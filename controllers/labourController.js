@@ -21,7 +21,7 @@ async function createRecord(req, res) {
             labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber,designation,LabourID
+            contractorName, contractorNumber, designation, title, nationality, maritalStatus, paymentMode, companyName, employeeType, currentStatus, seatingOffice
         } = req.body;
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc } = req.files;
@@ -30,7 +30,7 @@ async function createRecord(req, res) {
         //     !dateOfBirth || !contactNumber || !gender || !dateOfJoining || !address || !pincode ||
         //     !taluka || !district || !village || !state || !emergencyContact || !photoSrc || !bankName ||
         //     !branch || !accountNumber || !ifscCode || !projectName || !labourCategory || !department || !designation ||
-        //     !workingHours ) {
+        //     !workingHours || !title || !nationality || !maritalStatus || !paymentMode || !companyName || !employeeType || !currentStatus || !seatingOffice)  {
         //     return res.status(400).json({ msg: "All fields are required" });
         // }
 
@@ -51,7 +51,7 @@ async function createRecord(req, res) {
             dateOfBirth, contactNumber, gender, dateOfJoining, address, pincode, taluka,
             district, village, state, emergencyContact, photoSrc: photoSrcUrl, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, 
+            contractorName, contractorNumber, designation, title, nationality, maritalStatus, paymentMode, companyName, employeeType, currentStatus, seatingOffice
         });
 
         return res.status(201).json({ msg: "User created successfully", data: data });
