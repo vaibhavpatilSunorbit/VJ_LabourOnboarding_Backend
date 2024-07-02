@@ -35,19 +35,19 @@ async function registerData(labourData) {
       });
 
       const result = await request.query(`
-          INSERT INTO labourOnboarding (
-              LabourID, labourOwnership, uploadAadhaarFront, uploadAadhaarBack, name, aadhaarNumber,
-              dateOfBirth, contactNumber, gender, dateOfJoining, address, pincode, taluka, district, village,
-              state, emergencyContact, photoSrc, bankName, branch, accountNumber, ifscCode, projectName, 
-              labourCategory, department, workingHours, contractorName, contractorNumber, designation,
-              status, isApproved
-          ) VALUES (
-              @LabourID, @labourOwnership, @uploadAadhaarFront, @uploadAadhaarBack, @name, @aadhaarNumber,
-              @dateOfBirth, @contactNumber, @gender, @dateOfJoining, @address, @pincode, @taluka, @district, @village,
-              @state, @emergencyContact, @photoSrc, @bankName, @branch, @accountNumber, @ifscCode, @projectName,
-              @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
-              'Pending', 0
-          )
+      INSERT INTO labourOnboarding (
+        LabourID, labourOwnership, uploadAadhaarFront, uploadAadhaarBack, name, aadhaarNumber,
+        dateOfBirth, contactNumber, gender, dateOfJoining, address, pincode, taluka, district, village,
+        state, emergencyContact, photoSrc, bankName, branch, accountNumber, ifscCode, projectName, 
+        labourCategory, department, workingHours, contractorName, contractorNumber, designation,
+        status, isApproved, title, nationality, maritalStatus, paymentMode, companyName, employeeType, currentStatus, seatingOffice
+    ) VALUES (
+        @LabourID, @labourOwnership, @uploadAadhaarFront, @uploadAadhaarBack, @name, @aadhaarNumber,
+        @dateOfBirth, @contactNumber, @gender, @dateOfJoining, @address, @pincode, @taluka, @district, @village,
+        @state, @emergencyContact, @photoSrc, @bankName, @branch, @accountNumber, @ifscCode, @projectName,
+        @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
+        'Pending', 0, @title, @nationality, @maritalStatus, @paymentMode, @companyName, @employeeType, @currentStatus, @seatingOffice
+    )
       `);
       return result.recordset;
   } catch (error) {
