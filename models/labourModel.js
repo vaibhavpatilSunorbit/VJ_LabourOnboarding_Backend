@@ -2,17 +2,35 @@
 const {sql, poolPromise } = require('../config/dbConfig');
 // const sql = require('mssql');
 
+async function checkAadhaarExists(aadhaarNumber) {
+    try {
+      const pool = await poolPromise;
+      const result = await pool.request()
+        .input('aadhaarNumber', aadhaarNumber)
+        .query('SELECT LabourID FROM labourOnboarding WHERE aadhaarNumber = @aadhaarNumber');
+  
+      return result.recordset.length > 0;
+    } catch (error) {
+      console.error('Error checking Aadhaar number:', error);
+      throw new Error('Error checking Aadhaar number');
+    }
+  }
+
 // Function to get the next unique ID
 async function getNextUniqueID() {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query('SELECT MAX(LabourID) AS lastID FROM labourOnboarding');
-        let nextID = 'VJLBF110001'; // Default starting ID if no records exist
+        let nextID = 'JC3621'; // Default starting ID if no records exist
 
-        if (result.recordset[0].lastID) {
+        if (result.recordset[0] && result.recordset[0].lastID) {
             const lastID = result.recordset[0].lastID;
-            const numericPart = parseInt(lastID.slice(5)) + 1; // Extract numeric part and increment
-            nextID = `VJLBF${numericPart.toString().padStart(6, '0')}`; // Format to desired ID pattern
+            const numericPart = parseInt(lastID.slice(2), 10); // Extract numeric part and parse as integer
+
+            if (!isNaN(numericPart)) {
+                const incrementedNumericPart = numericPart + 1;
+                nextID = `JC${incrementedNumericPart.toString().padStart(4, '0')}`; // Format to desired ID pattern
+            }
         }
 
         return nextID;
@@ -40,14 +58,13 @@ async function registerData(labourData) {
         dateOfBirth, contactNumber, gender, dateOfJoining, address, pincode, taluka, district, village,
         state, emergencyContact, photoSrc, bankName, branch, accountNumber, ifscCode, projectName, 
         labourCategory, department, workingHours, contractorName, contractorNumber, designation,
-        status, isApproved, title, nationality, maritalStatus, paymentMode, companyName, employeeType, currentStatus, seatingOffice
-    ) VALUES (
+        status, isApproved, title, maritalStatus, companyName) 
+        VALUES (
         @LabourID, @labourOwnership, @uploadAadhaarFront, @uploadAadhaarBack, @name, @aadhaarNumber,
         @dateOfBirth, @contactNumber, @gender, @dateOfJoining, @address, @pincode, @taluka, @district, @village,
         @state, @emergencyContact, @photoSrc, @bankName, @branch, @accountNumber, @ifscCode, @projectName,
         @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
-        'Pending', 0, @title, @nationality, @maritalStatus, @paymentMode, @companyName, @employeeType, @currentStatus, @seatingOffice
-    )
+        'Pending', 0, @title, @maritalStatus, @companyName)
       `);
       return result.recordset;
   } catch (error) {
@@ -195,6 +212,7 @@ async function getApprovedLabours() {
 
 
 module.exports = {
+    checkAadhaarExists,
     getNextUniqueID,
     registerData,
     getAll,

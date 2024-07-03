@@ -30,7 +30,7 @@ const express = require('express');
 const router = express.Router();
 const labourController = require('../controllers/labourController');
 
-
+router.post('/check-aadhaar', labourController.handleCheckAadhaar);
 router.get('/next-id', labourController.getNextUniqueID);
 router.post('/', labourController.createRecord);
 router.get('/', labourController.getAllRecords);

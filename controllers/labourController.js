@@ -2,7 +2,22 @@
 const labourModel = require('../models/labourModel');
 const path = require('path');
 
-const baseUrl = 'http://localhost:5000/uploads/';
+// const baseUrl = 'http://localhost:5000/uploads/';
+const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+
+
+async function handleCheckAadhaar(req, res) {
+    const { aadhaarNumber } = req.body;
+  
+    try {
+      const exists = await labourModel.checkAadhaarExists(aadhaarNumber);
+  
+      res.status(200).json({ exists });
+    } catch (error) {
+      console.error('Error in handleCheckAadhaar:', error);
+      res.status(500).json({ error: 'Error checking Aadhaar number' });
+    }
+  }
 
 async function getNextUniqueID(req, res) {
     try {
@@ -21,7 +36,7 @@ async function createRecord(req, res) {
             labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, nationality, maritalStatus, paymentMode, companyName, employeeType, currentStatus, seatingOffice
+            contractorName, contractorNumber, designation, title, maritalStatus, companyName,
         } = req.body;
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc } = req.files;
@@ -51,7 +66,7 @@ async function createRecord(req, res) {
             dateOfBirth, contactNumber, gender, dateOfJoining, address, pincode, taluka,
             district, village, state, emergencyContact, photoSrc: photoSrcUrl, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, nationality, maritalStatus, paymentMode, companyName, employeeType, currentStatus, seatingOffice
+            contractorName, contractorNumber, designation, title, maritalStatus, companyName,
         });
 
         return res.status(201).json({ msg: "User created successfully", data: data });
@@ -192,6 +207,7 @@ async function getApprovedLabours(req, res) {
 
 
 module.exports = {
+    handleCheckAadhaar,
     getNextUniqueID,
     createRecord,
     getAllRecords,
