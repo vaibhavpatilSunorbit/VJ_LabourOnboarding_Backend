@@ -36,37 +36,41 @@ async function createRecord(req, res) {
             labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, maritalStatus, companyName,
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName,
         } = req.body;
 
-        const { uploadAadhaarFront, uploadAadhaarBack, photoSrc } = req.files;
+        const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof } = req.files;
 
-        // if (!labourOwnership || !uploadAadhaarFront || !uploadAadhaarBack || !name || !aadhaarNumber ||
-        //     !dateOfBirth || !contactNumber || !gender || !dateOfJoining || !address || !pincode ||
+        // if (!labourOwnership || !name  || !contactNumber || !gender || !dateOfJoining || !address || !pincode ||
         //     !taluka || !district || !village || !state || !emergencyContact || !photoSrc || !bankName ||
-        //     !branch || !accountNumber || !ifscCode || !projectName || !labourCategory || !department || !designation ||
-        //     !workingHours || !title || !nationality || !maritalStatus || !paymentMode || !companyName || !employeeType || !currentStatus || !seatingOffice)  {
+        //     !branch || !accountNumber || !ifscCode || !projectName || !labourCategory || !department || !designation )  {
         //     return res.status(400).json({ msg: "All fields are required" });
         // }
 
         const frontImageFilename = path.basename(uploadAadhaarFront[0].path);
         const backImageFilename = path.basename(uploadAadhaarBack[0].path);
+        const IdProofImageFilename = path.basename(uploadIdProof[0].path);
         const photoSrcFilename = path.basename(photoSrc[0].path);
 
   
         const frontImageUrl = baseUrl + frontImageFilename;
         const backImageUrl = baseUrl + backImageFilename;
+        const IdProofImageUrl = baseUrl + IdProofImageFilename;
         const photoSrcUrl = baseUrl + photoSrcFilename;
 
         const nextID = await labourModel.getNextUniqueID();
 
+        const dateOfJoiningDate = new Date(dateOfJoining);
+        const fromDate = new Date(dateOfJoiningDate.getFullYear(), dateOfJoiningDate.getMonth(), 1);
+        const period = dateOfJoiningDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
          const data = await labourModel.registerData({
             LabourID: nextID,
-            labourOwnership, uploadAadhaarFront: frontImageUrl, uploadAadhaarBack: backImageUrl, name, aadhaarNumber,
-            dateOfBirth, contactNumber, gender, dateOfJoining, address, pincode, taluka,
+          labourOwnership, uploadAadhaarFront: frontImageUrl, uploadAadhaarBack: backImageUrl, uploadIdProof: IdProofImageUrl, name, aadhaarNumber,
+            dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date: dateOfJoining, From_Date: fromDate.toISOString().split('T')[0], Period: period, address, pincode, taluka,
             district, village, state, emergencyContact, photoSrc: photoSrcUrl, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, maritalStatus, companyName,
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName,
         });
 
         return res.status(201).json({ msg: "User created successfully", data: data });
