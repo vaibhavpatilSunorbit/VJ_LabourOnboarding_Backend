@@ -24,22 +24,25 @@ const upload = multer({ storage: storage });
 router.post('/upload', upload.fields([
   { name: 'uploadAadhaarFront' }, 
   { name: 'uploadAadhaarBack' },
+  { name: 'uploadIdProof' },
   { name: 'photoSrc' }
 ]), (req, res) => {
   try {
-    const { uploadAadhaarFront, uploadAadhaarBack, photoSrc } = req.files;
+    const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof } = req.files;
 
-    if (!uploadAadhaarFront || !uploadAadhaarBack || !photoSrc) {
+    if (!uploadAadhaarFront || !uploadAadhaarBack || !photoSrc || !uploadIdProof) {
       return res.status(400).json({ error: 'Front image, back image, and photo source are all required' });
     }
 
     const frontImageFilename = uploadAadhaarFront[0].filename;
     const backImageFilename = uploadAadhaarBack[0].filename;
+    const IdProofImageFilename = uploadIdProof[0].filename;
     const photoSrcFilename = photoSrc[0].filename;
 
     res.json({ 
       frontImage: frontImageFilename, 
       backImage: backImageFilename, 
+      idImage: IdProofImageFilename, 
       photoSrc: photoSrcFilename, 
       message: 'Files uploaded successfully' 
     });

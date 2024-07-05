@@ -370,14 +370,17 @@ app.get('/labours/:id/download/aadhaar-card', async (req, res) => {
     const { id } = req.params;
     const frontFilePath = path.join(__dirname, 'uploads', `aadhaar_front_${id}.jpg`);
     const backFilePath = path.join(__dirname, 'uploads', `aadhaar_back_${id}.jpg`);
+    const idProofFilePath = path.join(__dirname, 'uploads', `id_Proof${id}.jpg`);
 
-    if (fs.existsSync(frontFilePath) && fs.existsSync(backFilePath)) {
+    if (fs.existsSync(frontFilePath) && fs.existsSync(backFilePath) && fs.existsSync(idProofFilePath)) {
         const frontFile = fs.readFileSync(frontFilePath);
         const backFile = fs.readFileSync(backFilePath);
+        const idFile = fs.readFileSync(idProofFilePath);
 
         const zip = new JSZip();
         zip.file(`aadhaar_front_${id}.jpg`, frontFile);
         zip.file(`aadhaar_back_${id}.jpg`, backFile);
+        zip.file(`id_Proof${id}.jpg`, idFile);
 
         res.set('Content-Type', 'application/zip');
         res.set('Content-Disposition', `attachment; filename="aadhaar_${id}.zip"`);
@@ -395,6 +398,7 @@ app.get('/labours/:id/download/aadhaar-card', async (req, res) => {
 app.post('/labours', upload.fields([
     { name: 'uploadAadhaarFront' },
     { name: 'uploadAadhaarBack' },
+    { name: 'uploadIdProof' },
     { name: 'photoSrc' }
 ]), labourController.createRecord);
 
