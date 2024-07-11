@@ -22,7 +22,7 @@ async function getNextUniqueID() {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query('SELECT MAX(LabourID) AS lastID FROM labourOnboarding');
-        let  nextID = 'JC3619'; // Default starting ID if no records exist
+        let  nextID = 'JC3615'; // Default starting ID if no records exist
 
         if (result.recordset[0].lastID) {
             const lastID = result.recordset[0].lastID;
@@ -57,13 +57,13 @@ async function registerData(labourData) {
         dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date, From_Date, Period, address, pincode, taluka, district, village,
         state, emergencyContact, photoSrc, bankName, branch, accountNumber, ifscCode, projectName, 
         labourCategory, department, workingHours, contractorName, contractorNumber, designation,
-        status, isApproved, title, Marital_Status, companyName) 
+        status, isApproved, title, Marital_Status, companyName, Induction_Date, Inducted_By, uploadInductionDoc, OnboardName) 
         VALUES (
         @LabourID, @labourOwnership, @uploadAadhaarFront, @uploadAadhaarBack, @uploadIdProof, @name, @aadhaarNumber,
         @dateOfBirth, @contactNumber, @gender, @dateOfJoining, @Group_Join_Date, @From_Date, @Period, @address, @pincode, @taluka, @district, @village,
         @state, @emergencyContact, @photoSrc, @bankName, @branch, @accountNumber, @ifscCode, @projectName,
         @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
-        'Pending', 0, @title, @Marital_Status, @companyName)
+        'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName)
       `);
       return result.recordset;
   } catch (error) {
@@ -135,7 +135,7 @@ async function getImagePathsById(id) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('id', sql.Int, id)
-            .query('SELECT uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof FROM labourOnboarding WHERE id = @id');
+            .query('SELECT uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc FROM labourOnboarding WHERE id = @id');
         return result.recordset[0];
     } catch (error) {
         throw error;
@@ -167,12 +167,18 @@ async function getAllLabours() {
     }
 }
 
-async function approveLabour(id) {
+async function approveLabour(id, nextID, onboardName) {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('id', sql.Int, id)
-            .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1 WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
+            .input('LabourID', sql.VarChar, nextID)
+            .input('OnboardName', sql.VarChar, onboardName) 
+            // .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1 WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
+            // .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
+            .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID, OnboardName = @OnboardName WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
+
+            console.log('Database update result:', result);
 
         return result.rowsAffected[0] > 0;
     } catch (error) {
@@ -181,12 +187,14 @@ async function approveLabour(id) {
     }
 }
 
-async function rejectLabour(id) {
+async function rejectLabour(id, rejectReason) {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('id', sql.Int, id)
-            .query("UPDATE labourOnboarding SET status = 'Rejected', isApproved = 2 WHERE id = @id AND (status = 'Pending' OR status = 'Approved')");
+            .input('Reject_Reason', sql.VarChar, rejectReason)
+            // .query("UPDATE labourOnboarding SET status = 'Rejected', isApproved = 2 WHERE id = @id AND (status = 'Pending' OR status = 'Approved')");
+            .query('UPDATE labourOnboarding SET status = \'Rejected\', isApproved = 2, Reject_Reason = @Reject_Reason WHERE id = @id AND (status = \'Pending\' OR status = \'Approved\')');
 
         return result.rowsAffected[0] > 0;
     } catch (error) {
@@ -209,6 +217,20 @@ async function getApprovedLabours() {
   }
 }
 
+async function resubmit(id) {
+    try {
+        const pool = await poolPromise;
+        const request = pool.request()
+            .input('id', sql.Int, id)
+            .input('status', sql.VarChar, 'Resubmit')
+            .input('isApproved', sql.Int, 3);
+
+        const result = await request.query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved WHERE id = @id');
+        return result.rowsAffected[0];
+    } catch (error) {
+        throw error;
+    }
+}
 
 module.exports = {
     checkAadhaarExists,
@@ -223,7 +245,8 @@ module.exports = {
     getAllLabours,
     approveLabour,
     rejectLabour,
-    getApprovedLabours
+    getApprovedLabours,
+    resubmit
 };
 
 

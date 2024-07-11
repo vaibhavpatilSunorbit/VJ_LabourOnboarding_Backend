@@ -40,9 +40,10 @@ router.get('/:id', labourController.getRecordById);
 router.put('/update/:id', labourController.updateRecord);
 router.delete('/:id', labourController.deleteRecord);
 
-
 router.get('/', labourController.getAllLabours);
 router.put('/approve/:id', labourController.approveLabour);
 router.put('/reject/:id', labourController.rejectLabour);
+router.put('/resubmit/:id', labourController.resubmitLabour);
+
 
 module.exports = router;

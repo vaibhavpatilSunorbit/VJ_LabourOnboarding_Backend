@@ -61,9 +61,11 @@ async function loginUserController(req, res) {
     const token = jwt.sign({ emailID: user.emailID, userType: user.userType }, secretKey, { expiresIn: '1h' });
     res.status(200).json({ success: true,
       data: {
+        id: user.id,
+        name: user.name, // Ensure name is included
         emailID: user.emailID,
-        accessPages: user.accessPages // Ensure user model includes this field
-        // Add any other user data you need to include
+        accessPages: user.accessPages,
+        userType: user.userType,
       },
       token });
   } catch (err) {
@@ -74,7 +76,7 @@ async function loginUserController(req, res) {
 
 async function updateUserController(req, res) {
     try {
-        const { id, name, emailID, contactNo, userType, accessPages } = req.body;
+        const { id, name, emailID, contactNo, userType, accessPages, plainPassword } = req.body;
         console.log('Request body:', req.body);
        
         if (!id || !name || !emailID || !contactNo || !userType || !Array.isArray(accessPages)) {
@@ -87,8 +89,13 @@ async function updateUserController(req, res) {
             return res.status(400).json({ msg: "Invalid user ID" });
         }
         console.log('numericId',numericId)
+
+        let hashedPassword;
+        if (plainPassword) {
+            hashedPassword = await bcrypt.hash(plainPassword, 10);
+        }
        
-        const updateResult = await updateUser(numericId, name, emailID, contactNo, userType, accessPages);
+        const updateResult = await updateUser(numericId, name, emailID, contactNo, userType, accessPages,  hashedPassword, plainPassword);
         // const updateResult = await updateUser(numericId, { name, emailID, contactNo, userType, accessPages });
         console.log('updateResult.result',updateResult)
         if (updateResult.success) {

@@ -56,22 +56,61 @@ async function findUserByEmail(emailID) {
   }
 }
 
-async function updateUser(id, name, emailID, contactNo, userType, accessPages) {
+// async function updateUser(id, name, emailID, contactNo, userType, accessPages, hashedPassword, plainPassword) {
+//   try {
+//       const pool = await poolPromise;
+//       const result = await pool.request()
+//           .input('id', id)
+//           .input('name', name)
+//           .input('emailID', emailID)
+//           .input('contactNo', contactNo)
+//           .input('userType', userType)
+//           .input('accessPages', JSON.stringify(accessPages))
+//           .query(`
+//               UPDATE Users_New
+//               SET name = @name, emailID = @emailID, contactNo = @contactNo, userType = @userType, 
+//                   accessPages = @accessPages
+//               WHERE Id = @id
+//           `);
+
+//       if (result.rowsAffected[0] > 0) {
+//           return { success: true, result: result.recordset };
+//       } else {
+//           return { success: false, message: "No rows affected" };
+//       }
+//   } catch (error) {
+//       console.error("Error occurred:", error);
+//       throw error;
+//   }
+// }
+
+async function updateUser(id, name, emailID, contactNo, userType, accessPages, hashedPassword, plainPassword) {
   try {
       const pool = await poolPromise;
-      const result = await pool.request()
+      let query = `
+          UPDATE Users_New
+          SET name = @name, emailID = @emailID, contactNo = @contactNo, userType = @userType, 
+              accessPages = @accessPages
+      `;
+      if (hashedPassword) {
+          query += `, pasword = @pasword, plainPassword = @plainPassword`;
+      }
+      query += ` WHERE id = @id`;
+
+      const request = pool.request()
           .input('id', id)
           .input('name', name)
           .input('emailID', emailID)
           .input('contactNo', contactNo)
           .input('userType', userType)
-          .input('accessPages', JSON.stringify(accessPages))
-          .query(`
-              UPDATE Users_New
-              SET name = @name, emailID = @emailID, contactNo = @contactNo, userType = @userType, 
-                  accessPages = @accessPages
-              WHERE Id = @id
-          `);
+          .input('accessPages', JSON.stringify(accessPages));
+
+      if (hashedPassword) {
+          request.input('pasword', hashedPassword)
+              .input('plainPassword', plainPassword);
+      }
+
+      const result = await request.query(query);
 
       if (result.rowsAffected[0] > 0) {
           return { success: true, result: result.recordset };
