@@ -88,7 +88,7 @@ async function createRecord(req, res) {
             labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName,
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate
         } = req.body;
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files;
@@ -119,7 +119,7 @@ async function createRecord(req, res) {
             dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date: dateOfJoining, From_Date: fromDate.toISOString().split('T')[0], Period: period, address, pincode, taluka,
             district, village, state, emergencyContact, photoSrc: photoSrcUrl, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName,Induction_Date, Inducted_By, OnboardName,
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName,Induction_Date, Inducted_By, OnboardName,expiryDate
         });
 
         return res.status(201).json({ msg: "User created successfully", data: data });
@@ -155,10 +155,29 @@ async function getRecordById(req, res) {
     }
 }
 
+// async function updateRecord(req, res) {
+//     try {
+//         const { id } = req.params;
+//         const updatedData = req.body;
+//         const updated = await labourModel.update(id, updatedData);
+//         if (updated === 0) {
+//             return res.status(404).json({ error: 'Record not found' });
+//         }
+//         return res.json({ message: 'Record updated successfully' });
+//     } catch (error) {
+//         console.error(error);
+//         return res.status(500).json({ error: 'Internal server error' });
+//     }
+// }
 async function updateRecord(req, res) {
     try {
         const { id } = req.params;
         const updatedData = req.body;
+
+        if (!id) {
+            return res.status(400).json({ error: 'ID is required' });
+        }
+
         const updated = await labourModel.update(id, updatedData);
         if (updated === 0) {
             return res.status(404).json({ error: 'Record not found' });
@@ -169,7 +188,6 @@ async function updateRecord(req, res) {
         return res.status(500).json({ error: 'Internal server error' });
     }
 }
-
 async function deleteRecord(req, res) {
     try {
         const { id } = req.params;
@@ -218,13 +236,13 @@ async function approveLabour(req, res) {
 
     try {
         const nextID = await labourModel.getNextUniqueID(); // Generate next unique LabourID
-        const onboardName = req.body.OnboardName;
+        // const onboardName = req.body.OnboardName;
 
         console.log('Approving labour ID:', id);
         console.log('Generated nextID:', nextID);
-        console.log('OnboardName:', onboardName);
+        // console.log('OnboardName:', onboardName);
 
-        const success = await labourModel.approveLabour(id, nextID, onboardName);
+        const success = await labourModel.approveLabour(id, nextID);
         if (success) {
             res.json({ success: true, message: 'Labour approved successfully.' });
         } else {

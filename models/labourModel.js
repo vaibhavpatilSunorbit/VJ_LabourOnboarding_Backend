@@ -97,6 +97,24 @@ async function getById(id) {
 }
 
 // Function to update a record
+// async function update(id, updatedData) {
+//     try {
+//         const pool = await poolPromise;
+//         const request = pool.request().input('id', sql.Int, id);
+//         let updateQuery = 'UPDATE labourOnboarding SET ';
+
+//         Object.keys(updatedData).forEach((key, index) => {
+//             updateQuery += `${key} = @param${index}, `;
+//             request.input(`param${index}`, sql.VarChar, updatedData[key]);
+//         });
+
+//         updateQuery = updateQuery.slice(0, -2) + ' WHERE id = @id';
+//         const result = await request.query(updateQuery);
+//         return result.rowsAffected[0];
+//     } catch (error) {
+//         throw error;
+//     }
+// }
 async function update(id, updatedData) {
     try {
         const pool = await poolPromise;
@@ -104,8 +122,10 @@ async function update(id, updatedData) {
         let updateQuery = 'UPDATE labourOnboarding SET ';
 
         Object.keys(updatedData).forEach((key, index) => {
-            updateQuery += `${key} = @param${index}, `;
-            request.input(`param${index}`, sql.VarChar, updatedData[key]);
+            if (key !== 'id') {  // Skip the 'id' column
+                updateQuery += `${key} = @param${index}, `;
+                request.input(`param${index}`, updatedData[key]);
+            }
         });
 
         updateQuery = updateQuery.slice(0, -2) + ' WHERE id = @id';
@@ -167,16 +187,16 @@ async function getAllLabours() {
     }
 }
 
-async function approveLabour(id, nextID, onboardName) {
+async function approveLabour(id, nextID) {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('id', sql.Int, id)
             .input('LabourID', sql.VarChar, nextID)
-            .input('OnboardName', sql.VarChar, onboardName) 
+            // .input('OnboardName', sql.VarChar, onboardName) 
             // .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1 WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
-            // .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
-            .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID, OnboardName = @OnboardName WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
+            .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
+            // .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID, OnboardName = @OnboardName WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
 
             console.log('Database update result:', result);
 
