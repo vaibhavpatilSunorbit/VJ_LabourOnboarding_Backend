@@ -6,16 +6,21 @@ const config = {
     password: process.env.DB_PASSWORD_2,
     server: process.env.DB_SERVER_2,
     database: process.env.DB_NAME_2,
+    pool: {
+      max: 10,
+      min: 0,
+      idleTimeoutMillis: 30000
+    },
   options: {
     encrypt: true,
     trustServerCertificate: true,
   },
 };
 
-const poolPromise = new sql.ConnectionPool(config)
+const poolPromise2 = new sql.ConnectionPool(config)
   .connect()
   .then(pool => {
-    console.log('Connected to MSSQL VJDPROJECT');
+    console.log('Connected to MSSQL');
     return pool;
   })
   .catch(err => {
@@ -24,9 +29,8 @@ const poolPromise = new sql.ConnectionPool(config)
 
 module.exports = {
   sql,
-  poolPromise,
+  poolPromise2,
 };
-
 
 
 
@@ -67,6 +71,7 @@ module.exports = {
 //   sql,
 //   poolPromise,
 // };
+
 
 
 

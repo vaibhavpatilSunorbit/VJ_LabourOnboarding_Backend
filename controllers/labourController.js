@@ -1,11 +1,11 @@
 
 const labourModel = require('../models/labourModel');
-const {sql, poolPromise } = require('../config/dbConfig2');
+const {sql, poolPromise2 } = require('../config/dbConfig2');
 const path = require('path');
-// const { sql, poolPromise } = require('../config/dbConfig');
+// const { sql, poolPromise2 } = require('../config/dbConfig');
 
-// const baseUrl = 'http://localhost:4000/uploads/';
-const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+const baseUrl = 'http://localhost:4000/uploads/';
+// const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
 
 
 // async function handleCheckAadhaar(req, res) {
@@ -72,13 +72,13 @@ async function handleCheckAadhaar(req, res) {
 
 async function getNextUniqueID(req, res) {
     try {
-      const nextID = await labourModel.getNextUniqueID();
-      res.json({ nextID });
+        const nextID = await labourModel.getNextUniqueID();
+        res.json({ nextID });
     } catch (error) {
-      console.error('Error in getNextUniqueID:', error.message);
-      res.status(500).json({ message: 'Internal server error' });
+        console.error('Error in getNextUniqueID:', error.message);
+        res.status(500).json({ message: 'Internal server error' });
     }
-  }
+}
   
 
 // async function createRecord(req, res) {
@@ -139,7 +139,7 @@ async function createRecord(req, res) {
             labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate,
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate ,
         } = req.body;
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files;
@@ -170,8 +170,11 @@ async function createRecord(req, res) {
         const validTillDate = new Date(dateOfJoiningDate);
         validTillDate.setFullYear(validTillDate.getFullYear() + 1);
 
+        const retirementDate = new Date(dateOfBirth);
+        retirementDate.setFullYear(retirementDate.getFullYear() + 60);
+
 // **********************************  NEW  ********************
-const pool = await poolPromise;
+const pool = await poolPromise2;
 const projectRequest = pool.request();
 
 const isNumeric = !isNaN(projectName);
@@ -213,13 +216,48 @@ const location = projectResult.recordset[0].Description; // Store the Business_U
 console.log(`Found project Description: ${location}`); 
 
 // **********************************  NEW  ********************
+
+let salaryBu;
+const projectId = projectResult.recordset[0].id;
+const parentIdResult = await pool.request().query(`
+    SELECT ParentId 
+    FROM Framework.BusinessUnit 
+    WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+    AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+    AND Id = ${projectId}
+`);
+
+if (parentIdResult.recordset.length === 0) {
+    return res.status(404).send('ParentId not found for the selected project');
+}
+
+const parentId = parentIdResult.recordset[0].ParentId;
+
+const companyNameResult = await pool.request().query(`
+    SELECT Description AS Company_Name 
+    FROM Framework.BusinessUnit 
+    WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+    AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+    AND Id = ${parentId}
+`);
+
+const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
+
+if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
+    salaryBu = `${companyNameFromDb} - HO`;
+} else {
+    salaryBu = location;
+}
+
+const creationDate = new Date();
         
         const data = await labourModel.registerData({
             labourOwnership, uploadAadhaarFront: frontImageUrl, uploadAadhaarBack: backImageUrl, uploadIdProof: IdProofImageUrl,uploadInductionDoc: uploadInductionDocImageUrl ,name, aadhaarNumber,
-            dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date: dateOfJoining, From_Date: fromDate.toISOString().split('T')[0], Period: period, address, pincode, taluka,
+            dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining, From_Date: fromDate.toISOString().split('T')[0], Period: period, address, pincode, taluka,
             district, village, state, emergencyContact, photoSrc: photoSrcUrl, bankName, branch,
-            accountNumber, ifscCode, projectName, labourCategory, department, workingHours,location,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName,Induction_Date, Inducted_By, OnboardName,expiryDate, ValidTill: validTillDate.toISOString().split('T')[0],  
+            accountNumber, ifscCode, projectName, labourCategory, department, workingHours,location, SalaryBu: salaryBu,
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName,Induction_Date, Inducted_By, OnboardName,expiryDate , ValidTill: validTillDate.toISOString().split('T')[0],
+            retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location, CreationDate: creationDate.toISOString()  
         });
 
         return res.status(201).json({ msg: "User created successfully", data: data });
@@ -277,6 +315,8 @@ async function updateRecord(req, res) {
         if (!id) {
             return res.status(400).json({ error: 'ID is required' });
         }
+        console.log('Updating record with ID:', id);
+        // console.log('Updated data:', updatedData);
 
         const updated = await labourModel.update(id, updatedData);
         if (updated === 0) {
@@ -288,6 +328,7 @@ async function updateRecord(req, res) {
         return res.status(500).json({ error: 'Internal server error' });
     }
 }
+
 async function deleteRecord(req, res) {
     try {
         const { id } = req.params;
@@ -344,7 +385,7 @@ async function approveLabour(req, res) {
 
         const success = await labourModel.approveLabour(id, nextID);
         if (success) {
-            res.json({ success: true, message: 'Labour approved successfully.' });
+            res.json({ success: true, message: 'Labour approved successfully.', data : success });
         } else {
             res.status(404).json({ message: 'Labour not found or already approved.' });
         }
