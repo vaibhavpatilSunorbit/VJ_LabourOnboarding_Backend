@@ -1,7 +1,7 @@
 
 const express = require('express');
-const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, getDesignations, getCompanyNamesByProjectId, getDevices   } = require('../controllers/dataController');
-
+const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, getDesignations, getCompanyNamesByProjectId, getDevices, getAttendanceLogs, approveLabour, getProjectDeviceStatus,updateProjectDeviceStatus, deleteProjectDeviceStatus, getProjectDeviceStatusSS, fetchDynamicData } = require('../controllers/dataController');
+const {addEmployee} =require("../controllers/sendLabourData")
 const router = express.Router();
 
 router.get('/project-names', getProjectNames);
@@ -11,8 +11,22 @@ router.get('/working-hours', getWorkingHours);
 router.get('/designations/:departmentId', getDesignations);
 router.get('/company-names/:projectId', getCompanyNamesByProjectId);
 router.get('/devices', getDevices);
+router.get('/attendance-logs', getAttendanceLogs);
+router.post('/AddEmployee',addEmployee);
+router.post('/approveLabour', approveLabour);
+router.get('/projectDeviceStatus/:projectName', getProjectDeviceStatus);
+router.put('/projectDeviceStatus', updateProjectDeviceStatus);
+router.delete('/projectDeviceStatus', deleteProjectDeviceStatus);
+router.get('/projectDeviceStatus', getProjectDeviceStatusSS);
+router.get('/fetchDynamicData', fetchDynamicData);
 
 module.exports = router;
+
+
+
+
+
+
 
 
 
