@@ -1,6 +1,7 @@
 
 const {sql, poolPromise } = require('../config/dbConfig');
 const { poolPromise2 } = require('../config/dbConfig2');
+const { poolPromise3 } = require('../config/dbConfig3');
 // const sql = require('mssql');
 
 
@@ -18,35 +19,36 @@ async function checkAadhaarExists(aadhaarNumber) {
 }
 
 
-async function getNextUniqueID() {
-    try {
-      const pool = await poolPromise;
-      const result = await pool.request().query('SELECT MAX(LabourID) AS lastID FROM labourOnboarding');
+// async function getNextUniqueID() {
+//     try {
+//       const pool = await poolPromise;
+//       const result = await pool.request().query('SELECT MAX(LabourID) AS lastID FROM labourOnboarding');
       
-      let initialID = 'JC3907'; // The starting ID
-      let nextID = initialID;
+//       let initialID = 'JC3907'; // The starting ID
+//       let nextID = initialID;
   
-      if (result.recordset[0].lastID) {
-        const lastID = result.recordset[0].lastID;
-        const numericPart = parseInt(lastID.slice(2)) + 1;
-        nextID = `JC${numericPart.toString().padStart(4, '0')}`; // Format to desired ID pattern
-      }
+//       if (result.recordset[0].lastID) {
+//         const lastID = result.recordset[0].lastID;
+//         const numericPart = parseInt(lastID.slice(2)) + 1;
+//         nextID = `JC${numericPart.toString().padStart(4, '0')}`; // Format to desired ID pattern
+//       }
   
-      return nextID;
-    } catch (error) {
-      throw new Error('Error fetching next unique ID');
-    }
-  }
+//       return nextID;
+//     } catch (error) {
+//       throw new Error('Error fetching next unique ID');
+//     }
+//   }
+
+
 
 // async function getNextUniqueID() {
 //     try {
-//         const pool = await poolPromise2;
+//         const pool = await poolPromise3;
 //         const query = `
-//             SELECT TOP 1 C.[Code], CAST(SUBSTRING(C.[Code], 3, 6) AS INT) + 1 AS IncrementedValue 
-//             FROM [JDPROJECT].[Payroll].[Employee] C
-//             WHERE C.[Code] LIKE 'JC%' 
-//               AND C.[Code] NOT LIKE 'JCO%' 
-//             ORDER BY C.Code DESC
+//         Select  TOP 1 [EmployeeCode], CAST(SUBSTRING([EmployeeCode], 3, 6) AS INT) + 1 AS IncrementedValue 
+// From Employees   WHERE [EmployeeCode] LIKE 'JC%' 
+// AND [EmployeeCode] NOT LIKE 'JCO%' 
+// ORDER BY [EmployeeCode] DESC
 //         `;
 //         const result = await pool.request().query(query);
 
@@ -63,6 +65,35 @@ async function getNextUniqueID() {
 //         throw new Error('Error fetching next unique ID');
 //     }
 // }
+
+async function getNextUniqueID() {
+    try {
+        const pool = await poolPromise3;
+        const query = `
+        SELECT TOP 1 
+        [EmployeeCode], 
+        CAST(SUBSTRING([EmployeeCode], 3, 6) AS INT) + 1 AS IncrementedValue 
+    FROM Employees 
+    WHERE [EmployeeCode] LIKE 'JC%' 
+    AND [EmployeeCode] NOT LIKE 'JCO%'
+    AND ISNUMERIC(SUBSTRING([EmployeeCode], 3, 6)) = 1
+    ORDER BY CAST(SUBSTRING([EmployeeCode], 3, 6) AS INT) DESC
+        `;
+        const result = await pool.request().query(query);
+
+        let nextID = 'JC0001'; 
+
+        if (result.recordset.length > 0) {
+            const incrementedValue = result.recordset[0].IncrementedValue;
+            nextID = `JC${incrementedValue.toString().padStart(4, '0')}`; 
+        }
+
+        return nextID;
+    } catch (error) {
+        console.error('Error in getNextUniqueID:', error.message);
+        throw new Error('Error fetching next unique ID');
+    }
+}
 
 
 // Function to register data
@@ -83,7 +114,7 @@ async function registerData(labourData) {
 
     const toUpperCaseFields = [
         'address', 'name', 'taluka', 'district', 'village', 'state', 
-        'bankName', 'branch', 'ifscCode', 'contractorName', 'Inducted_By', 'OnboardName', 'title', 'Period', 
+        'bankName', 'branch', 'ifscCode', 'contractorName', 'Inducted_By', 'OnboardName', 'title', 
       ];
   
       // Helper function to set input with uppercase conversion
@@ -110,13 +141,13 @@ async function registerData(labourData) {
         dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date, From_Date, Period, address, pincode, taluka, district, village,
         state, emergencyContact, photoSrc, bankName, branch, accountNumber, ifscCode, projectName, 
         labourCategory, department, workingHours, contractorName, contractorNumber, designation,
-        status, isApproved, title, Marital_Status, companyName, Induction_Date, Inducted_By, uploadInductionDoc, OnboardName, ValidTill, location, ConfirmDate, retirementDate, SalaryBu, WorkingBu, CreationDate  ) 
+        status, isApproved, title, Marital_Status, companyName, Induction_Date, Inducted_By, uploadInductionDoc, OnboardName, ValidTill, location, ConfirmDate, retirementDate, SalaryBu, WorkingBu, CreationDate, businessUnit, departmentId, designationId, labourCategoryId) 
         VALUES (
         @LabourID, @labourOwnership, @uploadAadhaarFront, @uploadAadhaarBack, @uploadIdProof, @name, @aadhaarNumber,
         @dateOfBirth, @contactNumber, @gender, @dateOfJoining, @Group_Join_Date, @From_Date, @Period, @address, @pincode, @taluka, @district, @village,
         @state, @emergencyContact, @photoSrc, @bankName, @branch, @accountNumber, @ifscCode, @projectName,
         @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
-        'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate  )
+        'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId)
       `);
       return result.recordset;
   } catch (error) {
