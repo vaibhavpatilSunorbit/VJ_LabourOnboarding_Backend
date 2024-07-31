@@ -4,8 +4,8 @@ const {sql, poolPromise2 } = require('../config/dbConfig2');
 const path = require('path');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
-const baseUrl = 'http://localhost:4000/uploads/';
-// const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+// const baseUrl = 'http://localhost:4000/uploads/';
+const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
 
 
 // async function handleCheckAadhaar(req, res) {
@@ -133,17 +133,176 @@ async function getNextUniqueID(req, res) {
 //     }
 // }
 
+
+
+
+// async function createRecord(req, res) {
+//     try {
+//         const {
+//             labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
+//             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
+//             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
+//             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate,
+//         } = req.body;
+
+//         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files;
+
+//         // Validate file fields
+//         if (!uploadAadhaarFront || !photoSrc || !uploadIdProof) {
+//             return res.status(400).json({ msg: 'All file fields are required' });
+//         }
+
+//         const frontImageFilename = path.basename(uploadAadhaarFront[0].path);
+//         const backImageFilename = uploadAadhaarBack ? path.basename(uploadAadhaarBack[0].path) : null;
+//         const IdProofImageFilename = path.basename(uploadIdProof[0].path);
+//         const uploadInductionDocFilename = path.basename(uploadInductionDoc[0].path);
+//         const photoSrcFilename = path.basename(photoSrc[0].path);
+
+//         const frontImageUrl = baseUrl + frontImageFilename;
+//         const backImageUrl = backImageFilename ? baseUrl + backImageFilename : null;
+//         const IdProofImageUrl = baseUrl + IdProofImageFilename;
+//         const uploadInductionDocImageUrl = baseUrl + uploadInductionDocFilename;
+//         const photoSrcUrl = baseUrl + photoSrcFilename;
+
+//         const dateOfJoiningDate = new Date(dateOfJoining);
+//         const fromDate = new Date(dateOfJoiningDate.getFullYear(), dateOfJoiningDate.getMonth(), 1);
+//         const period = dateOfJoiningDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+//         const validTillDate = new Date(dateOfJoiningDate);
+//         validTillDate.setFullYear(validTillDate.getFullYear() + 1);
+
+//         const retirementDate = new Date(dateOfBirth);
+//         retirementDate.setFullYear(retirementDate.getFullYear() + 60);
+
+//         const pool = await poolPromise2;
+//         const projectRequest = pool.request();
+
+//         const isNumeric = !isNaN(projectName);
+//         projectRequest.input('projectName', isNumeric ? sql.Int : sql.VarChar, projectName);
+
+//         let query;
+//         if (isNumeric) {
+//             query = `
+//                 SELECT a.id, a.Description 
+//                 FROM Framework.BusinessUnit a
+//                 LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
+//                 WHERE a.id = @projectName
+//                 AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
+//                 AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+//                 AND b.Id = 3
+//             `;
+//         } else {
+//             query = `
+//                 SELECT a.id, a.Description 
+//                 FROM Framework.BusinessUnit a
+//                 LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
+//                 WHERE a.Description = @projectName
+//                 AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
+//                 AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+//                 AND b.Id = 3
+//             `;
+//         }
+
+//         const projectResult = await projectRequest.query(query);
+
+//         if (projectResult.recordset.length === 0) {
+//             return res.status(400).json({ msg: 'Invalid project name' });
+//         }
+
+//         const projectId = projectResult.recordset[0].id;
+//         const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
+//         const businessUnit = projectResult.recordset[0].Description;
+
+//         const parentIdResult = await pool.request().query(`
+//             SELECT ParentId 
+//             FROM Framework.BusinessUnit 
+//             WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+//             AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+//             AND Id = ${projectId}
+//         `);
+
+//         if (parentIdResult.recordset.length === 0) {
+//             return res.status(404).send('ParentId not found for the selected project');
+//         }
+
+//         const parentId = parentIdResult.recordset[0].ParentId;
+
+//         const companyNameResult = await pool.request().query(`
+//             SELECT Id, Description AS Company_Name 
+//             FROM Framework.BusinessUnit 
+//             WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+//             AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+//             AND Id = ${parentId}
+//         `);
+
+//         const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
+
+//         let salaryBu;
+//         if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
+//             salaryBu = `${companyNameFromDb} - HO`;
+//         } else {
+//             salaryBu = location;
+//         }
+
+//         const creationDate = new Date();
+
+//         // Fetch additional IDs
+//         const employeeResult = await pool.request().query(`
+//             SELECT * FROM Payroll.Employee WHERE LedgerId = (
+//                 SELECT LedgerId FROM Payroll.Employee WHERE id = ${employeeId}
+//             )
+//         `);
+
+//         const gradeResult = await pool.request().query(`
+//             SELECT * FROM Payroll.Grade WHERE id = ${gradeId}
+//         `);
+
+//         const departmentResult = await pool.request().query(`
+//             SELECT * FROM Payroll.Department WHERE id = ${departmentId}
+//         `);
+
+//         const designationResult = await pool.request().query(`
+//             SELECT * FROM Payroll.Designation WHERE id = ${designationId}
+//         `);
+
+//         // Extract IDs from results
+//         const ledgerId = employeeResult.recordset[0].LedgerId;
+//         const gradeId = gradeResult.recordset[0].id;
+//         const departmentId = departmentResult.recordset[0].id;
+//         const designationId = designationResult.recordset[0].id;
+
+//         const data = await labourModel.registerData({
+//             labourOwnership, uploadAadhaarFront: frontImageUrl, uploadAadhaarBack: backImageUrl, uploadIdProof: IdProofImageUrl, uploadInductionDoc: uploadInductionDocImageUrl, name, aadhaarNumber,
+//             dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining, From_Date: fromDate.toISOString().split('T')[0], Period: period, address, pincode, taluka,
+//             district, village, state, emergencyContact, photoSrc: photoSrcUrl, bankName, branch,
+//             accountNumber, ifscCode, projectName, labourCategory, department, workingHours, location, SalaryBu: salaryBu, businessUnit,
+//             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, ValidTill: validTillDate.toISOString().split('T')[0],
+//             retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location, CreationDate: creationDate.toISOString(), 
+//             DepartmentId: departmentId, DesignationId: designationId, LedgerId: ledgerId, GradeId: gradeId
+//         });
+
+//         return res.status(201).json({ msg: "User created successfully", data: data });
+//     } catch (err) {
+//         console.error(err);
+//         return res.status(500).json({ msg: 'Internal server error' });
+//     }
+// }
+
+
+
+
+// This is running code comment in 29-07-2024
+
 async function createRecord(req, res) {
     try {
         const {
             labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate ,
-        } = req.body;
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, labourCategoryId} = req.body;
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files;
-
+        console.log('Received IDs:', { departmentId, designationId, labourCategoryId});
         // Validate file fields
         if (!uploadAadhaarFront || !photoSrc || !uploadIdProof) {
             return res.status(400).json({ msg: 'All file fields are required' });
@@ -165,7 +324,8 @@ async function createRecord(req, res) {
 
         const dateOfJoiningDate = new Date(dateOfJoining);
         const fromDate = new Date(dateOfJoiningDate.getFullYear(), dateOfJoiningDate.getMonth(), 1);
-        const period = dateOfJoiningDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+        // const period = dateOfJoiningDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+        const period = dateOfJoiningDate.toLocaleString('default', { month: 'long', year: 'numeric' }).replace(' ', '-');
 
         const validTillDate = new Date(dateOfJoiningDate);
         validTillDate.setFullYear(validTillDate.getFullYear() + 1);
@@ -213,7 +373,8 @@ if (projectResult.recordset.length === 0) {
 }
 
 const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
-console.log(`Found project Description: ${location}`); 
+const businessUnit = projectResult.recordset[0].Description;
+console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
 
 // **********************************  NEW  ********************
 
@@ -234,7 +395,7 @@ if (parentIdResult.recordset.length === 0) {
 const parentId = parentIdResult.recordset[0].ParentId;
 
 const companyNameResult = await pool.request().query(`
-    SELECT Description AS Company_Name 
+    SELECT Id, Description AS Company_Name 
     FROM Framework.BusinessUnit 
     WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
     AND (IsDeleted = 0 OR IsDeleted IS NULL) 
@@ -255,10 +416,9 @@ const creationDate = new Date();
             labourOwnership, uploadAadhaarFront: frontImageUrl, uploadAadhaarBack: backImageUrl, uploadIdProof: IdProofImageUrl,uploadInductionDoc: uploadInductionDocImageUrl ,name, aadhaarNumber,
             dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining, From_Date: fromDate.toISOString().split('T')[0], Period: period, address, pincode, taluka,
             district, village, state, emergencyContact, photoSrc: photoSrcUrl, bankName, branch,
-            accountNumber, ifscCode, projectName, labourCategory, department, workingHours,location, SalaryBu: salaryBu,
+            accountNumber, ifscCode, projectName, labourCategory, department, workingHours,location, SalaryBu: salaryBu, businessUnit,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName,Induction_Date, Inducted_By, OnboardName,expiryDate , ValidTill: validTillDate.toISOString().split('T')[0],
-            retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location, CreationDate: creationDate.toISOString()  
-        });
+            retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location, CreationDate: creationDate.toISOString(), departmentId, designationId, labourCategoryId});
 
         return res.status(201).json({ msg: "User created successfully", data: data });
     } catch (err) {

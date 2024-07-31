@@ -358,6 +358,27 @@ const deleteProjectDeviceStatus = async (req, res) => {
   }
 };
 
+const addFvEmpId = async (req, res) => {
+  try {
+    const { empId } = req.body;
+    const { Id } = req.params;
+
+    const pool = await poolPromise;
+    await pool.request()
+      .input('Id', sql.Int, Id)
+      .input('empId', sql.Int, empId)
+      .query(`
+        update labourOnboarding set empId = @empId where id = @Id
+      `);
+
+    res.status(200).json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+};
+
+
 
 const fetchDynamicData = async (req, res) => {
   try {
@@ -406,6 +427,149 @@ const fetchDynamicData = async (req, res) => {
     res.status(500).send('Error fetching dynamic data');
   } finally {
     await sql.close();
+  }
+};
+
+
+
+const fetchOrgDynamicData = async (req, res) => {
+  // const { employeeId= 444, monthPeriodId=55, gradeId = 1, businessUnitId1 = 80, businessUnitId2 = 65, ledgerId = 170 } = req.query;
+  const { employeeId, monthdesc, gradeId, salarybudescription, workbudesc, ledgerId, departmentId, designationId } = req.query;
+
+  // Logging query parameters
+  console.log('Received query parameters:', { employeeId, monthdesc, gradeId, salarybudescription, workbudesc, ledgerId, departmentId, designationId });
+
+  // Validate required parameters
+  // if (!employeeId || !monthPeriodId) {
+  //   return res.status(400).send('Employee ID and Month Period ID are required');
+  // }
+
+  try {
+    const payrollPool = await poolPromise;
+    const pool = await poolPromise2;
+
+    // Construct SQL queries
+    const payrollUnitQuery = `SELECT * FROM labourOnboarding WHERE empId = ${employeeId}`;
+    const payrollGradUnitQuery = `SELECT * FROM Payroll.Grade WHERE id = ${gradeId}`;
+    // const salaryBuQuery = `SELECT * FROM Framework.BusinessUnit WHERE Description like ${salarybudescription}`;
+    const salaryBuQuery = `SELECT * FROM Framework.BusinessUnit WHERE Description LIKE '%${salarybudescription.replace(/'/g, "''")}%'`;
+    // const workBuQuery = `SELECT * FROM Framework.BusinessUnit WHERE Description like ${workbudesc}`;
+    const workBuQuery = `SELECT * FROM Framework.BusinessUnit WHERE Description LIKE '%${workbudesc.replace(/'/g, "''")}%'`;
+    // const frameworkQuery = `SELECT * FROM Framework.BusinessUnit WHERE Id = ${businessUnitId1}`;
+    // const financeQuery = `SELECT * FROM Finance.Ledger WHERE Id = ${ledgerId}`;
+    // const frameworksQuery = `SELECT * FROM Framework.BusinessUnit WHERE Id = ${businessUnitId2}`;
+    const payrollDepartmentQuery = `SELECT * FROM Payroll.Department WHERE Id = ${departmentId}`;
+    const payrollDesignationQuery = `SELECT * FROM Payroll.Designation WHERE Id = ${designationId}`;
+    // const payrollEmployeeQuery = `Select * From Framework.FiscalYearPeriod Where Description like ${monthdesc}`;
+    const payrollEmployeeQuery = `Select * From Framework.FiscalYearPeriod Where Description like '%${monthdesc.replace(/'/g, "''")}%'`;
+
+    const salaryBuQueryResult = await pool.request().query(salaryBuQuery);
+    const salaryBuJson = JSON.stringify(salaryBuQueryResult);
+    console.log('salaryBuQueryResult :' +salaryBuJson);
+    let salaryUnitResult;
+    let groupIdResult;
+    if(salaryBuQueryResult.recordset.length > 0){
+    const salaryBuDesc = salaryBuQueryResult.recordset[0];
+    const frameworkQuery = `SELECT * FROM Framework.BusinessUnit WHERE Id = ${salaryBuDesc.Id}`;
+    const frameworkUnit = await pool.request().query(frameworkQuery);
+    console.log('salaryBuUnit :' +JSON.stringify(frameworkUnit));      
+    salaryUnitResult = frameworkUnit.recordset[0];
+    if(frameworkUnit.recordset.length > 0){
+      console.log("salaryUnitResult : " + salaryUnitResult.InterUnitParentId);
+      const frameworkQuery = `SELECT * FROM Finance.Ledger Where Id = ${salaryUnitResult.InterUnitParentId}`;
+      const frameworkUnit = await pool.request().query(frameworkQuery);
+      groupIdResult = frameworkUnit.recordset[0];
+      console.log('groupIdResult : ' + groupIdResult);
+    }
+    console.log('salary :' +JSON.stringify(salaryUnitResult));      
+    }
+
+    const workBuQueryResult = await pool.request().query(workBuQuery);
+    const workBuJson = JSON.stringify(workBuQueryResult);
+    console.log('workBuQueryResult :' +workBuJson);      
+    let workUnitResult;
+    if(workBuQueryResult.recordset.length > 0){
+      const workBuDesc = workBuQueryResult.recordset[0];
+      const frameworkQuery = `SELECT * FROM Framework.BusinessUnit WHERE Id = ${workBuDesc.Id}`;
+      const frameworkUnit = await pool.request().query(frameworkQuery);
+    console.log('workbuUnit :' +JSON.stringify(frameworkUnit));      
+      workUnitResult = frameworkUnit.recordset[0];
+    console.log('workbu :' +workUnitResult);     
+
+    }
+
+    const monthPeriodResult = await pool.request().query(payrollEmployeeQuery);
+    console.log(monthPeriodResult);
+    let monthPeriodDetails;
+    if(monthPeriodResult.recordset.length > 0){
+      const month = monthPeriodResult.recordset[0];
+      const frameworkQuery = `Select * From Framework.FiscalYearPeriod WHERE Id = ${month.Id}`;
+      const frameworkUnit = await pool.request().query(frameworkQuery);
+      monthPeriodDetails = frameworkUnit.recordset[0];
+      console.log(monthPeriodDetails);
+    }
+
+    // Execute queries and handle results
+    const [
+      payrollUnitResult,
+      payrollGradUnitResult,
+      // financeUnitResult,
+      payrollDepartmenUnitResult,
+      payrollDesignationUnitResult,
+    ] = await Promise.all([
+      payrollPool.request().query(payrollUnitQuery),
+      pool.request().query(payrollGradUnitQuery),
+      // pool.request().query(financeQuery),
+      pool.request().query(payrollDepartmentQuery),
+      pool.request().query(payrollDesignationQuery),
+    ]);
+
+    const payrollUnit = payrollUnitResult.recordset[0];
+    const payrollGradUnit = payrollGradUnitResult.recordset[0];
+    // const financeUnit = financeUnitResult.recordset[0];
+    const payrollDepartmentUnit = payrollDepartmenUnitResult.recordset[0];
+    const payrollDesignationUnit = payrollDesignationUnitResult.recordset[0];
+console.log("payrollUnit : " + payrollUnit);
+    const dynamicData2 = {
+      payrollUnit,
+      monthPeriod: {
+        id: monthPeriodDetails.Id,
+        description: monthPeriodDetails.Description,
+        periodFrom: monthPeriodDetails.PeriodFrom,
+        periodTo: monthPeriodDetails.PeriodTo,
+        actualPeriod: monthPeriodDetails.ActualPeriod,
+        startDate: monthPeriodDetails.PeriodFrom,
+        endDate: monthPeriodDetails.PeriodTo,
+        cutOffPeriodFrom: monthPeriodDetails.CutOffPeriodFrom,
+        cutOffPeriodTo: monthPeriodDetails.CutOffPeriodTo
+      },
+      grade: payrollGradUnit,
+      email1: salaryUnitResult.Email1,
+      natureId: salaryUnitResult.NatureId,
+      interUnitLedgerId: salaryUnitResult.InterUnitLedgerId,
+      interUnitParentId: salaryUnitResult.InterUnitParentId,
+      interUnitLedger: {
+        ledgerGroupId: groupIdResult.GroupId
+      },
+      id: salaryUnitResult.Id,
+      code: salaryUnitResult.Code,
+      description: salaryUnitResult.Description,
+      parentId: salaryUnitResult.ParentId,
+      parentDesc: workUnitResult.Description,
+      department: payrollDepartmentUnit,
+      designation: payrollDesignationUnit
+    };
+
+    res.json(dynamicData2);
+  } catch (error) {
+    console.error('Error fetching dynamic data:', error);
+    res.status(500).send('Error fetching dynamic data');
+  } finally {
+    try {
+      await sql.close();
+    } catch (closeError) {
+      console.error('Error closing the SQL connection:', closeError);
+    }
   }
 };
 
@@ -475,7 +639,9 @@ module.exports = {
   updateProjectDeviceStatus,
   deleteProjectDeviceStatus,
   getProjectDeviceStatusSS,
-  fetchDynamicData
+  fetchDynamicData,
+  fetchOrgDynamicData,
+  addFvEmpId
 };
 
 
