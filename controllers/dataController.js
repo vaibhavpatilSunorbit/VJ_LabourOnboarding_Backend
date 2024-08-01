@@ -238,9 +238,9 @@ const getProjectDeviceStatusSS = async (req, res) => {
       FROM ProjectDeviceStatus
     `);
 
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ message: 'No records found' });
-    }
+    // if (result.recordset.length === 0) {
+    //   return res.status(404).json({ message: 'No records found' });
+    // }
 
     res.json(result.recordset);
   } catch (err) {
@@ -380,45 +380,98 @@ const addFvEmpId = async (req, res) => {
 
 
 
+// const fetchDynamicData = async (req, res) => {
+//   try {
+//     const pool = await poolPromise2;
+    
+//     const businessUnitQuery = `
+//       SELECT * FROM Framework.BusinessUnit 
+//       WHERE Description = 'SANKALP CONTRACTS PRIVATE LIMITED'
+//     `;
+//     const parentBusinessUnitQuery = `
+//       SELECT * FROM Framework.BusinessUnit 
+//       WHERE Id = 64
+//     `;
+//     const ledgerQuery = `
+//       SELECT * FROM Finance.Ledger 
+//       WHERE Id = 6559
+//     `;
+
+//     const businessUnitResult = await pool.request().query(businessUnitQuery);
+//     const parentBusinessUnitResult = await pool.request().query(parentBusinessUnitQuery);
+//     const ledgerResult = await pool.request().query(ledgerQuery);
+
+//     const businessUnit = businessUnitResult.recordset[0];
+//     const parentBusinessUnit = parentBusinessUnitResult.recordset[0];
+//     const ledger = ledgerResult.recordset[0];
+
+//     const dynamicData = {
+//       // phone1: '+91-...', 
+//       email1: 'system@javdekars.com', 
+//       natureId: 0,
+//       interUnitLedgerId: 6559,
+//       interUnitParentId: 169,
+//       interUnitLedger: {
+//         ledgerGroupId: ledger.GroupId 
+//       },
+//       id: businessUnit.Id,
+//       code: businessUnit.Code,
+//       description: businessUnit.Description,
+//       parentId: parentBusinessUnit.Id,
+//       parentDesc: parentBusinessUnit.Description
+//     };
+
+//     res.json(dynamicData);
+//   } catch (error) {
+//     console.error('Error fetching dynamic data:', error);
+//     res.status(500).send('Error fetching dynamic data');
+//   } finally {
+//     await sql.close();
+//   }
+// };
+
+
+
+
 const fetchDynamicData = async (req, res) => {
+  const { businessUnitDesc } = req.query;
+
+  console.log('Received query parameters:', { businessUnitDesc});
+
   try {
     const pool = await poolPromise2;
-    
-    const businessUnitQuery = `
-      SELECT * FROM Framework.BusinessUnit 
-      WHERE Description = 'SANKALP CONTRACTS PRIVATE LIMITED'
-    `;
-    const parentBusinessUnitQuery = `
-      SELECT * FROM Framework.BusinessUnit 
-      WHERE Id = 64
-    `;
-    const ledgerQuery = `
-      SELECT * FROM Finance.Ledger 
-      WHERE Id = 6559
-    `;
 
-    const businessUnitResult = await pool.request().query(businessUnitQuery);
-    const parentBusinessUnitResult = await pool.request().query(parentBusinessUnitQuery);
-    const ledgerResult = await pool.request().query(ledgerQuery);
+    // Construct SQL queries dynamically based on provided parameters
+    let businessUnitQuery = `SELECT * FROM Framework.BusinessUnit where Description LIKE '%${businessUnitDesc.replace(/'/g, "''")}%'`;
+  
+    const businessUnitQueryResult = await pool.request().query(businessUnitQuery);
+    let result = businessUnitQueryResult.recordset[0];
+    let parentResult;
+    let ledgerResult;
+    if(businessUnitQueryResult.recordset.length > 0){
+      const frameworkQuery = `SELECT * FROM Framework.BusinessUnit Where Id = ${result.ParentId}`;
+      const frameworkUnit = await pool.request().query(frameworkQuery);
+      parentResult = frameworkUnit.recordset[0];
+      console.log('parentIdResult : ' + parentResult);
 
-    const businessUnit = businessUnitResult.recordset[0];
-    const parentBusinessUnit = parentBusinessUnitResult.recordset[0];
-    const ledger = ledgerResult.recordset[0];
+      const frameworkQueryLedger = `SELECT * FROM Finance.Ledger Where Id = ${result.InterUnitLedgerId}`;
+      const frameworkUnitLedger = await pool.request().query(frameworkQueryLedger);
+      ledgerResult = frameworkUnitLedger.recordset[0];
+      console.log('ledgerResult : ' + ledgerResult);
+    }
 
+    // Construct the dynamic data object
     const dynamicData = {
-      // phone1: '+91-...', 
-      email1: 'system@javdekars.com', 
+      email1: 'system@javdekars.com',
       natureId: 0,
-      interUnitLedgerId: 6559,
-      interUnitParentId: 169,
-      interUnitLedger: {
-        ledgerGroupId: ledger.GroupId 
-      },
-      id: businessUnit.Id,
-      code: businessUnit.Code,
-      description: businessUnit.Description,
-      parentId: parentBusinessUnit.Id,
-      parentDesc: parentBusinessUnit.Description
+      interUnitLedgerId: result.interUnitLedgerId || null,
+      interUnitParentId: result.interUnitParentId, 
+      interUnitLedger: ledgerResult ? { ledgerGroupId: ledgerResult.GroupId } : null,
+      id: result ? result.Id : null,
+      code: result ? result.Code : null,
+      description: result ? result.Description : null,
+      parentId: parentResult ? parentResult.Id : null,
+      parentDesc: parentResult ? parentResult.Description : null
     };
 
     res.json(dynamicData);
@@ -426,9 +479,17 @@ const fetchDynamicData = async (req, res) => {
     console.error('Error fetching dynamic data:', error);
     res.status(500).send('Error fetching dynamic data');
   } finally {
-    await sql.close();
+    try {
+      await sql.close();
+    } catch (closeError) {
+      console.error('Error closing the SQL connection:', closeError);
+    }
   }
 };
+
+
+
+
 
 
 
@@ -555,9 +616,12 @@ console.log("payrollUnit : " + payrollUnit);
       code: salaryUnitResult.Code,
       description: salaryUnitResult.Description,
       parentId: salaryUnitResult.ParentId,
-      parentDesc: workUnitResult.Description,
+      parentDesc: payrollUnit.companyName,
       department: payrollDepartmentUnit,
-      designation: payrollDesignationUnit
+      designation: payrollDesignationUnit,
+      workbu: {
+        code: workUnitResult.Code
+      }
     };
 
     res.json(dynamicData2);
