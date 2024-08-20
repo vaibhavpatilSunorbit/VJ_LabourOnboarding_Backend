@@ -146,7 +146,17 @@ const { poolPromise2 } = require('./config/dbConfig2');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
+
+app.use(express.text({ type: 'text/xml' }));
+
+
+app.use(cors({
+    origin: '*'
+}));
+
+
+// app.use(cors())
+
 app.use(bodyParser.json({ limit: '100mb' }));
 app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
 
