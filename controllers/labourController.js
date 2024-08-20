@@ -2,10 +2,12 @@
 const labourModel = require('../models/labourModel');
 const {sql, poolPromise2 } = require('../config/dbConfig2');
 const path = require('path');
+const axios = require('axios')
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 // const baseUrl = 'http://localhost:4000/uploads/';
-const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+// const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
 // async function handleCheckAadhaar(req, res) {
@@ -323,7 +325,8 @@ async function createRecord(req, res) {
         const photoSrcUrl = baseUrl + photoSrcFilename;
 
         const dateOfJoiningDate = new Date(dateOfJoining);
-        const fromDate = new Date(dateOfJoiningDate.getFullYear(), dateOfJoiningDate.getMonth(), 1);
+        const fromDate = dateOfJoiningDate;
+        // const fromDate = new Date(dateOfJoiningDate.getFullYear(), dateOfJoiningDate.getMonth(), 1);
         // const period = dateOfJoiningDate.toLocaleString('default', { month: 'long', year: 'numeric' });
         const period = dateOfJoiningDate.toLocaleString('default', { month: 'long', year: 'numeric' }).replace(' ', '-');
 
@@ -410,6 +413,23 @@ if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
     salaryBu = location;
 }
 
+
+ // Fetch department description
+ const departmentRequest = pool.request();
+ departmentRequest.input('departmentId', sql.Int, departmentId);
+ const departmentQuery = `
+     SELECT a.Description AS Department_Name
+     FROM Payroll.Department a
+     WHERE a.Id = @departmentId
+ `;
+ const departmentResult = await departmentRequest.query(departmentQuery);
+
+ if (departmentResult.recordset.length === 0) {
+     return res.status(404).send('Department not found');
+ }
+
+ const departmentName = departmentResult.recordset[0].Department_Name;
+
 const creationDate = new Date();
         
         const data = await labourModel.registerData({
@@ -418,7 +438,7 @@ const creationDate = new Date();
             district, village, state, emergencyContact, photoSrc: photoSrcUrl, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,location, SalaryBu: salaryBu, businessUnit,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName,Induction_Date, Inducted_By, OnboardName,expiryDate , ValidTill: validTillDate.toISOString().split('T')[0],
-            retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location, CreationDate: creationDate.toISOString(), departmentId, designationId, labourCategoryId});
+            retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location, CreationDate: creationDate.toISOString(), departmentId, departmentName, designationId, labourCategoryId});
 
         return res.status(201).json({ msg: "User created successfully", data: data });
     } catch (err) {
@@ -602,6 +622,26 @@ async function resubmitLabour(req, res) {
 }
 
 
+async function esslapi (req, res) {
+    try {
+        const approvedLabours = req.body;
+        // console.log("approvedLabours : " + approvedLabours);
+
+        const esslapiurl = 'https://essl.vjerp.com:8530/iclock/webapiservice.asmx?op=AddEmployee';
+        const response = await axios.post(esslapiurl, approvedLabours, {
+            headers: {
+              'Content-Type': 'text/xml'
+            }
+          });
+
+        res.json(response.data);
+    } catch (error) {
+        console.error('Error fetching approved labours:', error.message);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+
 
 
 
@@ -619,6 +659,7 @@ module.exports = {
     rejectLabour,
     getApprovedLabours,
     resubmitLabour,
+    esslapi
 };
 
 

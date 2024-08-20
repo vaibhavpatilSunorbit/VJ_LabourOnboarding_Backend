@@ -72,7 +72,7 @@ const addEmployee = async (req, res) => {
   });
 
   try {
-    const response = await axios.post('http://192.168.1.140/iclock/WebAPIService.asmx', xmlRequest, {
+    const response = await axios.post('http://essl.vjerp.com:8530/iclock/WebAPIService.asmx', xmlRequest, {
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
         'SOAPAction': 'http://tempuri.org/AddEmployee'
