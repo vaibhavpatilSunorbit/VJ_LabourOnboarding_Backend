@@ -2,17 +2,17 @@
 const sql = require('mssql');
 
 const config = {
-    user: process.env.DB_USER_2,
-    password: process.env.DB_PASSWORD_2,
-    server: process.env.DB_SERVER_2,
-    database: process.env.DB_NAME_2,
+    user: process.env.DB_USER_2 || 'vj',
+    password: process.env.DB_PASSWORD_2 || 'Password*2024',
+    server: process.env.DB_SERVER_2 || '103.231.78.55',
+    database: process.env.DB_NAME_2 || 'JDPROJECT',
     pool: {
       max: 10,
       min: 0,
       idleTimeoutMillis: 30000
     },
   options: {
-    encrypt: true,
+    encrypt: false,
     trustServerCertificate: true,
   },
 };

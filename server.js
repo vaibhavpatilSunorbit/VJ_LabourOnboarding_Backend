@@ -180,6 +180,16 @@ const upload = multer({
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Define the route to update a labour record
+app.put('/labours/:id', upload.fields([
+    { name: 'uploadAadhaarFront' },
+    { name: 'uploadAadhaarBack' },
+    { name: 'uploadIdProof' },
+    { name: 'uploadInductionDoc' },
+    { name: 'photoSrc' }
+]), labourController.updateRecord);
+
+
 app.get('/labours/:id/download/full-form', (req, res) => {
     const { id } = req.params;
     const filePath = path.join(__dirname, 'uploads', `full_form_${id}.pdf`);
@@ -305,7 +315,10 @@ poolPromise2
         console.error('Database connection failed:', err);
     });
 
-
+    module.exports = {
+        upload, // Export the upload function
+        // other exports if any
+    };
 
 
 
