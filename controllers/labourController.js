@@ -1,6 +1,5 @@
-
 const labourModel = require('../models/labourModel');
-const {sql, poolPromise2 } = require('../config/dbConfig2');
+const { sql, poolPromise2 } = require('../config/dbConfig2');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios')
@@ -8,38 +7,39 @@ const multer = require('multer');
 const { upload } = require('../server');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
-const baseUrl = 'http://localhost:4000/uploads/';
+// const baseUrl = 'http://localhost:4000/uploads/';
 // const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
-// const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
+const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
 
 
 async function handleCheckAadhaar(req, res) {
     const { aadhaarNumber } = req.body;
-  
+    console.log('Request Body: AaadharNumber Ch----------', req.body);
+
     try {
-      const labourRecord = await labourModel.checkAadhaarExists(aadhaarNumber);
-  
-      if (labourRecord) {
-        if (labourRecord.status === 'Resubmitted' && labourRecord.isApproved === 3) {
-          console.log("Returning skipCheck for Resubmitted and isApproved 3"); 
-          return res.status(200).json({ exists: false, skipCheck: true });
+        const labourRecord = await labourModel.checkAadhaarExists(aadhaarNumber);
+
+        if (labourRecord) {
+            if (labourRecord.status === 'Resubmitted' && labourRecord.isApproved === 3) {
+                console.log("Returning skipCheck for Resubmitted and isApproved 3");
+                return res.status(200).json({ exists: false, skipCheck: true });
+            } else {
+                console.log("Returning exists true");
+                return res.status(200).json({ exists: true });
+            }
         } else {
-          console.log("Returning exists true");
-          return res.status(200).json({ exists: true });
+            console.log("Returning exists false");
+            return res.status(200).json({ exists: false });
         }
-      } else {
-        console.log("Returning exists false"); 
-        return res.status(200).json({ exists: false });
-      }
     } catch (error) {
-      console.error('Error in handleCheckAadhaar:', error);
-      return res.status(500).json({ error: 'Error checking Aadhaar number' });
-    }
-  }
-  
-  
+        console.error('Error in handleCheckAadhaar:', error);
+        return res.status(500).json({ error: 'Error checking Aadhaar number' });
+    };
+};
+
+
 
 // async function handleCheckAadhaar(req, res) {
 //     const { aadhaarNumber } = req.body;
@@ -70,9 +70,9 @@ async function getNextUniqueID(req, res) {
     } catch (error) {
         console.error('Error in getNextUniqueID:', error.message);
         res.status(500).json({ message: 'Internal server error' });
-    }
-}
-  
+    };
+};
+
 
 // This is running code comment in 29-07-2024
 
@@ -82,10 +82,10 @@ async function createRecord(req, res) {
             labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, labourCategoryId} = req.body;
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, labourCategoryId } = req.body;
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files;
-        console.log('Received IDs:', { departmentId, designationId, labourCategoryId});
+        console.log('Received IDs:', { departmentId, designationId, labourCategoryId });
         // Validate file fields
         if (!photoSrc || !uploadIdProof) {
             return res.status(400).json({ msg: 'All file fields are required' });
@@ -117,16 +117,16 @@ async function createRecord(req, res) {
         const retirementDate = new Date(dateOfBirth);
         retirementDate.setFullYear(retirementDate.getFullYear() + 60);
 
-// **********************************  NEW  ********************
-const pool = await poolPromise2;
-const projectRequest = pool.request();
+        // **********************************  NEW  ********************
+        const pool = await poolPromise2;
+        const projectRequest = pool.request();
 
-const isNumeric = !isNaN(projectName);
-projectRequest.input('projectName', isNumeric ? sql.Int : sql.VarChar, projectName);
+        const isNumeric = !isNaN(projectName);
+        projectRequest.input('projectName', isNumeric ? sql.Int : sql.VarChar, projectName);
 
-let query;
-if (isNumeric) {
-    query = `
+        let query;
+        if (isNumeric) {
+            query = `
         SELECT a.id, a.Description 
         FROM Framework.BusinessUnit a
         LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
@@ -135,8 +135,8 @@ if (isNumeric) {
         AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
         AND b.Id = 3
     `;
-} else {
-    query = `
+        } else {
+            query = `
         SELECT a.id, a.Description 
         FROM Framework.BusinessUnit a
         LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
@@ -145,26 +145,26 @@ if (isNumeric) {
         AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
         AND b.Id = 3
     `;
-}
+        }
 
-console.log(`Querying for projectName: ${projectName}`); // Debug log
+        console.log(`Querying for projectName: ${projectName}`); // Debug log
 
-const projectResult = await projectRequest.query(query);
+        const projectResult = await projectRequest.query(query);
 
-if (projectResult.recordset.length === 0) {
-    console.log('Invalid project name:', projectName); // Debug log
-    return res.status(400).json({ msg: 'Invalid project name' });
-}
+        if (projectResult.recordset.length === 0) {
+            // console.log('Invalid project name:', projectName); 
+            return res.status(400).json({ msg: 'Invalid project name' });
+        }
 
-const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
-const businessUnit = projectResult.recordset[0].Description;
-console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
+        const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
+        const businessUnit = projectResult.recordset[0].Description;
+        console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
 
-// **********************************  NEW  ********************
+        // **********************************  NEW  ********************
 
-let salaryBu;
-const projectId = projectResult.recordset[0].id;
-const parentIdResult = await pool.request().query(`
+        let salaryBu;
+        const projectId = projectResult.recordset[0].id;
+        const parentIdResult = await pool.request().query(`
     SELECT ParentId 
     FROM Framework.BusinessUnit 
     WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
@@ -172,13 +172,13 @@ const parentIdResult = await pool.request().query(`
     AND Id = ${projectId}
 `);
 
-if (parentIdResult.recordset.length === 0) {
-    return res.status(404).send('ParentId not found for the selected project');
-}
+        if (parentIdResult.recordset.length === 0) {
+            return res.status(404).send('ParentId not found for the selected project');
+        }
 
-const parentId = parentIdResult.recordset[0].ParentId;
+        const parentId = parentIdResult.recordset[0].ParentId;
 
-const companyNameResult = await pool.request().query(`
+        const companyNameResult = await pool.request().query(`
     SELECT Id, Description AS Company_Name 
     FROM Framework.BusinessUnit 
     WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
@@ -186,40 +186,41 @@ const companyNameResult = await pool.request().query(`
     AND Id = ${parentId}
 `);
 
-const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
+        const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
 
-if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
-    salaryBu = `${companyNameFromDb} - HO`;
-} else {
-    salaryBu = location;
-}
+        if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
+            salaryBu = `${companyNameFromDb} - HO`;
+        } else {
+            salaryBu = location;
+        }
 
 
- // Fetch department description
- const departmentRequest = pool.request();
- departmentRequest.input('departmentId', sql.Int, departmentId);
- const departmentQuery = `
+        // Fetch department description
+        const departmentRequest = pool.request();
+        departmentRequest.input('departmentId', sql.Int, departmentId);
+        const departmentQuery = `
      SELECT a.Description AS Department_Name
      FROM Payroll.Department a
      WHERE a.Id = @departmentId
  `;
- const departmentResult = await departmentRequest.query(departmentQuery);
+        const departmentResult = await departmentRequest.query(departmentQuery);
 
- if (departmentResult.recordset.length === 0) {
-     return res.status(404).send('Department not found');
- }
+        if (departmentResult.recordset.length === 0) {
+            return res.status(404).send('Department not found');
+        }
 
- const departmentName = departmentResult.recordset[0].Department_Name;
+        const departmentName = departmentResult.recordset[0].Department_Name;
 
-const creationDate = new Date();
-        
+        const creationDate = new Date();
+
         const data = await labourModel.registerData({
-            labourOwnership, uploadAadhaarFront: frontImageUrl, uploadAadhaarBack: backImageUrl, uploadIdProof: IdProofImageUrl,uploadInductionDoc: uploadInductionDocImageUrl ,name, aadhaarNumber,
+            labourOwnership, uploadAadhaarFront: frontImageUrl, uploadAadhaarBack: backImageUrl, uploadIdProof: IdProofImageUrl, uploadInductionDoc: uploadInductionDocImageUrl, name, aadhaarNumber,
             dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining, From_Date: fromDate.toISOString().split('T')[0], Period: period, address, pincode, taluka,
             district, village, state, emergencyContact, photoSrc: photoSrcUrl, bankName, branch,
-            accountNumber, ifscCode, projectName, labourCategory, department, workingHours,location, SalaryBu: salaryBu, businessUnit,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName,Induction_Date, Inducted_By, OnboardName,expiryDate , ValidTill: validTillDate.toISOString().split('T')[0],
-            retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location, CreationDate: creationDate.toISOString(), departmentId, departmentName, designationId, labourCategoryId});
+            accountNumber, ifscCode, projectName, labourCategory, department, workingHours, location, SalaryBu: salaryBu, businessUnit,
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, ValidTill: validTillDate.toISOString().split('T')[0],
+            retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location, CreationDate: creationDate.toISOString(), departmentId, departmentName, designationId, labourCategoryId
+        });
 
         return res.status(201).json({ msg: "User created successfully", data: data });
     } catch (err) {
@@ -257,6 +258,455 @@ async function getRecordById(req, res) {
 
 
 
+async function createRecordUpdate(req, res) {
+    try {
+        console.log('Request Body: check----------', req.body);
+        console.log('Request Files:', req.files); 
+
+        const {
+            labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
+            address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
+            accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
+        } = req.body;
+
+        const labourCategoryMap = {
+            'SKILLED': 1,
+            'UN-SKILLED': 2,
+            'SEMI-SKILLED': 3
+        };
+
+        const safeLabourCategoryId = String(labourCategoryMap[labourCategory]) || null;
+
+        if (safeLabourCategoryId === null) {
+            console.log('Invalid labourCategory:', labourCategory);
+            return res.status(400).json({ msg: 'Invalid labourCategory provided' });
+        }
+
+        const safeConvertToInt = (value) => {
+            if (value === 'null' || value === '' || value === undefined) return null;
+            const parsedValue = parseInt(value, 10);
+            return isNaN(parsedValue) ? null : parsedValue;
+        };
+
+        const safeDepartmentId = String(departmentId);
+        const safeDesignationId = String(designationId);
+        const safeProjectName = isNaN(projectName) ? projectName : String(projectName); 
+
+        console.log('Converted Values:', {
+            safeProjectName,
+            safeDepartmentId,
+            safeDesignationId,
+            safeLabourCategoryId
+        });
+
+        if (safeProjectName === null || safeDepartmentId === null || safeDesignationId === null) {
+            return res.status(400).json({ msg: 'Missing required fields: projectName, departmentId, or designationId' });
+        }
+
+        const {
+            uploadAadhaarFront = null,
+            uploadAadhaarBack = null,
+            photoSrc = null,
+            uploadIdProof = null,
+            uploadInductionDoc = null
+        } = req.files || {};  // Use {} as fallback if req.files is undefined
+
+        const processFileField = (fileField, reqFile) => {
+            if (typeof fileField === 'string' && fileField.startsWith('http')) {
+                return fileField; // URL
+            } else if (reqFile) {
+                return baseUrl + path.basename(reqFile[0].path); // Binary data uploaded, get URL path
+            }
+            return null; // No data available
+        };
+
+        const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
+        const backImageUrl = processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
+        const photoSrcUrl = processFileField(req.body.photoSrc, photoSrc);
+        const IdProofImageUrl = processFileField(req.body.uploadIdProof, uploadIdProof);
+        const uploadInductionDocImageUrl = processFileField(req.body.uploadInductionDoc, uploadInductionDoc);
+
+
+        const dateOfJoiningDate = new Date(dateOfJoining);
+        const fromDate = dateOfJoiningDate;
+        const period = dateOfJoiningDate.toLocaleString('default', { month: 'long', year: 'numeric' }).replace(' ', '-');
+        const validTillDate = new Date(dateOfJoiningDate);
+        validTillDate.setFullYear(validTillDate.getFullYear() + 1);
+        const retirementDate = new Date(dateOfBirth);
+        retirementDate.setFullYear(retirementDate.getFullYear() + 60);
+
+        const pool = await poolPromise2;
+        const projectRequest = pool.request();
+
+        projectRequest.input('projectName', isNaN(safeProjectName) ? sql.VarChar : sql.Int, safeProjectName);
+
+        let query;
+        if (!isNaN(safeProjectName)) {
+            query = `
+                SELECT a.id, a.Description 
+                FROM Framework.BusinessUnit a
+                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
+                WHERE a.id = @projectName
+                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
+                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+                AND b.Id = 3
+            `;
+        } else {
+            query = `
+                SELECT a.id, a.Description 
+                FROM Framework.BusinessUnit a
+                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
+                WHERE a.Description = @projectName
+                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
+                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+                AND b.Id = 3
+            `;
+        }
+
+        console.log(`Querying for projectName: ${safeProjectName}`); // Debug log
+
+        const projectResult = await projectRequest.query(query);
+
+        if (projectResult.recordset.length === 0) {
+            console.log('Invalid project name:', safeProjectName); // Debug log
+            return res.status(400).json({ msg: 'Invalid project name-------' });
+        }
+
+        const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
+        const businessUnit = projectResult.recordset[0].Description;
+        console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
+
+        let salaryBu;
+        const projectId = projectResult.recordset[0].id;
+        const parentIdResult = await pool.request().query(`
+            SELECT ParentId 
+            FROM Framework.BusinessUnit 
+            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+            AND Id = ${projectId}
+        `);
+
+        if (parentIdResult.recordset.length === 0) {
+            return res.status(404).send('ParentId not found for the selected project');
+        }
+
+        const parentId = parentIdResult.recordset[0].ParentId;
+
+        const companyNameResult = await pool.request().query(`
+            SELECT Id, Description AS Company_Name 
+            FROM Framework.BusinessUnit 
+            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+            AND Id = ${parentId}
+        `);
+
+        const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
+
+        if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
+            salaryBu = `${companyNameFromDb} - HO`;
+        } else {
+            salaryBu = location;
+        }
+
+        // Fetch department description
+        const departmentRequest = pool.request();
+
+        // Validate and log departmentId before setting SQL input
+        console.log('Setting SQL input for departmentId:', safeDepartmentId);
+        if (safeDepartmentId !== null) {
+            departmentRequest.input('departmentId', safeDepartmentId);
+            console.log("departmentId", departmentId)
+        } else {
+            console.log('Invalid departmentId provided:', departmentId);
+            return res.status(400).send('Invalid departmentId');
+        }
+
+        const departmentQuery = `
+            SELECT a.Description AS Department_Name
+            FROM Payroll.Department a
+            WHERE a.Id = @departmentId
+        `;
+        const departmentResult = await departmentRequest.query(departmentQuery);
+
+        if (departmentResult.recordset.length === 0) {
+            console.log('Department not found for departmentId:', safeDepartmentId);
+            return res.status(404).send('Department not found');
+        }
+
+        const departmentName = departmentResult.recordset[0].Department_Name;
+
+        const creationDate = new Date();
+
+
+
+
+        const data = await labourModel.registerDataUpdate({
+            labourOwnership,
+            uploadAadhaarFront: frontImageUrl,
+            uploadAadhaarBack: backImageUrl,
+            uploadIdProof: IdProofImageUrl,
+            uploadInductionDoc: uploadInductionDocImageUrl,
+            name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
+            Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining,
+            From_Date: fromDate.toISOString().split('T')[0], Period: period, address,
+            pincode, taluka, district, village, state, emergencyContact,
+            photoSrc: photoSrcUrl, bankName, branch, accountNumber, ifscCode, projectName,
+            labourCategory, department, workingHours, location, SalaryBu: salaryBu, businessUnit,
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName,
+            Induction_Date, Inducted_By, OnboardName, expiryDate,
+            ValidTill: validTillDate.toISOString().split('T')[0],
+            retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location,
+            CreationDate: creationDate.toISOString(), departmentId: safeDepartmentId, departmentName, designationId: safeDesignationId,
+            labourCategoryId: safeLabourCategoryId
+        });
+
+
+        console.log('dataupdate', data)
+
+        return res.status(201).json({ msg: "User created successfully", data: data });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ msg: 'Internal server error' });
+    }
+}
+
+
+
+
+
+
+
+async function updateRecord(req, res) {
+    try {
+        // Log the full request body and files for debugging
+        console.log('Request Body:', req.body);
+        console.log('Request Files:', req.files); // Logs undefined when no files are uploaded
+
+        // Extract fields from request body
+        const {
+            LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
+            address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
+            accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
+        } = req.body;
+
+        console.log('LabourID from request body:', LabourID);
+
+        // Check if LabourID exists
+        if (!LabourID) {
+            console.error('LabourID is missing from request body.');
+            return res.status(400).json({ msg: 'LabourID is required.' });
+        }
+
+        // Mapping for labourCategory to labourCategoryId
+        const labourCategoryMap = {
+            'SKILLED': 1,
+            'UN-SKILLED': 2,
+            'SEMI-SKILLED': 3
+        };
+
+        // Set safeLabourCategoryId using the mapping
+        const safeLabourCategoryId = labourCategoryMap[labourCategory] !== undefined ? labourCategoryMap[labourCategory] : null;
+
+        // If labourCategoryId is null, handle the error or assign a default value
+        if (safeLabourCategoryId === null) {
+            console.log('Invalid labourCategory:', labourCategory);
+            return res.status(400).json({ msg: 'Invalid labourCategory provided' });
+        }
+
+        // Convert fields to appropriate formats
+        const safeDepartmentId = departmentId ? String(departmentId) : null;
+        const safeDesignationId = designationId ? String(designationId) : null;
+        const safeProjectName = projectName && !isNaN(projectName) ? String(projectName) : projectName;
+
+        if (!safeProjectName || !safeDepartmentId || !safeDesignationId) {
+            return res.status(400).json({ msg: 'Missing required fields: projectName, departmentId, or designationId' });
+        }
+
+        const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files || {};
+
+        const processFileField = (fileField, reqFile) => {
+            if (typeof fileField === 'string' && fileField.startsWith('http')) {
+                return fileField;
+            } else if (reqFile) {
+                return baseUrl + path.basename(reqFile[0].path);
+            }
+            return null;
+        };
+
+        const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
+        const backImageUrl = processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
+        const photoSrcUrl = processFileField(req.body.photoSrc, photoSrc);
+        const IdProofImageUrl = processFileField(req.body.uploadIdProof, uploadIdProof);
+        const uploadInductionDocImageUrl = processFileField(req.body.uploadInductionDoc, uploadInductionDoc);
+
+        const dateOfJoiningDate = new Date(dateOfJoining);
+        const fromDate = dateOfJoiningDate;
+        const period = dateOfJoiningDate.toLocaleString('default', { month: 'long', year: 'numeric' }).replace(' ', '-');
+        const validTillDate = new Date(dateOfJoiningDate);
+        validTillDate.setFullYear(validTillDate.getFullYear() + 1);
+        const retirementDate = new Date(dateOfBirth);
+        retirementDate.setFullYear(retirementDate.getFullYear() + 60);
+
+        const pool = await poolPromise2;
+        const projectRequest = pool.request();
+        projectRequest.input('projectName', isNaN(safeProjectName) ? sql.VarChar : sql.Int, safeProjectName);
+
+        let query;
+        if (!isNaN(safeProjectName)) {
+            query = `
+                SELECT a.id, a.Description 
+                FROM Framework.BusinessUnit a
+                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
+                WHERE a.id = @projectName
+                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
+                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+                AND b.Id = 3
+            `;
+        } else {
+            query = `
+                SELECT a.id, a.Description 
+                FROM Framework.BusinessUnit a
+                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
+                WHERE a.Description = @projectName
+                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
+                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+                AND b.Id = 3
+            `;
+        }
+
+        console.log(`Querying for projectName: ${safeProjectName}`);
+
+        const projectResult = await projectRequest.query(query);
+
+        if (projectResult.recordset.length === 0) {
+            console.log('Invalid project name:', safeProjectName);
+            return res.status(400).json({ msg: 'Invalid project name' });
+        }
+
+        const location = projectResult.recordset[0].Description;
+        const businessUnit = projectResult.recordset[0].Description;
+        console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
+
+        let salaryBu;
+        const projectId = projectResult.recordset[0].id;
+        const parentIdResult = await pool.request().query(`
+            SELECT ParentId 
+            FROM Framework.BusinessUnit 
+            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+            AND Id = ${projectId}
+        `);
+
+        if (parentIdResult.recordset.length === 0) {
+            return res.status(404).send('ParentId not found for the selected project');
+        }
+
+        const parentId = parentIdResult.recordset[0].ParentId;
+
+        const companyNameResult = await pool.request().query(`
+            SELECT Id, Description AS Company_Name 
+            FROM Framework.BusinessUnit 
+            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+            AND Id = ${parentId}
+        `);
+
+        const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
+
+        salaryBu = companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED' ? `${companyNameFromDb} - HO` : location;
+
+        const departmentRequest = pool.request();
+        departmentRequest.input('departmentId', safeDepartmentId);
+
+        const departmentQuery = `
+            SELECT a.Description AS Department_Name
+            FROM Payroll.Department a
+            WHERE a.Id = @departmentId
+        `;
+        const departmentResult = await departmentRequest.query(departmentQuery);
+
+        if (departmentResult.recordset.length === 0) {
+            console.log('Department not found for departmentId:', safeDepartmentId);
+            return res.status(404).send('Department not found');
+        }
+
+        const departmentName = departmentResult.recordset[0].Department_Name;
+
+        const creationDate = new Date();
+
+        // Prepare data for update
+        const data = await labourModel.updateData({
+            LabourID,
+            labourOwnership,
+            uploadAadhaarFront: frontImageUrl,
+            uploadAadhaarBack: backImageUrl,
+            uploadIdProof: IdProofImageUrl,
+            uploadInductionDoc: uploadInductionDocImageUrl,
+            name,
+            aadhaarNumber,
+            dateOfBirth,
+            contactNumber,
+            gender,
+            dateOfJoining,
+            Group_Join_Date: dateOfJoining,
+            ConfirmDate: dateOfJoining,
+            From_Date: fromDate.toISOString().split('T')[0],
+            Period: period,
+            address,
+            pincode,
+            taluka,
+            district,
+            village,
+            state,
+            emergencyContact,
+            photoSrc: photoSrcUrl,
+            bankName,
+            branch,
+            accountNumber,
+            ifscCode,
+            projectName,
+            labourCategory,
+            department,
+            workingHours,
+            location,
+            SalaryBu: salaryBu,
+            businessUnit,
+            contractorName,
+            contractorNumber,
+            designation,
+            title,
+            Marital_Status,
+            companyName,
+            Induction_Date,
+            Inducted_By,
+            OnboardName,
+            expiryDate,
+            ValidTill: validTillDate.toISOString().split('T')[0],
+            retirementDate: retirementDate.toISOString().split('T')[0],
+            WorkingBu: location,
+            CreationDate: creationDate.toISOString(),
+            departmentId: safeDepartmentId,
+            departmentName,
+            designationId: safeDesignationId,
+            labourCategoryId: safeLabourCategoryId
+        });
+
+        console.log("Data after update:", data);
+
+        if (!data) {
+            return res.status(404).json({ msg: 'No data updated' });
+        }
+
+        return res.status(200).json({ msg: "User updated successfully", data: data });
+    } catch (err) {
+        console.error('Error updating record:', err.message);
+        return res.status(500).json({ msg: 'Internal server error' });
+    }
+}
+
+
 // Define multer storage configuration
 // const storage = multer.diskStorage({
 //     destination: (req, file, cb) => {
@@ -285,56 +735,57 @@ async function getRecordById(req, res) {
 // const baseUrl = 'http://localhost:4000/uploads/';
 
 // Update Record Function
-async function updateRecord(req, res) {
-    try {
-        const { id } = req.params;  // Get ID from request parameters
-        console.log('Incoming request body:', req.body);  
-        const updatedData = { ...req.body };  // Get data from request body
+// async function updateRecord(req, res) {
+//     try {
+//         const { id } = req.params;  // Get ID from request parameters
+//         console.log('Incoming request body:', req.body);  
+//         const updatedData = { ...req.body };  // Get data from request body
 
-        if (!id) {
-            return res.status(400).json({ error: 'ID is required' });  // Check if ID is provided
-        }
+//         if (!id) {
+//             return res.status(400).json({ error: 'ID is required' });  // Check if ID is provided
+//         }
 
-        // Add file paths to updatedData if they are provided
-        if (req.files) {
-            if (req.files.uploadAadhaarFront) {
-                const frontImageFilename = path.basename(req.files.uploadAadhaarFront[0].path);
-                updatedData.uploadAadhaarFront = baseUrl + frontImageFilename;
-            }
-            if (req.files.uploadAadhaarBack) {
-                const backImageFilename = path.basename(req.files.uploadAadhaarBack[0].path);
-                updatedData.uploadAadhaarBack = baseUrl + backImageFilename;
-            }
-            if (req.files.uploadIdProof) {
-                const IdProofImageFilename = path.basename(req.files.uploadIdProof[0].path);
-                updatedData.uploadIdProof = baseUrl + IdProofImageFilename;
-            }
-            if (req.files.uploadInductionDoc) {
-                const uploadInductionDocFilename = path.basename(req.files.uploadInductionDoc[0].path);
-                updatedData.uploadInductionDoc = baseUrl + uploadInductionDocFilename;
-            }
-            if (req.files.photoSrc) {
-                const photoSrcFilename = path.basename(req.files.photoSrc[0].path);
-                updatedData.photoSrc = baseUrl + photoSrcFilename;
-            }
-        }
-        if (Object.keys(updatedData).length === 0) {
-            return res.status(400).json({ error: 'No data provided to update.' });
-        }
-        console.log('Updating record with ID:', id);
-        console.log('Updated data:', updatedData);
+//         // Add file paths to updatedData if they are provided
+//         if (req.files) {
+//             if (req.files.uploadAadhaarFront) {
+//                 const frontImageFilename = path.basename(req.files.uploadAadhaarFront[0].path);
+//                 updatedData.uploadAadhaarFront = baseUrl + frontImageFilename;
+//             }
+//             if (req.files.uploadAadhaarBack) {
+//                 const backImageFilename = path.basename(req.files.uploadAadhaarBack[0].path);
+//                 updatedData.uploadAadhaarBack = baseUrl + backImageFilename;
+//             }
+//             if (req.files.uploadIdProof) {
+//                 const IdProofImageFilename = path.basename(req.files.uploadIdProof[0].path);
+//                 updatedData.uploadIdProof = baseUrl + IdProofImageFilename;
+//             }
+//             if (req.files.uploadInductionDoc) {
+//                 const uploadInductionDocFilename = path.basename(req.files.uploadInductionDoc[0].path);
+//                 updatedData.uploadInductionDoc = baseUrl + uploadInductionDocFilename;
+//             }
+//             if (req.files.photoSrc) {
+//                 const photoSrcFilename = path.basename(req.files.photoSrc[0].path);
+//                 updatedData.photoSrc = baseUrl + photoSrcFilename;
+//             }
+//         }
+//         if (Object.keys(updatedData).length === 0) {
+//             return res.status(400).json({ error: 'No data provided to update.' });
+//         }
+//         console.log('Updating record with ID:', id);
+//         console.log('Updated data:', updatedData);
 
-        const updated = await labourModel.update(id, updatedData);  // Call the model function to update the record
-        if (updated === 0) {
-            return res.status(404).json({ error: 'Record not found' });  // Return if no record was found to update
-        }
+//         const updated = await labourModel.update(id, updatedData);  // Call the model function to update the record
+//         if (updated === 0) {
+//             return res.status(404).json({ error: 'Record not found' });  // Return if no record was found to update
+//         }
 
-        return res.json({ message: 'Record updated successfully' });  // Success response
-    } catch (error) {
-        console.error('Error updating record:', error);
-        return res.status(500).json({ error: 'Internal server error' });  // Catch and handle errors
-    }
-}
+//         return res.json({ message: 'Record updated successfully' });  // Success response
+//     } catch (error) {
+//         console.error('Error updating record:', error);
+//         return res.status(500).json({ error: 'Internal server error' });  // Catch and handle errors
+//     }
+// }
+
 
 async function updateRecordLabour(req, res) {
     try {
@@ -403,7 +854,7 @@ async function getAllLabours(req, res) {
 }
 
 async function approveLabour(req, res) {
-    const id = parseInt(req.params.id, 10); 
+    const id = parseInt(req.params.id, 10);
     // console.log(`Received id: ${req.params.id}, Parsed id: ${id}`);
 
     if (isNaN(id)) {
@@ -420,7 +871,7 @@ async function approveLabour(req, res) {
 
         const success = await labourModel.approveLabour(id, nextID);
         if (success) {
-            res.json({ success: true, message: 'Labour approved successfully.', data : success });
+            res.json({ success: true, message: 'Labour approved successfully.', data: success });
         } else {
             res.status(404).json({ message: 'Labour not found or already approved.' });
         }
@@ -432,7 +883,7 @@ async function approveLabour(req, res) {
 
 async function rejectLabour(req, res) {
     // console.log('Fetching rejected labours...');
-    const id = parseInt(req.params.id, 10); 
+    const id = parseInt(req.params.id, 10);
     const { Reject_Reason } = req.body;
     if (isNaN(id)) {
         return res.status(400).json({ message: 'Invalid labour ID' });
@@ -464,12 +915,12 @@ async function getApprovedLabours(req, res) {
 
 async function resubmitLabour(req, res) {
     try {
-        const {id} = req.params;
+        const { id } = req.params;
         const updated = await labourModel.resubmit(id);
         if (updated === 0) {
             return res.status(404).json({ error: 'Record not found' });
         }
-        return res.json({success:true, message: 'Labour resubmitted successfully' });
+        return res.json({ success: true, message: 'Labour resubmitted successfully' });
     } catch (error) {
         console.error(error);
         return res.status(500).json({ error: 'Internal server error' });
@@ -477,7 +928,7 @@ async function resubmitLabour(req, res) {
 }
 
 
-async function esslapi (req, res) {
+async function esslapi(req, res) {
     try {
         const approvedLabours = req.body;
         // console.log("approvedLabours : " + approvedLabours);
@@ -485,9 +936,9 @@ async function esslapi (req, res) {
         const esslapiurl = 'https://essl.vjerp.com:8530/iclock/webapiservice.asmx?op=AddEmployee';
         const response = await axios.post(esslapiurl, approvedLabours, {
             headers: {
-              'Content-Type': 'text/xml'
+                'Content-Type': 'text/xml'
             }
-          });
+        });
 
         res.json(response.data);
     } catch (error) {
@@ -515,7 +966,7 @@ module.exports = {
     getApprovedLabours,
     resubmitLabour,
     esslapi,
-    updateRecordLabour
+    updateRecordLabour,
+    createRecordUpdate
     // updateLabour
 };
-
