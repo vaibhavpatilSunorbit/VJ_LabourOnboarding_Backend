@@ -1,4 +1,3 @@
-
 const {sql, poolPromise } = require('../config/dbConfig');
 const { poolPromise2 } = require('../config/dbConfig2');
 const { poolPromise3 } = require('../config/dbConfig3');
@@ -223,11 +222,208 @@ async function registerData(labourData) {
 
 
 
+
+async function updateData(labourData) {
+    try {
+        console.log("labourData:", labourData);
+
+        const pool = await poolPromise;
+        const request = pool.request();
+
+        const toUpperCaseFields = [
+            'address', 'name', 'taluka', 'district', 'village', 'state',
+            'bankName', 'branch', 'ifscCode', 'contractorName', 'Inducted_By', 'OnboardName', 'title', 'Employee_Type'
+        ];
+
+        const setInputWithUpperCase = (key, value) => {
+            request.input(key, sql.NVarChar, value ? value.toUpperCase() : null);
+        };
+
+        // Check if LabourID exists and is correct
+        if (!labourData.LabourID) {
+            console.error('LabourID is not provided or is null/undefined.');
+            return null;
+        }
+
+        console.log("Updating LabourID:", labourData.LabourID);
+        request.input('LabourID', sql.NVarChar, labourData.LabourID);
+
+        Object.keys(labourData).forEach((key) => {
+            if (key !== 'LabourID') {
+                if (toUpperCaseFields.includes(key)) {
+                    setInputWithUpperCase(key, labourData[key]);
+                } else {
+                    let sqlType = sql.NVarChar;
+                    if (['aadhaarNumber', 'pincode', 'contactNumber'].includes(key)) {
+                        sqlType = sql.NVarChar;
+                    } else if (['dateOfBirth', 'dateOfJoining', 'Induction_Date', 'ValidTill', 'ConfirmDate', 'retirementDate', 'CreationDate'].includes(key)) {
+                        sqlType = sql.DateTime;
+                    } else if (['departmentId', 'designationId', 'labourCategoryId'].includes(key)) {
+                        sqlType = sql.Int;
+                    } else if (key === 'isApproved') {
+                        sqlType = sql.Int;
+                    }
+
+                    const value = labourData[key] === 'null' ? null : labourData[key];
+                    request.input(key, sqlType, value);
+                }
+            }
+        });
+
+        request.input('status', sql.NVarChar, 'Approved');
+        request.input('isApproved', sql.Int, 1);
+
+        console.log("Executing SQL Update...");
+        const updateResult = await request.query(`
+            UPDATE labourOnboarding SET
+                labourOwnership = @labourOwnership,
+                uploadAadhaarFront = @uploadAadhaarFront,
+                uploadAadhaarBack = @uploadAadhaarBack,
+                uploadIdProof = @uploadIdProof,
+                uploadInductionDoc = @uploadInductionDoc,
+                name = @name,
+                aadhaarNumber = @aadhaarNumber,
+                dateOfBirth = @dateOfBirth,
+                contactNumber = @contactNumber,
+                gender = @gender,
+                dateOfJoining = @dateOfJoining,
+                Group_Join_Date = @Group_Join_Date,
+                From_Date = @From_Date,
+                Period = @Period,
+                address = @address,
+                pincode = @pincode,
+                taluka = @taluka,
+                district = @district,
+                village = @village,
+                state = @state,
+                emergencyContact = @emergencyContact,
+                photoSrc = @photoSrc,
+                bankName = @bankName,
+                branch = @branch,
+                accountNumber = @accountNumber,
+                ifscCode = @ifscCode,
+                projectName = @projectName,
+                labourCategory = @labourCategory,
+                department = @department,
+                workingHours = @workingHours,
+                contractorName = @contractorName,
+                contractorNumber = @contractorNumber,
+                designation = @designation,
+                title = @title,
+                Marital_Status = @Marital_Status,
+                companyName = @companyName,
+                Induction_Date = @Induction_Date,
+                Inducted_By = @Inducted_By,
+                OnboardName = @OnboardName,
+                ValidTill = @ValidTill,
+                location = @location,
+                ConfirmDate = @ConfirmDate,
+                retirementDate = @retirementDate,
+                SalaryBu = @SalaryBu,
+                WorkingBu = @WorkingBu,
+                CreationDate = @CreationDate,
+                businessUnit = @businessUnit,
+                departmentId = @departmentId,
+                designationId = @designationId,
+                labourCategoryId = @labourCategoryId,
+                departmentName = @departmentName,
+                status = @status,
+                isApproved = @isApproved
+            WHERE LabourID = @LabourID
+        `);
+
+        if (updateResult.rowsAffected[0] === 0) {
+            console.warn("No rows were updated, check LabourID or other conditions.");
+            return null;
+        }
+
+        console.log("Update successful:", updateResult.rowsAffected[0], "rows updated.");
+
+        // Fetch the updated record to return it
+        const fetchResult = await request.query(`
+            SELECT * FROM labourOnboarding WHERE LabourID = @LabourID
+        `);
+
+        return fetchResult.recordset[0];  // Return the first row of the updated data
+    } catch (error) {
+        console.error('Error updating data:', error);
+        throw error;
+    }
+}
+
+
+
+
+
+
+
+
+
+async function registerDataUpdate(labourData) {
+    try {
+        const pool = await poolPromise;
+        const request = pool.request();
+        
+      //   request.input('LabourID', sql.VarChar, labourData.LabourID);
+      //   request.input('location', labourData.location);
+        
+      //   Object.keys(labourData).forEach((key, index) => {
+      //       if (key !== 'LabourID' && key !== 'location') {
+      //           request.input(key, sql.VarChar, labourData[key]);
+      //       }
+      //   });
+  
+  
+      const toUpperCaseFields = [
+          'address', 'name', 'taluka', 'district', 'village', 'state', 
+          'bankName', 'branch', 'ifscCode', 'contractorName', 'Inducted_By', 'OnboardName', 'title', 
+        ];
+    
+        // Helper function to set input with uppercase conversion
+        const setInputWithUpperCase = (key, value) => {
+          request.input(key, sql.VarChar, value ? value.toUpperCase() : '');
+        };
+    
+        request.input('LabourID', sql.VarChar, labourData.LabourID);
+        request.input('location', sql.VarChar, labourData.location);
+    
+        Object.keys(labourData).forEach((key) => {
+          if (key !== 'LabourID' && key !== 'location') {
+            if (toUpperCaseFields.includes(key)) {
+              setInputWithUpperCase(key, labourData[key]);
+            } else {
+              request.input(key, sql.VarChar, labourData[key]);
+            }
+          }
+        });
+  
+        const result = await request.query(`
+        INSERT INTO labourOnboarding (
+          LabourID, labourOwnership, uploadAadhaarFront, uploadAadhaarBack, uploadIdProof, name, aadhaarNumber,
+          dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date, From_Date, Period, address, pincode, taluka, district, village,
+          state, emergencyContact, photoSrc, bankName, branch, accountNumber, ifscCode, projectName, 
+          labourCategory, department, workingHours, contractorName, contractorNumber, designation,
+          status, isApproved, title, Marital_Status, companyName, Induction_Date, Inducted_By, uploadInductionDoc, OnboardName, ValidTill, location, ConfirmDate, retirementDate, SalaryBu, WorkingBu, CreationDate, businessUnit, departmentId, designationId, labourCategoryId, departmentName) 
+          VALUES (
+          @LabourID, @labourOwnership, @uploadAadhaarFront, @uploadAadhaarBack, @uploadIdProof, @name, @aadhaarNumber,
+          @dateOfBirth, @contactNumber, @gender, @dateOfJoining, @Group_Join_Date, @From_Date, @Period, @address, @pincode, @taluka, @district, @village,
+          @state, @emergencyContact, @photoSrc, @bankName, @branch, @accountNumber, @ifscCode, @projectName,
+          @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
+          'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId, @departmentName)
+        `);
+        return result.recordset;
+    } catch (error) {
+        throw error;
+    }
+  }
+  
+
+
 // Function to get all records
 async function getAll() {
     try {
         const pool = await poolPromise;
-        const result = await pool.request().query('SELECT * FROM labourOnboarding ORDER BY id DESC');
+        const result = await pool.request().query('SELECT * FROM labourOnboarding ORDER BY LabourID');
         return result.recordset;
     } catch (error) {
         throw error;
@@ -248,104 +444,128 @@ async function getById(id) {
 }
 
 
-async function update(id, updatedData) {
-    try {
-        // Check if updatedData is provided and is not empty
-        if (!updatedData || typeof updatedData !== 'object' || Object.keys(updatedData).length === 0) {
-            throw new Error('Updated data is required and should not be empty or invalid.');
-        }
+// async function update(id, updatedData) {
+//     try {
+//         // Check if updatedData is provided and is not empty
+//         if (!updatedData || typeof updatedData !== 'object' || Object.keys(updatedData).length === 0) {
+//             throw new Error('Updated data is required and should not be empty or invalid.');
+//         }
 
-        console.log('Received updatedData:', updatedData);  // Log the received data for debugging
+//         // console.log('Received updatedData:', updatedData);  
 
-        const pool = await poolPromise;
-        const request = pool.request().input('id', sql.Int, id);
-        let updateQuery = 'UPDATE labourOnboarding SET ';
+//         const pool = await poolPromise;
+//         const request = pool.request().input('id', sql.Int, id);
+//         let updateQuery = 'UPDATE labourOnboarding SET ';
 
-        const columns = [
-            'labourOwnership', 'uploadAadhaarFront', 'uploadAadhaarBack', 'name',
-            'aadhaarNumber', 'dateOfBirth', 'contactNumber', 'gender',
-            'dateOfJoining', 'address', 'pincode', 'taluka', 'district',
-            'village', 'state', 'emergencyContact', 'bankName',
-            'branch', 'accountNumber', 'ifscCode', 'projectName', 'labourCategory',
-            'department', 'workingHours', 'contractorName', 'contractorNumber', 'designation', 'title', 'Nationality', 'Marital_Status',
-            'Payment_Mode', 'companyName', 'Employee_Type', 'Current_Status',
-            'Seating_Office', 'Period', 'From_Date', 'Group_Join_Date',
-            'Reject_Reason', 'Inducted_By', 'Induction_Date', 'ValidTill', 'location',
-            'OnboardName', 'expiryDate', 'CalenderType', 'ConfirmDate',
-            'retirementDate', 'SalaryBu', 'WorkingBu', 'CreationDate', 'businessUnit',
-            'departmentId', 'designationId', 'LedgerId', 'GradeId', 'labourCategoryId',
-            'empId', 'departmentName'
-        ];
+//         const columns = [
+//             'labourOwnership', 'uploadAadhaarFront', 'uploadAadhaarBack', 'name',
+//             'aadhaarNumber', 'dateOfBirth', 'contactNumber', 'gender',
+//             'dateOfJoining', 'address', 'pincode', 'taluka', 'district',
+//             'village', 'state', 'emergencyContact', 'bankName',
+//             'branch', 'accountNumber', 'ifscCode', 'projectName', 'labourCategory',
+//             'department', 'workingHours', 'contractorName', 'contractorNumber', 'designation', 'title', 'Nationality', 'Marital_Status',
+//             'Payment_Mode', 'companyName', 'Employee_Type', 'Current_Status',
+//             'Seating_Office', 'Period', 'From_Date', 'Group_Join_Date',
+//             'Reject_Reason', 'Inducted_By', 'Induction_Date', 'ValidTill', 'location',
+//             'OnboardName', 'expiryDate', 'CalenderType', 'ConfirmDate',
+//             'retirementDate', 'SalaryBu', 'WorkingBu', 'CreationDate', 'businessUnit',
+//             'departmentId', 'designationId', 'LedgerId', 'GradeId', 'labourCategoryId',
+//             'empId', 'departmentName'
+//         ];
 
-        const integerFields = [
-            'projectName', 'IsApproved', 'departmentId', 'designationId',
-            'LedgerId', 'GradeId', 'labourCategoryId', 'CalenderType'
-        ];
+//         const integerFields = [
+//             'projectName', 'IsApproved', 'departmentId', 'designationId',
+//             'LedgerId', 'GradeId', 'labourCategoryId', 'CalenderType'
+//         ];
 
-        let hasValidColumns = false;
+//         const uppercaseFields = [
+//             'labourOwnership', 'name', 'gender', 'address', 'taluka', 'district',
+//             'village', 'state', 'bankName', 'branch', 'accountNumber', 'ifscCode',
+//             'labourCategory', 'workingHours', 'contractorName', 'designation', 'title',
+//             'Nationality', 'Marital_Status', 'Payment_Mode', 'companyName', 'contractorNumber',
+//             'Employee_Type', 'Current_Status', 'Seating_Office',
+//             'Inducted_By', 'location', 'OnboardName', 'SalaryBu', 'WorkingBu',
+//             'businessUnit', 'departmentName'
+//         ];
 
-        columns.forEach((column, index) => {
-            if (updatedData.hasOwnProperty(column)) {
-                let value = updatedData[column];
+//         let hasValidColumns = false;
 
-                // Convert 'null' string or empty string to actual null
-                if (value === 'null' || value === '') {
-                    value = null;
-                }
+//         columns.forEach((column, index) => {
+//             if (updatedData.hasOwnProperty(column)) {
+//                 let value = updatedData[column];
 
-                // Convert strings that should be integers to actual integers
-                if (integerFields.includes(column)) {
-                    if (value !== null) {
-                        value = parseInt(value, 10);
-                        if (isNaN(value)) {
-                            throw new Error(`Invalid integer format for ${column}: ${updatedData[column]}`);
-                        }
-                    }
-                }
+//                 // Convert 'null' string or empty string to actual null
+//                 if (value === 'null' || value === '') {
+//                     value = null;
+//                 }
 
-                // Convert date strings to proper date format
-                if (['dateOfBirth', 'dateOfJoining', 'From_Date', 'Group_Join_Date', 'Induction_Date', 'ValidTill', 'ConfirmDate', 'retirementDate', 'CreationDate'].includes(column)) {
-                    if (value) {
-                        const dateValue = new Date(value);
-                        if (isNaN(dateValue.getTime())) {
-                            throw new Error(`Invalid date format for ${column}: ${value}`);
-                        }
-                        value = dateValue.toISOString().split('T')[0]; // Convert to 'YYYY-MM-DD'
-                    } else {
-                        value = null;
-                    }
-                }
+//                 // Convert strings that should be integers to actual integers
+//                 if (integerFields.includes(column)) {
+//                     if (value !== null) {
+//                         value = parseInt(value, 10);
+//                         if (isNaN(value)) {
+//                             throw new Error(`Invalid integer format for ${column}: ${updatedData[column]}`);
+//                         }
+//                     }
+//                  } else if (typeof value === 'string' && uppercaseFields.includes(column)) {
+//                     value = value.toUpperCase();  // Convert specific strings to uppercase
+//                 }
 
-                // Log the value and type being set for debugging
-                console.log(`Setting parameter ${index}:`, { value, type: typeof value });
+//                 // Convert date strings to proper date format
+//                 if (['dateOfBirth', 'dateOfJoining', 'From_Date', 'Group_Join_Date', 'Induction_Date', 'ValidTill', 'ConfirmDate', 'retirementDate', 'CreationDate'].includes(column)) {
+//                     if (value) {
+//                         const dateValue = new Date(value);
+//                         if (isNaN(dateValue.getTime())) {
+//                             throw new Error(`Invalid date format for ${column}: ${value}`);
+//                         }
+//                         value = dateValue.toISOString().split('T')[0]; // Convert to 'YYYY-MM-DD'
+//                     } else {
+//                         value = null;
+//                     }
+//                 }
 
-                // Check if the value is a valid string before adding it as a parameter
-                if (typeof value === 'string' && value.trim() === '') {
-                    throw new Error(`Invalid string format for ${column}: empty or whitespace string.`);
-                }
+//                 // Log the value and type being set for debugging
+//                 console.log(`Setting parameter ${index}:`, { value, type: typeof value });
 
-                // Add the column to the update query
-                updateQuery += `${column} = @param${index}, `;
-                request.input(`param${index}`, value);
-                hasValidColumns = true;
-            }
-        });
+//                 // Check if the value is a valid string before adding it as a parameter
+//                 if (typeof value === 'string' && value.trim() === '') {
+//                     throw new Error(`Invalid string format for ${column}: empty or whitespace string.`);
+//                 }
 
-        if (!hasValidColumns) {
-            throw new Error('No valid columns provided to update.');
-        }
+//                 // Add the column to the update query
+//                 updateQuery += `${column} = @param${index}, `;
+//                 request.input(`param${index}`, value);
+//                 hasValidColumns = true;
+//             }
+//         });
 
-        // Explicitly set status to 'Pending' and IsApproved to 0
-        updateQuery = updateQuery.slice(0, -2); // Remove the last comma and space
-        updateQuery += " WHERE id = @id";
+//         if (!hasValidColumns) {
+//             throw new Error('No valid columns provided to update.');
+//         }
 
-        const result = await request.query(updateQuery);
-        return result.rowsAffected[0];
-    } catch (error) {
-        console.error('Error in update function:', error);
-        throw error;
-    }
-}
+//     // Set status and IsApproved based on the presence of LabourID
+//     if (updatedData.LabourID && typeof updatedData.LabourID === 'string' && updatedData.LabourID.trim() !== '' && updatedData.LabourID !== 'null') {
+//         // LabourID is a non-empty string and not explicitly 'null'
+//         console.log("LabourID is present:", updatedData.LabourID);  // Debugging output
+//         updateQuery += "status = @status, IsApproved = @IsApproved WHERE id = @id";
+//         request.input('status', 'Approved');  // Set status to 'Approved'
+//         request.input('IsApproved', 1);       // Set IsApproved to 1
+//     } else {
+//         // LabourID is null, undefined, an empty string, or explicitly the string 'null'
+//         console.log("LabourID is null, undefined, or an empty string:", updatedData.LabourID);  // Debugging output
+//         updateQuery += "status = @status, IsApproved = @IsApproved WHERE id = @id";
+//         request.input('status', 'Pending');   // Set status to 'Pending'
+//         request.input('IsApproved', 0);       // Set IsApproved to 0
+//     }
+
+
+//         const result = await request.query(updateQuery);
+//         return result.rowsAffected[0];
+//     } catch (error) {
+//         console.error('Error in update function:', error);
+//         throw error;
+//     }
+// }
 
 
 async function updateLabour(id, updatedData) {
@@ -439,7 +659,7 @@ async function search(query) {
 async function getAllLabours() {
     try {
         const pool = await poolPromise;
-        const result = await pool.request().query("SELECT * FROM Labour");
+        const result = await pool.request().query("SELECT * FROM Labour order by LabourID");
         return result.recordset;
     } catch (error) {
         console.error("Error in getAllLabours:", error);
@@ -555,7 +775,7 @@ module.exports = {
     registerData,
     getAll,
     getById,
-    update,
+    // update,
     deleteById,
     getImagePathsById,
     search,
@@ -566,7 +786,8 @@ module.exports = {
     resubmit,
     getLabourByAadhaar,  // Add this
     getFormDataByAadhaar,
-    updateLabour
+    updateLabour,
+    registerDataUpdate,
+    updateData
     // updateLabour
 };
-
