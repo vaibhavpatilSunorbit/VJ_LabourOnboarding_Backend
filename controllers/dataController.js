@@ -355,9 +355,9 @@ const addFvEmpId = async (req, res) => {
 
 
 const fetchDynamicData = async (req, res) => {
-  const { businessUnitDesc } = req.query;
+  const { businessUnitDesc, workingHours  } = req.query;
 
-  console.log('Received query parameters:', { businessUnitDesc});
+  console.log('Received query parameters:', { businessUnitDesc, workingHours });
 
   try {
     const pool = await poolPromise2;
@@ -381,6 +381,11 @@ const fetchDynamicData = async (req, res) => {
       console.log('ledgerResult : ' + ledgerResult);
     }
 
+     // Fetch shift details dynamically based on workingHours
+     const shiftQuery = `SELECT Id, Description FROM Payroll.Shift WHERE Description LIKE '%${workingHours.replace(/'/g, "''")}%'`;
+     const shiftResult = await pool.request().query(shiftQuery);
+     const shift = shiftResult.recordset[0];
+
     // Construct the dynamic data object
     const dynamicData = {
       email1: 'system@javdekars.com',
@@ -392,20 +397,16 @@ const fetchDynamicData = async (req, res) => {
       code: result ? result.Code : null,
       description: result ? result.Description : null,
       parentId: parentResult ? parentResult.Id : null,
-      parentDesc: parentResult ? parentResult.Description : null
+      parentDesc: parentResult ? parentResult.Description : null,
+      shiftId: shift ? shift.Id : null, // Add shiftId dynamically
+      shiftName: shift ? shift.Description : null,
     };
 
     res.json(dynamicData);
   } catch (error) {
     console.error('Error fetching dynamic data:', error);
     res.status(500).send('Error fetching dynamic data');
-  } finally {
-    try {
-      await sql.close();
-    } catch (closeError) {
-      console.error('Error closing the SQL connection:', closeError);
-    }
-  }
+  } 
 };
 
 
@@ -422,9 +423,9 @@ const fetchOrgDynamicData = async (req, res) => {
   console.log('Received query parameters:', { employeeId, monthdesc, gradeId, salarybudescription, workbudesc, ledgerId, departmentId, designationId });
 
   // Validate required parameters
-  // if (!employeeId || !monthPeriodId) {
-  //   return res.status(400).send('Employee ID and Month Period ID are required');
-  // }
+  if (!employeeId || !monthdesc || !gradeId || !salarybudescription || !workbudesc || !ledgerId || !departmentId || !designationId) {
+    return res.status(400).send('Employee ID and Month Period ID are required');
+  }
 
   try {
     const payrollPool = await poolPromise;
@@ -549,16 +550,122 @@ console.log("payrollUnit : " + payrollUnit);
   } catch (error) {
     console.error('Error fetching dynamic data:', error);
     res.status(500).send('Error fetching dynamic data');
-  } finally {
-    try {
-      await sql.close();
-    } catch (closeError) {
-      console.error('Error closing the SQL connection:', closeError);
-    }
   }
 };
 
 
+
+
+
+const saveApiResponsePayload = async (req, res) => {
+  const {
+    userId,
+    LabourID,
+    name,
+    aadharNumber,
+    employeeMasterPayload,
+    employeeMasterResponseId,
+    employeeMasterLedgerId,
+    employeeMasterUserId,
+    employeeCompanyID,
+    employeeExtraInfoId,
+    employeeMasterFullResponse,
+    organizationMasterPayload,
+    organizationMasterResponseId,
+    organizationMasterOrgId,
+    organizationMasterStatus,
+    organizationMasterFullResponse
+  } = req.body;
+
+  try {
+    const pool = await poolPromise;
+    const query = `
+      INSERT INTO API_ResponsePayloads (
+        userId, LabourID, name, aadharNumber,
+        employeeMasterId, employeeMasterLedgerId,
+        employeeMasterUserId, employeeCompanyID, employeeExtraInfoId, employeeMasterStatus,
+        organizationMasterId, organizationMasterOrgId, organizationMasterStatus,
+        employeeMasterPayload, organizationMasterPayload,
+        employeeMasterResponse, organizationMasterResponse, createdAt, updatedAt
+      ) VALUES (
+        @userId, @LabourID, @name, @aadharNumber,
+        @employeeMasterId, @employeeMasterLedgerId,
+        @employeeMasterUserId, @employeeCompanyID, @employeeExtraInfoId, @employeeMasterStatus,
+        @organizationMasterId, @organizationMasterOrgId, @organizationMasterStatus,
+        @employeeMasterPayload, @organizationMasterPayload,
+        @employeeMasterResponse, @organizationMasterResponse, GETDATE(), GETDATE()
+      )
+    `;
+
+    // // Logging the extracted and full response data
+    // console.log('employeeMasterResponseId:', employeeMasterResponseId);
+    // console.log('employeeMasterLedgerId:', employeeMasterLedgerId);
+    // console.log('employeeMasterUserId:', employeeMasterUserId);
+    // console.log('employeeCompanyID:', employeeCompanyID);
+    // console.log('employeeExtraInfoId:', employeeExtraInfoId);
+    // console.log('employeeMasterFullResponse:', employeeMasterFullResponse);
+    // console.log('organizationMasterResponseId:', organizationMasterResponseId);
+    // console.log('organizationMasterOrgId:', organizationMasterOrgId);
+    // console.log('organizationMasterStatus:', organizationMasterStatus);
+    // console.log('organizationMasterFullResponse:', organizationMasterFullResponse);
+
+    // Execute SQL query to insert data into the database
+    await pool
+      .request()
+      .input('userId', sql.Int, userId)
+      .input('LabourID', sql.NVarChar(50), LabourID)
+      .input('name', sql.NVarChar(100), name)
+      .input('aadharNumber', sql.NVarChar(20), aadharNumber)
+      .input('employeeMasterId', sql.Int, employeeMasterResponseId)
+      .input('employeeMasterLedgerId', sql.Int, employeeMasterLedgerId)
+      .input('employeeMasterUserId', sql.Int, employeeMasterUserId)
+      .input('employeeCompanyID', sql.Int, employeeCompanyID)
+      .input('employeeExtraInfoId', sql.Int, employeeExtraInfoId)
+      .input('employeeMasterStatus', sql.Bit, employeeMasterFullResponse?.status ?? null)
+      .input('organizationMasterId', sql.Int, organizationMasterResponseId)
+      .input('organizationMasterOrgId', sql.Int, organizationMasterOrgId)
+      .input('organizationMasterStatus', sql.Bit, organizationMasterStatus)
+      .input('employeeMasterPayload', sql.NVarChar(sql.MAX), JSON.stringify(employeeMasterPayload))
+      .input('organizationMasterPayload', sql.NVarChar(sql.MAX), JSON.stringify(organizationMasterPayload))
+      .input('employeeMasterResponse', sql.NVarChar(sql.MAX), JSON.stringify(employeeMasterFullResponse))
+      .input('organizationMasterResponse', sql.NVarChar(sql.MAX), JSON.stringify(organizationMasterFullResponse))
+      .query(query);
+
+    res.status(200).send('API response and payload saved successfully.');
+  } catch (err) {
+    console.error('Error saving API response and payload:', err.message);
+    res.status(500).send('Error saving API response and payload');
+  }
+};
+
+// Function to update Employee Master data and save responses
+const updateEmployeeMaster = async (req, res) => {
+  const { userId, LabourID, name, aadharNumber, employeeMasterPayload, organizationMasterPayload } = req.body; 
+
+  try {
+      // API call to Employee Master
+      const employeeMasterResponse = await axios.post('https://vjerp.farvisioncloud.com/Payroll/odata/Employees', employeeMasterPayload, {
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'apikey 8d1588e79eb31ed7cb57ff57325510572baa1008d575537615e295d3bbd7d558' }
+      });
+
+      // API call to Organization Master
+      const organizationMasterResponse = await axios.post('https://vjerp.farvisioncloud.com/Payroll/odata/Organisations', organizationMasterPayload, {
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'apikey 8d1588e79eb31ed7cb57ff57325510572baa1008d575537615e295d3bbd7d558' }
+      });
+
+      // Check if both responses are successful and save to database
+      if (employeeMasterResponse.data.status && organizationMasterResponse.data.status) {
+          await saveApiResponsePayload(userId, LabourID, name, aadharNumber, {}, employeeMasterResponse.data, organizationMasterResponse.data);
+          res.json({ message: 'Employee Master and Organization Master data updated successfully' });
+      } else {
+          res.status(400).json({ message: 'Failed to update data from Employee Master or Organization Master' });
+      }
+
+  } catch (error) {
+      console.error('Error updating Employee Master:', error.message);
+      res.status(500).json({ message: 'Error updating Employee Master data' });
+  }
+};
 
 module.exports = {
   getProjectNames,
@@ -576,7 +683,9 @@ module.exports = {
   getProjectDeviceStatusSS,
   fetchDynamicData,
   fetchOrgDynamicData,
-  addFvEmpId
+  addFvEmpId,
+  saveApiResponsePayload,
+  updateEmployeeMaster
 };
 
 
