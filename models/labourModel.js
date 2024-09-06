@@ -179,16 +179,19 @@ async function registerData(labourData) {
 
     const toUpperCaseFields = [
         'address', 'name', 'taluka', 'district', 'village', 'state', 
-        'bankName', 'branch', 'ifscCode', 'contractorName', 'Inducted_By', 'OnboardName', 'title', 
+        'bankName', 'branch', 'ifscCode', 'contractorName', 'Inducted_By','OnboardName', 'title', 
       ];
   
-      // Helper function to set input with uppercase conversion
       const setInputWithUpperCase = (key, value) => {
-        request.input(key, sql.VarChar, value ? value.toUpperCase() : '');
+        const valueAsString = value ? String(value) : '';
+        request.input(key, sql.VarChar, valueAsString ? valueAsString.toUpperCase() : '');
       };
   
       request.input('LabourID', sql.VarChar, labourData.LabourID);
       request.input('location', sql.VarChar, labourData.location);
+
+      const finalOnboardName = labourData.OnboardName ? labourData.OnboardName : ''; // Fallback to empty string if undefined
+      labourData.OnboardName = finalOnboardName;
   
       Object.keys(labourData).forEach((key) => {
         if (key !== 'LabourID' && key !== 'location') {
@@ -200,6 +203,7 @@ async function registerData(labourData) {
         }
       });
 
+      console.log('Inserting data into database for OnboardName:', labourData.OnboardName);
       const result = await request.query(`
       INSERT INTO labourOnboarding (
         LabourID, labourOwnership, uploadAadhaarFront, uploadAadhaarBack, uploadIdProof, name, aadhaarNumber,
@@ -214,6 +218,7 @@ async function registerData(labourData) {
         @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
         'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId, @departmentName)
       `);
+      console.log('Data successfully inserted for OnboardName:', labourData.OnboardName);
       return result.recordset;
   } catch (error) {
       throw error;
@@ -235,9 +240,13 @@ async function updateData(labourData) {
             'bankName', 'branch', 'ifscCode', 'contractorName', 'Inducted_By', 'OnboardName', 'title', 'Employee_Type'
         ];
 
+        // const setInputWithUpperCase = (key, value) => {
+        //     request.input(key, sql.NVarChar, value ? value.toUpperCase() : null);
+        // };
         const setInputWithUpperCase = (key, value) => {
-            request.input(key, sql.NVarChar, value ? value.toUpperCase() : null);
-        };
+            const valueAsString = value ? String(value) : '';
+            request.input(key, sql.VarChar, valueAsString ? valueAsString.toUpperCase() : '');
+          };
 
         // Check if LabourID exists and is correct
         if (!labourData.LabourID) {
@@ -247,6 +256,9 @@ async function updateData(labourData) {
 
         console.log("Updating LabourID:", labourData.LabourID);
         request.input('LabourID', sql.NVarChar, labourData.LabourID);
+
+        const finalOnboardName = labourData.OnboardName ? labourData.OnboardName : ''; // Fallback to empty string if undefined
+      labourData.OnboardName = finalOnboardName;
 
         Object.keys(labourData).forEach((key) => {
             if (key !== 'LabourID') {
@@ -343,7 +355,7 @@ async function updateData(labourData) {
         const fetchResult = await request.query(`
             SELECT * FROM labourOnboarding WHERE LabourID = @LabourID
         `);
-
+        console.log('Data successfully inserted for OnboardName Edit button:', labourData.OnboardName);
         return fetchResult.recordset[0];  // Return the first row of the updated data
     } catch (error) {
         console.error('Error updating data:', error);
@@ -380,12 +392,20 @@ async function registerDataUpdate(labourData) {
         ];
     
         // Helper function to set input with uppercase conversion
+        // const setInputWithUpperCase = (key, value) => {
+        //   request.input(key, sql.VarChar, value ? value.toUpperCase() : '');
+        // };
+
         const setInputWithUpperCase = (key, value) => {
-          request.input(key, sql.VarChar, value ? value.toUpperCase() : '');
-        };
+            const valueAsString = value ? String(value) : '';
+            request.input(key, sql.VarChar, valueAsString ? valueAsString.toUpperCase() : '');
+          };
     
         request.input('LabourID', sql.VarChar, labourData.LabourID);
         request.input('location', sql.VarChar, labourData.location);
+
+        const finalOnboardName = labourData.OnboardName ? labourData.OnboardName : ''; // Fallback to empty string if undefined
+        labourData.OnboardName = finalOnboardName;
     
         Object.keys(labourData).forEach((key) => {
           if (key !== 'LabourID' && key !== 'location') {
@@ -411,6 +431,7 @@ async function registerDataUpdate(labourData) {
           @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
           'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId, @departmentName)
         `);
+        console.log('Data successfully inserted for OnboardName Resubmmit button:', labourData.OnboardName);
         return result.recordset;
     } catch (error) {
         throw error;

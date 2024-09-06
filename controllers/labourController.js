@@ -1,15 +1,17 @@
 const labourModel = require('../models/labourModel');
 const { sql, poolPromise2 } = require('../config/dbConfig2');
+const { poolPromise } = require('../config/dbConfig');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios')
 const multer = require('multer');
 const { upload } = require('../server');
+const xml2js = require('xml2js');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
-// const baseUrl = 'http://localhost:4000/uploads/';
+const baseUrl = 'http://localhost:4000/uploads/';
 // const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
-const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
+// const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
 
@@ -83,6 +85,8 @@ async function createRecord(req, res) {
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, labourCategoryId } = req.body;
+
+            const finalOnboardName = Array.isArray(OnboardName) ? OnboardName[0] : OnboardName;
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files;
         console.log('Received IDs:', { departmentId, designationId, labourCategoryId });
@@ -212,16 +216,16 @@ async function createRecord(req, res) {
         const departmentName = departmentResult.recordset[0].Department_Name;
 
         const creationDate = new Date();
-
+        console.log('Received OnboardName:', finalOnboardName);
         const data = await labourModel.registerData({
             labourOwnership, uploadAadhaarFront: frontImageUrl, uploadAadhaarBack: backImageUrl, uploadIdProof: IdProofImageUrl, uploadInductionDoc: uploadInductionDocImageUrl, name, aadhaarNumber,
             dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining, From_Date: fromDate.toISOString().split('T')[0], Period: period, address, pincode, taluka,
             district, village, state, emergencyContact, photoSrc: photoSrcUrl, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours, location, SalaryBu: salaryBu, businessUnit,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, ValidTill: validTillDate.toISOString().split('T')[0],
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName: finalOnboardName, expiryDate, ValidTill: validTillDate.toISOString().split('T')[0],
             retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location, CreationDate: creationDate.toISOString(), departmentId, departmentName, designationId, labourCategoryId
         });
-
+        console.log('Inserted OnboardName:', finalOnboardName);
         return res.status(201).json({ msg: "User created successfully", data: data });
     } catch (err) {
         console.error(err);
@@ -269,6 +273,16 @@ async function createRecordUpdate(req, res) {
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
         } = req.body;
+
+        let finalOnboardName = Array.isArray(OnboardName) ? OnboardName.filter(name => name !== 'null' && name.trim() !== '')[0] : OnboardName;
+        
+        if (!finalOnboardName || finalOnboardName.trim() === '') {
+            console.error('OnboardName is missing or empty.');
+            return res.status(400).json({ msg: 'OnboardName is required.' });
+        }
+
+        console.log('Cleaned OnboardName Resubmitted button:', finalOnboardName);
+
 
         const labourCategoryMap = {
             'SKILLED': 1,
@@ -439,7 +453,7 @@ async function createRecordUpdate(req, res) {
         const creationDate = new Date();
 
 
-
+        console.log('Received OnboardName Resubmmit button functionlity:', finalOnboardName);
 
         const data = await labourModel.registerDataUpdate({
             labourOwnership,
@@ -454,7 +468,7 @@ async function createRecordUpdate(req, res) {
             photoSrc: photoSrcUrl, bankName, branch, accountNumber, ifscCode, projectName,
             labourCategory, department, workingHours, location, SalaryBu: salaryBu, businessUnit,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName,
-            Induction_Date, Inducted_By, OnboardName, expiryDate,
+            Induction_Date, Inducted_By, OnboardName: finalOnboardName, expiryDate,
             ValidTill: validTillDate.toISOString().split('T')[0],
             retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location,
             CreationDate: creationDate.toISOString(), departmentId: safeDepartmentId, departmentName, designationId: safeDesignationId,
@@ -492,7 +506,14 @@ async function updateRecord(req, res) {
         } = req.body;
 
         console.log('LabourID from request body:', LabourID);
+        let finalOnboardName = Array.isArray(OnboardName) ? OnboardName.filter(name => name !== 'null' && name.trim() !== '')[0] : OnboardName;
+        
+        if (!finalOnboardName || finalOnboardName.trim() === '') {
+            console.error('OnboardName is missing or empty.');
+            return res.status(400).json({ msg: 'OnboardName is required.' });
+        }
 
+        console.log('Cleaned OnboardName:', finalOnboardName);
         // Check if LabourID exists
         if (!LabourID) {
             console.error('LabourID is missing from request body.');
@@ -635,7 +656,7 @@ async function updateRecord(req, res) {
         const departmentName = departmentResult.recordset[0].Department_Name;
 
         const creationDate = new Date();
-
+        console.log('Received OnboardName Edit button functionlity:', finalOnboardName);
         // Prepare data for update
         const data = await labourModel.updateData({
             LabourID,
@@ -681,7 +702,7 @@ async function updateRecord(req, res) {
             companyName,
             Induction_Date,
             Inducted_By,
-            OnboardName,
+            OnboardName: finalOnboardName,
             expiryDate,
             ValidTill: validTillDate.toISOString().split('T')[0],
             retirementDate: retirementDate.toISOString().split('T')[0],
@@ -698,7 +719,7 @@ async function updateRecord(req, res) {
         if (!data) {
             return res.status(404).json({ msg: 'No data updated' });
         }
-
+        console.log('Inserted OnboardName Edit button functionlity:', finalOnboardName);
         return res.status(200).json({ msg: "User updated successfully", data: data });
     } catch (err) {
         console.error('Error updating record:', err.message);
@@ -928,27 +949,147 @@ async function resubmitLabour(req, res) {
 }
 
 
+// async function esslapi(req, res) {
+//     try {
+//         const approvedLabours = req.body;
+//         // console.log("approvedLabours : " + approvedLabours);
+
+//         const esslapiurl = 'https://essl.vjerp.com:8530/iclock/webapiservice.asmx?op=AddEmployee';
+//         const response = await axios.post(esslapiurl, approvedLabours, {
+//             headers: {
+//                 'Content-Type': 'text/xml'
+//             }
+//         });
+
+//         res.json(response.data);
+//     } catch (error) {
+//         console.error('Error fetching approved labours:', error.message);
+//         res.status(500).json({ message: 'Internal server error' });
+//     }
+// };
+
+
+
+
 async function esslapi(req, res) {
     try {
-        const approvedLabours = req.body;
-        // console.log("approvedLabours : " + approvedLabours);
+        const approvedLaboursXml = req.body; // This is the XML body from your request
+        
+        // Parse the incoming XML to extract relevant values
+        const parser = new xml2js.Parser({ explicitArray: false });
+        const approvedLabours = await parser.parseStringPromise(approvedLaboursXml);
+
+        // Extract values from parsed XML
+        const LabourID = approvedLabours['soap:Envelope']['soap:Body']['AddEmployee']['EmployeeCode']; // EmployeeCode as LabourID
+        const name = approvedLabours['soap:Envelope']['soap:Body']['AddEmployee']['EmployeeName']; // EmployeeName as name
+        const userId = approvedLabours['soap:Envelope']['soap:Body']['AddEmployee']['CardNumber']; // CardNumber as userId
+
+        console.log("Parsed Approved Labours:", { userId, LabourID, name });
 
         const esslapiurl = 'https://essl.vjerp.com:8530/iclock/webapiservice.asmx?op=AddEmployee';
-        const response = await axios.post(esslapiurl, approvedLabours, {
+        const response = await axios.post(esslapiurl, approvedLaboursXml, {
             headers: {
                 'Content-Type': 'text/xml'
             }
         });
 
-        res.json(response.data);
+        const esslResponseData = response.data;
+        console.log("Raw XML Response:", esslResponseData); // Debugging: Check raw XML response
+
+        // Parse the XML response correctly
+        const parsedResponse = await parseEsslResponse(esslResponseData);
+        const { Status: esslStatus = 'false', CommandId: esslCommandId = null } = parsedResponse;
+
+        console.log("Parsed Response - Status:", esslStatus); // Debugging: Check the parsed status
+        console.log("Parsed Response - CommandId:", esslCommandId); // Debugging: Check the parsed command ID
+
+        // Save to database with userId
+        await saveEsslResponse({
+            userId,  // Use userId extracted from CardNumber
+            LabourID,
+            name,
+            esslStatus,
+            esslCommandId,
+            esslPayload: approvedLaboursXml, // Store raw XML if needed, otherwise use a parsed structure
+            esslApiResponse: parsedResponse
+        });
+
+        res.json(parsedResponse);
     } catch (error) {
         console.error('Error fetching approved labours:', error.message);
         res.status(500).json({ message: 'Internal server error' });
     }
+}
+
+async function parseEsslResponse(xmlData) {
+    try {
+        const parser = new xml2js.Parser({ explicitArray: false });  // Initialize xml2js parser
+        const parsedData = await parser.parseStringPromise(xmlData);
+
+        console.log("Parsed XML Data Structure:", parsedData); // Debugging: Check parsed XML structure
+
+        // Extract Status and CommandId using the correct path
+        const status = parsedData['soap:Envelope']['soap:Body']['AddEmployeeResponse']['AddEmployeeResult'];
+        const commandId = parsedData['soap:Envelope']['soap:Body']['AddEmployeeResponse']['CommandId'];
+
+        // If status is not found or is not 'success', set it to 'false'
+        const result = {
+            Status: status && status.toLowerCase() === 'success' ? status : 'false',
+            CommandId: commandId || null
+        };
+
+        console.log("XML Parsed Result:", result); // Debugging: Check parsed result
+        return result;
+    } catch (error) {
+        console.error('Error parsing XML response:', error.message);
+        return {
+            Status: 'false',  // Default to 'false' if there's an error
+            CommandId: null
+        };
+    }
+}
+
+async function saveEsslResponse(data) {
+    try {
+        const pool = await poolPromise;
+        const query = `
+            INSERT INTO API_EsslPayloads (
+                userId, LabourID, name,
+                esslStatus, esslCommandId, esslPayload, esslApiResponse, createdAt, updatedAt
+            ) VALUES (
+                @userId, @LabourID, @name,
+                @esslStatus, @esslCommandId, @esslPayload, @esslApiResponse, GETDATE(), GETDATE()
+            )
+        `;
+
+        const esslPayloadString = JSON.stringify(data.esslPayload);
+        const esslApiResponseString = JSON.stringify(data.esslApiResponse);
+
+        console.log("Data to be saved to DB:", {
+            userId: data.userId,  // Corrected to match the parsed XML id
+            LabourID: data.LabourID,
+            name: data.name,
+            esslStatus: data.esslStatus,
+            esslCommandId: data.esslCommandId,
+            esslPayload: esslPayloadString,
+            esslApiResponse: esslApiResponseString
+        });
+
+        await pool.request()
+            .input('userId', sql.Int, data.userId) // Adjusted to match userId input type
+            .input('LabourID', sql.NVarChar(50), data.LabourID)
+            .input('name', sql.NVarChar(255), data.name)
+            .input('esslStatus', sql.VarChar(50), data.esslStatus)
+            .input('esslCommandId', sql.Int, data.esslCommandId)
+            .input('esslPayload', sql.VarChar(sql.MAX), esslPayloadString)
+            .input('esslApiResponse', sql.NVarChar(sql.MAX), esslApiResponseString)
+            .query(query);
+
+    } catch (err) {
+        console.error('Error saving response to database:', err.message);
+        throw err;
+    }
 };
-
-
-
 
 
 module.exports = {
