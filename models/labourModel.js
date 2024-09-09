@@ -714,21 +714,60 @@ async function approveLabour(id, nextID) {
     }
 }
 
+// async function rejectLabour(id, rejectReason) {
+//     try {
+//         const pool = await poolPromise;
+//         const result = await pool.request()
+//             .input('id', sql.Int, id)
+//             .input('Reject_Reason', sql.VarChar, rejectReason)
+//             // .query("UPDATE labourOnboarding SET status = 'Rejected', isApproved = 2 WHERE id = @id AND (status = 'Pending' OR status = 'Approved')");
+//             .query('UPDATE labourOnboarding SET status = \'Rejected\', isApproved = 2, Reject_Reason = @Reject_Reason WHERE id = @id AND (status = \'Pending\' OR status = \'Approved\')');
+
+//         return result.rowsAffected[0] > 0;
+//     } catch (error) {
+//         console.error("Error in rejectLabour:", error);
+//         throw error;
+//     }
+// }
+
+
+
 async function rejectLabour(id, rejectReason) {
     try {
         const pool = await poolPromise;
+        const labour = await pool.request()
+            .input('id', sql.Int, id)
+            .query('SELECT * FROM labourOnboarding WHERE id = @id');
+        
+        if (labour.recordset.length === 0) {
+            return false; // labour not found
+        }
+        
+        const labourData = labour.recordset[0];
+
+        // Update the labour status
         const result = await pool.request()
             .input('id', sql.Int, id)
             .input('Reject_Reason', sql.VarChar, rejectReason)
-            // .query("UPDATE labourOnboarding SET status = 'Rejected', isApproved = 2 WHERE id = @id AND (status = 'Pending' OR status = 'Approved')");
             .query('UPDATE labourOnboarding SET status = \'Rejected\', isApproved = 2, Reject_Reason = @Reject_Reason WHERE id = @id AND (status = \'Pending\' OR status = \'Approved\')');
+
+        // Insert into RejectLabours table
+        await pool.request()
+            .input('userId', sql.Int, labourData.id)
+            .input('name', sql.VarChar, labourData.name)
+            .input('status', sql.VarChar, 'Rejected')
+            .input('Reject_Reason', sql.VarChar, rejectReason)
+            .input('OnboardName', sql.VarChar, labourData.OnboardName)
+            .input('aadhaarNumber', sql.VarChar, labourData.aadhaarNumber)
+            .input('isApproved', sql.Int, 2) // isApproved is 2 for rejected
+            .query('INSERT INTO RejectLabours (userId, name, status, Reject_Reason, OnboardName, aadhaarNumber, isApproved) VALUES (@userId, @name, @status, @Reject_Reason, @OnboardName, @aadhaarNumber, @isApproved)');
 
         return result.rowsAffected[0] > 0;
     } catch (error) {
         console.error("Error in rejectLabour:", error);
         throw error;
     }
-}
+};
 
 
 
@@ -744,20 +783,60 @@ async function getApprovedLabours() {
   }
 }
 
+// async function resubmit(id) {
+//     try {
+//         const pool = await poolPromise;
+//         const request = pool.request()
+//             .input('id', sql.Int, id)
+//             .input('status', sql.VarChar, 'Resubmitted')
+//             .input('isApproved', sql.Int, 3);
+
+//         const result = await request.query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved WHERE id = @id');
+//         return result.rowsAffected[0];
+//     } catch (error) {
+//         throw error;
+//     }
+// }
+
+
+
 async function resubmit(id) {
     try {
         const pool = await poolPromise;
-        const request = pool.request()
+        const labour = await pool.request()
+            .input('id', sql.Int, id)
+            .query('SELECT * FROM labourOnboarding WHERE id = @id');
+        
+        if (labour.recordset.length === 0) {
+            return 0; // labour not found
+        }
+
+        const labourData = labour.recordset[0];
+
+        // Update the labour status
+        const result = await pool.request()
             .input('id', sql.Int, id)
             .input('status', sql.VarChar, 'Resubmitted')
-            .input('isApproved', sql.Int, 3);
+            .input('isApproved', sql.Int, 3)
+            .query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved WHERE id = @id');
 
-        const result = await request.query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved WHERE id = @id');
+        // Insert into RejectLabours table
+        await pool.request()
+            .input('userId', sql.Int, labourData.id)
+            .input('name', sql.VarChar, labourData.name)
+            .input('status', sql.VarChar, 'Resubmitted')
+            .input('Reject_Reason', sql.VarChar, labourData.Reject_Reason) // might be empty on resubmission
+            .input('OnboardName', sql.VarChar, labourData.OnboardName)
+            .input('aadhaarNumber', sql.VarChar, labourData.aadhaarNumber)
+            .input('isApproved', sql.Int, 3) // isApproved is 3 for resubmitted
+            .query('INSERT INTO RejectLabours (userId, name, status, Reject_Reason, OnboardName, aadhaarNumber, isApproved) VALUES (@userId, @name, @status, @Reject_Reason, @OnboardName, @aadhaarNumber, @isApproved)');
+
         return result.rowsAffected[0];
     } catch (error) {
+        console.error("Error in resubmitLabour:", error);
         throw error;
     }
-}
+};
 
 
 
