@@ -1,5 +1,6 @@
 const labourModel = require('../models/labourModel');
 const { sql, poolPromise2 } = require('../config/dbConfig2');
+const { poolPromise3 } = require('../config/dbConfig3');
 const { poolPromise } = require('../config/dbConfig');
 const path = require('path');
 const fs = require('fs');
@@ -1092,6 +1093,28 @@ async function saveEsslResponse(data) {
 };
 
 
+async function getCommandStatus(req, res) {
+    const commandId = req.params.commandId;
+
+    try {
+        const pool = await poolPromise3;
+        const result = await pool.request()
+            .input('CommandId', sql.Int, commandId)
+            .query('SELECT status FROM DeviceCommands WHERE DeviceCommandId = @CommandId');
+
+        if (result.recordset.length > 0) {
+            const status = result.recordset[0].status;
+            return res.json({ status });
+        } else {
+            return res.status(404).json({ message: 'Command ID not found.' });
+        }
+    } catch (error) {
+        console.error('Error fetching command status:', error.message);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+
 module.exports = {
     handleCheckAadhaar,
     getNextUniqueID,
@@ -1108,6 +1131,7 @@ module.exports = {
     resubmitLabour,
     esslapi,
     updateRecordLabour,
-    createRecordUpdate
+    createRecordUpdate,
+    getCommandStatus
     // updateLabour
 };
