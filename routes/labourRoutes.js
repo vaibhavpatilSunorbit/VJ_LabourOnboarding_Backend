@@ -18,6 +18,7 @@ router.put('/approve/:id', labourController.approveLabour);
 router.put('/reject/:id', labourController.rejectLabour);
 router.put('/resubmit/:id', labourController.resubmitLabour);
 router.post('/essl/addEmployee', labourController.esslapi);
+router.get('/commandstatus/:commandId', labourController.getCommandStatus);
 
 
 
