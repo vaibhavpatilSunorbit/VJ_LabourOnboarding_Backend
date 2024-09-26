@@ -10,28 +10,37 @@ const { upload } = require('../server');
 const xml2js = require('xml2js');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
-// const baseUrl = 'http://localhost:4000/uploads/';
+const baseUrl = 'http://localhost:4000/uploads/';
 // const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
-const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
-
+// const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
 
 async function handleCheckAadhaar(req, res) {
     const { aadhaarNumber } = req.body;
-    console.log('Request Body: AaadharNumber Ch----------', req.body);
+    console.log('Request Body: AadhaarNumber:', aadhaarNumber);
 
     try {
         const labourRecord = await labourModel.checkAadhaarExists(aadhaarNumber);
 
         if (labourRecord) {
+            // Condition 1: Check for 'Resubmitted' and 'isApproved' === 3
             if (labourRecord.status === 'Resubmitted' && labourRecord.isApproved === 3) {
                 console.log("Returning skipCheck for Resubmitted and isApproved 3");
-                return res.status(200).json({ exists: false, skipCheck: true });
-            } else {
-                console.log("Returning exists true");
-                return res.status(200).json({ exists: true });
+                return res.status(200).json({ exists: false, skipCheck: true, LabourID: labourRecord.LabourID });
             }
+
+            // Condition 2: If LabourID exists, return LabourID
+            if (labourRecord.LabourID) {
+                console.log(`LabourID found: ${labourRecord.LabourID}`);
+                return res.status(200).json({
+                    exists: true,
+                    LabourID: labourRecord.LabourID
+                });
+            }
+
+            console.log("Returning exists true for regular record");
+            return res.status(200).json({ exists: true });
         } else {
             console.log("Returning exists false");
             return res.status(200).json({ exists: false });
@@ -39,8 +48,34 @@ async function handleCheckAadhaar(req, res) {
     } catch (error) {
         console.error('Error in handleCheckAadhaar:', error);
         return res.status(500).json({ error: 'Error checking Aadhaar number' });
-    };
-};
+    }
+}
+
+
+// async function handleCheckAadhaar(req, res) {
+//     const { aadhaarNumber } = req.body;
+//     console.log('Request Body: AaadharNumber Ch----------', req.body);
+
+//     try {
+//         const labourRecord = await labourModel.checkAadhaarExists(aadhaarNumber);
+
+//         if (labourRecord) {
+//             if (labourRecord.status === 'Resubmitted' && labourRecord.isApproved === 3) {
+//                 console.log("Returning skipCheck for Resubmitted and isApproved 3");
+//                 return res.status(200).json({ exists: false, skipCheck: true });
+//             } else {
+//                 console.log("Returning exists true");
+//                 return res.status(200).json({ exists: true });
+//             }
+//         } else {
+//             console.log("Returning exists false");
+//             return res.status(200).json({ exists: false });
+//         }
+//     } catch (error) {
+//         console.error('Error in handleCheckAadhaar:', error);
+//         return res.status(500).json({ error: 'Error checking Aadhaar number' });
+//     };
+// };
 
 
 
@@ -729,6 +764,245 @@ async function updateRecord(req, res) {
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+async function updateRecordWithDisable(req, res) {
+    try {
+        console.log('Request Body: check----------', req.body);
+        console.log('Request Files:', req.files); 
+
+        const {
+            labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
+            address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
+            accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
+        } = req.body;
+
+        let finalOnboardName = Array.isArray(OnboardName) ? OnboardName.filter(name => name !== 'null' && name.trim() !== '')[0] : OnboardName;
+        
+        if (!finalOnboardName || finalOnboardName.trim() === '') {
+            console.error('OnboardName is missing or empty.');
+            return res.status(400).json({ msg: 'OnboardName is required.' });
+        }
+
+        console.log('Cleaned OnboardName Resubmitted button:', finalOnboardName);
+
+
+        const labourCategoryMap = {
+            'SKILLED': 1,
+            'UN-SKILLED': 2,
+            'SEMI-SKILLED': 3
+        };
+
+        const safeLabourCategoryId = String(labourCategoryMap[labourCategory]) || null;
+
+        if (safeLabourCategoryId === null) {
+            console.log('Invalid labourCategory:', labourCategory);
+            return res.status(400).json({ msg: 'Invalid labourCategory provided' });
+        }
+
+        const safeConvertToInt = (value) => {
+            if (value === 'null' || value === '' || value === undefined) return null;
+            const parsedValue = parseInt(value, 10);
+            return isNaN(parsedValue) ? null : parsedValue;
+        };
+
+        const safeDepartmentId = String(departmentId);
+        const safeDesignationId = String(designationId);
+        const safeProjectName = isNaN(projectName) ? projectName : String(projectName); 
+
+        console.log('Converted Values:', {
+            safeProjectName,
+            safeDepartmentId,
+            safeDesignationId,
+            safeLabourCategoryId
+        });
+
+        if (safeProjectName === null || safeDepartmentId === null || safeDesignationId === null) {
+            return res.status(400).json({ msg: 'Missing required fields: projectName, departmentId, or designationId' });
+        }
+
+        const {
+            uploadAadhaarFront = null,
+            uploadAadhaarBack = null,
+            photoSrc = null,
+            uploadIdProof = null,
+            uploadInductionDoc = null
+        } = req.files || {};  // Use {} as fallback if req.files is undefined
+
+        const processFileField = (fileField, reqFile) => {
+            if (typeof fileField === 'string' && fileField.startsWith('http')) {
+                return fileField; // URL
+            } else if (reqFile) {
+                return baseUrl + path.basename(reqFile[0].path); // Binary data uploaded, get URL path
+            }
+            return null; // No data available
+        };
+
+        const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
+        const backImageUrl = processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
+        const photoSrcUrl = processFileField(req.body.photoSrc, photoSrc);
+        const IdProofImageUrl = processFileField(req.body.uploadIdProof, uploadIdProof);
+        const uploadInductionDocImageUrl = processFileField(req.body.uploadInductionDoc, uploadInductionDoc);
+
+
+        const dateOfJoiningDate = new Date(dateOfJoining);
+        const fromDate = dateOfJoiningDate;
+        const period = dateOfJoiningDate.toLocaleString('default', { month: 'long', year: 'numeric' }).replace(' ', '-');
+        const validTillDate = new Date(dateOfJoiningDate);
+        validTillDate.setFullYear(validTillDate.getFullYear() + 1);
+        const retirementDate = new Date(dateOfBirth);
+        retirementDate.setFullYear(retirementDate.getFullYear() + 60);
+
+        const pool = await poolPromise2;
+        const projectRequest = pool.request();
+
+        projectRequest.input('projectName', isNaN(safeProjectName) ? sql.VarChar : sql.Int, safeProjectName);
+
+        let query;
+        if (!isNaN(safeProjectName)) {
+            query = `
+                SELECT a.id, a.Description 
+                FROM Framework.BusinessUnit a
+                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
+                WHERE a.id = @projectName
+                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
+                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+                AND b.Id = 3
+            `;
+        } else {
+            query = `
+                SELECT a.id, a.Description 
+                FROM Framework.BusinessUnit a
+                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
+                WHERE a.Description = @projectName
+                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
+                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+                AND b.Id = 3
+            `;
+        }
+
+        console.log(`Querying for projectName: ${safeProjectName}`); // Debug log
+
+        const projectResult = await projectRequest.query(query);
+
+        if (projectResult.recordset.length === 0) {
+            console.log('Invalid project name:', safeProjectName); // Debug log
+            return res.status(400).json({ msg: 'Invalid project name-------' });
+        }
+
+        const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
+        const businessUnit = projectResult.recordset[0].Description;
+        console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
+
+        let salaryBu;
+        const projectId = projectResult.recordset[0].id;
+        const parentIdResult = await pool.request().query(`
+            SELECT ParentId 
+            FROM Framework.BusinessUnit 
+            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+            AND Id = ${projectId}
+        `);
+
+        if (parentIdResult.recordset.length === 0) {
+            return res.status(404).send('ParentId not found for the selected project');
+        }
+
+        const parentId = parentIdResult.recordset[0].ParentId;
+
+        const companyNameResult = await pool.request().query(`
+            SELECT Id, Description AS Company_Name 
+            FROM Framework.BusinessUnit 
+            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+            AND Id = ${parentId}
+        `);
+
+        const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
+
+        if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
+            salaryBu = `${companyNameFromDb} - HO`;
+        } else {
+            salaryBu = location;
+        }
+
+        // Fetch department description
+        const departmentRequest = pool.request();
+
+        // Validate and log departmentId before setting SQL input
+        console.log('Setting SQL input for departmentId:', safeDepartmentId);
+        if (safeDepartmentId !== null) {
+            departmentRequest.input('departmentId', safeDepartmentId);
+            console.log("departmentId", departmentId)
+        } else {
+            console.log('Invalid departmentId provided:', departmentId);
+            return res.status(400).send('Invalid departmentId');
+        }
+
+        const departmentQuery = `
+            SELECT a.Description AS Department_Name
+            FROM Payroll.Department a
+            WHERE a.Id = @departmentId
+        `;
+        const departmentResult = await departmentRequest.query(departmentQuery);
+
+        if (departmentResult.recordset.length === 0) {
+            console.log('Department not found for departmentId:', safeDepartmentId);
+            return res.status(404).send('Department not found');
+        }
+
+        const departmentName = departmentResult.recordset[0].Department_Name;
+
+        const creationDate = new Date();
+
+
+        console.log('Received OnboardName Resubmmit button functionlity:', finalOnboardName);
+
+        const data = await labourModel.registerDataUpdate({
+            labourOwnership,
+            uploadAadhaarFront: frontImageUrl,
+            uploadAadhaarBack: backImageUrl,
+            uploadIdProof: IdProofImageUrl,
+            uploadInductionDoc: uploadInductionDocImageUrl,
+            name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
+            Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining,
+            From_Date: fromDate.toISOString().split('T')[0], Period: period, address,
+            pincode, taluka, district, village, state, emergencyContact,
+            photoSrc: photoSrcUrl, bankName, branch, accountNumber, ifscCode, projectName,
+            labourCategory, department, workingHours, location, SalaryBu: salaryBu, businessUnit,
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName,
+            Induction_Date, Inducted_By, OnboardName: finalOnboardName, expiryDate,
+            ValidTill: validTillDate.toISOString().split('T')[0],
+            retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location,
+            CreationDate: creationDate.toISOString(), departmentId: safeDepartmentId, departmentName, designationId: safeDesignationId,
+            labourCategoryId: safeLabourCategoryId
+        });
+
+
+        console.log('dataupdate', data)
+
+        return res.status(201).json({ msg: "User created successfully", data: data });
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ msg: 'Internal server error' });
+    };
+
+};
+
+
 // Define multer storage configuration
 // const storage = multer.diskStorage({
 //     destination: (req, file, cb) => {
@@ -950,6 +1224,22 @@ async function resubmitLabour(req, res) {
 }
 
 
+//Edit labuor button functionality
+async function editbuttonLabour(req, res) {
+    try {
+        const { id } = req.params;
+        const updated = await labourModel.editLabour(id);
+        if (updated === 0) {
+            return res.status(404).json({ error: 'Record not found' });
+        }
+        return res.json({ success: true, message: 'Labour resubmitted successfully' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
+
 // async function esslapi(req, res) {
 //     try {
 //         const approvedLabours = req.body;
@@ -1132,6 +1422,8 @@ module.exports = {
     esslapi,
     updateRecordLabour,
     createRecordUpdate,
-    getCommandStatus
+    getCommandStatus,
+    editbuttonLabour,
+    updateRecordWithDisable
     // updateLabour
 };

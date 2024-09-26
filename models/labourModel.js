@@ -371,6 +371,225 @@ async function updateData(labourData) {
 
 
 
+
+
+
+
+async function updateDataDisableStatus(labourData) {
+    try {
+        const pool = await poolPromise;
+        const request = pool.request();
+        
+      //   request.input('LabourID', sql.VarChar, labourData.LabourID);
+      //   request.input('location', labourData.location);
+        
+      //   Object.keys(labourData).forEach((key, index) => {
+      //       if (key !== 'LabourID' && key !== 'location') {
+      //           request.input(key, sql.VarChar, labourData[key]);
+      //       }
+      //   });
+  
+  
+      const toUpperCaseFields = [
+          'address', 'name', 'taluka', 'district', 'village', 'state', 
+          'bankName', 'branch', 'ifscCode', 'contractorName', 'Inducted_By', 'OnboardName', 'title', 
+        ];
+    
+        // Helper function to set input with uppercase conversion
+        // const setInputWithUpperCase = (key, value) => {
+        //   request.input(key, sql.VarChar, value ? value.toUpperCase() : '');
+        // };
+
+        const setInputWithUpperCase = (key, value) => {
+            const valueAsString = value ? String(value) : '';
+            request.input(key, sql.VarChar, valueAsString ? valueAsString.toUpperCase() : '');
+          };
+    
+        request.input('LabourID', sql.VarChar, labourData.LabourID);
+        request.input('location', sql.VarChar, labourData.location);
+
+        const finalOnboardName = labourData.OnboardName ? labourData.OnboardName : ''; // Fallback to empty string if undefined
+        labourData.OnboardName = finalOnboardName;
+    
+        Object.keys(labourData).forEach((key) => {
+          if (key !== 'LabourID' && key !== 'location') {
+            if (toUpperCaseFields.includes(key)) {
+              setInputWithUpperCase(key, labourData[key]);
+            } else {
+              request.input(key, sql.VarChar, labourData[key]);
+            }
+          }
+        });
+  
+        const result = await request.query(`
+        INSERT INTO labourOnboarding (
+          LabourID, labourOwnership, uploadAadhaarFront, uploadAadhaarBack, uploadIdProof, name, aadhaarNumber,
+          dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date, From_Date, Period, address, pincode, taluka, district, village,
+          state, emergencyContact, photoSrc, bankName, branch, accountNumber, ifscCode, projectName, 
+          labourCategory, department, workingHours, contractorName, contractorNumber, designation,
+          status, isApproved, title, Marital_Status, companyName, Induction_Date, Inducted_By, uploadInductionDoc, OnboardName, ValidTill, location, ConfirmDate, retirementDate, SalaryBu, WorkingBu, CreationDate, businessUnit, departmentId, designationId, labourCategoryId, departmentName) 
+          VALUES (
+          @LabourID, @labourOwnership, @uploadAadhaarFront, @uploadAadhaarBack, @uploadIdProof, @name, @aadhaarNumber,
+          @dateOfBirth, @contactNumber, @gender, @dateOfJoining, @Group_Join_Date, @From_Date, @Period, @address, @pincode, @taluka, @district, @village,
+          @state, @emergencyContact, @photoSrc, @bankName, @branch, @accountNumber, @ifscCode, @projectName,
+          @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
+          'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId, @departmentName)
+        `);
+        console.log('Data successfully inserted for OnboardName Resubmmit button:', labourData.OnboardName);
+        return result.recordset;
+    } catch (error) {
+        throw error;
+    };
+
+    // try {
+    //     console.log("labourData:", labourData);
+
+    //     const pool = await poolPromise;
+    //     const request = pool.request();
+
+    //     const toUpperCaseFields = [
+    //         'address', 'name', 'taluka', 'district', 'village', 'state',
+    //         'bankName', 'branch', 'ifscCode', 'contractorName', 'Inducted_By', 'OnboardName', 'title', 'Employee_Type'
+    //     ];
+
+    //     const setInputWithUpperCase = (key, value) => {
+    //         const valueAsString = value ? String(value) : '';
+    //         request.input(key, sql.VarChar, valueAsString ? valueAsString.toUpperCase() : '');
+    //     };
+
+    //     // Check if LabourID exists and is correct
+    //     // if (!labourData.LabourID) {
+    //     //     console.error('LabourID is not provided or is null/undefined.');
+    //     //     return null;
+    //     // }
+
+    //     // console.log("Updating LabourID:", labourData.LabourID);
+    //     // request.input('LabourID', sql.NVarChar, labourData.LabourID);
+
+    //     const finalOnboardName = labourData.OnboardName ? labourData.OnboardName : ''; // Fallback to empty string if undefined
+    //     labourData.OnboardName = finalOnboardName;
+
+    //     // New Logic: Check labourStatus to set LabourID, status, empId, and isApproved fields
+    //     // if (labourData.status === 'Disable' && labourData.isApproved == 4) {
+    //     //     console.log('Labour is disabled and approved. Setting status to Pending, isApproved to 0, and LabourID to NULL');
+            
+    //     //     // Update fields
+    //     //     labourData.LabourID = null; // Set LabourID to null
+    //     //     labourData.status = 'Pending'; // Set status to Pending
+    //     //     labourData.isApproved = 0; // Set isApproved to 0
+    //     // } else {
+    //     //     return { error: 'Labour is not in disabled state or approval status is not 4' };
+    //     // }
+    //     labourData.status = labourData.status || 'Pending';  // Set status to Pending if undefined
+    //     labourData.isApproved = labourData.isApproved || 0;  // Set isApproved to 0 if undefined
+    //     labourData.LabourID = labourData.LabourID === 'Disable' ? null : labourData.LabourID;
+
+    //     // const labourStatus = labourData.status || 'Pending';
+
+    //     Object.keys(labourData).forEach((key) => {
+    //         if (key !== 'LabourID' && key !== 'status' && key !== 'isApproved') {
+    //             if (toUpperCaseFields.includes(key)) {
+    //                 setInputWithUpperCase(key, labourData[key]);
+    //             } else {
+    //                 let sqlType = sql.NVarChar;
+    //                 if (['aadhaarNumber', 'pincode', 'contactNumber'].includes(key)) {
+    //                     sqlType = sql.NVarChar;
+    //                 } else if (['dateOfBirth', 'dateOfJoining', 'Induction_Date', 'ValidTill', 'ConfirmDate', 'retirementDate', 'CreationDate'].includes(key)) {
+    //                     sqlType = sql.DateTime;
+    //                 } else if (['departmentId', 'designationId', 'labourCategoryId'].includes(key)) {
+    //                     sqlType = sql.Int;
+    //                 } 
+
+    //                 const value = labourData[key] === 'null' ? null : labourData[key];
+    //                 request.input(key, sqlType, value);
+    //             }
+    //         }
+    //     });
+
+    //     request.input('status', sql.VarChar, labourData.status)
+    //            .input('isApproved', sql.Int, labourData.isApproved)
+    //            .input('LabourID', sql.NVarChar, labourData.LabourID);
+
+    //     console.log("Executing SQL Update...");
+    //     const updateResult = await request.query(`
+    //         UPDATE labourOnboarding SET
+    //             labourOwnership = @labourOwnership,
+    //             uploadAadhaarFront = @uploadAadhaarFront,
+    //             uploadAadhaarBack = @uploadAadhaarBack,
+    //             uploadIdProof = @uploadIdProof,
+    //             uploadInductionDoc = @uploadInductionDoc,
+    //             name = @name,
+    //             aadhaarNumber = @aadhaarNumber,
+    //             dateOfBirth = @dateOfBirth,
+    //             contactNumber = @contactNumber,
+    //             gender = @gender,
+    //             dateOfJoining = @dateOfJoining,
+    //             Group_Join_Date = @Group_Join_Date,
+    //             From_Date = @From_Date,
+    //             Period = @Period,
+    //             address = @address,
+    //             pincode = @pincode,
+    //             taluka = @taluka,
+    //             district = @district,
+    //             village = @village,
+    //             state = @state,
+    //             emergencyContact = @emergencyContact,
+    //             photoSrc = @photoSrc,
+    //             bankName = @bankName,
+    //             branch = @branch,
+    //             accountNumber = @accountNumber,
+    //             ifscCode = @ifscCode,
+    //             projectName = @projectName,
+    //             labourCategory = @labourCategory,
+    //             department = @department,
+    //             workingHours = @workingHours,
+    //             contractorName = @contractorName,
+    //             contractorNumber = @contractorNumber,
+    //             designation = @designation,
+    //             title = @title,
+    //             Marital_Status = @Marital_Status,
+    //             companyName = @companyName,
+    //             Induction_Date = @Induction_Date,
+    //             Inducted_By = @Inducted_By,
+    //             OnboardName = @OnboardName,
+    //             ValidTill = @ValidTill,
+    //             location = @location,
+    //             ConfirmDate = @ConfirmDate,
+    //             retirementDate = @retirementDate,
+    //             SalaryBu = @SalaryBu,
+    //             WorkingBu = @WorkingBu,
+    //             CreationDate = @CreationDate,
+    //             businessUnit = @businessUnit,
+    //             departmentId = @departmentId,
+    //             designationId = @designationId,
+    //             labourCategoryId = @labourCategoryId,
+    //             departmentName = @departmentName,
+    //             status = @status,
+    //             isApproved = @isApproved
+    //         WHERE LabourID IS NULL
+    //     `);
+
+    //     if (updateResult.rowsAffected[0] === 0) {
+    //         console.warn("No rows were updated, check LabourID or other conditions.");
+    //         return null;
+    //     }
+
+    //     console.log("Update successful:", updateResult.rowsAffected[0], "rows updated.");
+    //     return updateResult;
+    //     // Fetch the updated record to return it
+    //     // Return the first row of the updated data
+    // } catch (error) {
+    //     console.error('Error updating data:', error);
+    //     throw error;
+    // }
+};
+
+
+
+
+
+
+
 async function registerDataUpdate(labourData) {
     try {
         const pool = await poolPromise;
@@ -692,10 +911,12 @@ async function getAllLabours() {
 async function approveLabour(id, nextID) {
     try {
         const pool = await poolPromise;
+        const now = new Date();
         const result = await pool.request()
             .input('id', sql.Int, id)
             .input('LabourID', sql.VarChar, nextID)
-            .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
+            .input('ApproveLabourDate', sql.DateTime, now)
+            .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID, ApproveLabourDate = @ApproveLabourDate WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
         
         console.log('Database update result:', result);
 
@@ -735,6 +956,7 @@ async function approveLabour(id, nextID) {
 async function rejectLabour(id, rejectReason) {
     try {
         const pool = await poolPromise;
+        const now = new Date();
         const labour = await pool.request()
             .input('id', sql.Int, id)
             .query('SELECT * FROM labourOnboarding WHERE id = @id');
@@ -749,7 +971,8 @@ async function rejectLabour(id, rejectReason) {
         const result = await pool.request()
             .input('id', sql.Int, id)
             .input('Reject_Reason', sql.VarChar, rejectReason)
-            .query('UPDATE labourOnboarding SET status = \'Rejected\', isApproved = 2, Reject_Reason = @Reject_Reason WHERE id = @id AND (status = \'Pending\' OR status = \'Approved\')');
+            .input('RejectLabourDate', sql.DateTime, now)
+            .query('UPDATE labourOnboarding SET status = \'Rejected\', isApproved = 2, Reject_Reason = @Reject_Reason, RejectLabourDate = @RejectLabourDate WHERE id = @id AND (status = \'Pending\' OR status = \'Approved\')');
 
         // Insert into RejectLabours table
         await pool.request()
@@ -800,9 +1023,55 @@ async function getApprovedLabours() {
 
 
 
+// async function resubmit(id) {
+//     try {
+//       const pool = await poolPromise;
+//       const now = new Date();
+//       const labour = await pool.request()
+//         .input('id', sql.Int, id)
+//         .query('SELECT * FROM labourOnboarding WHERE id = @id');
+      
+//       if (labour.recordset.length === 0) {
+//         return 0; // labour not found
+//       }
+  
+//       const labourData = labour.recordset[0];
+//       let rejectReason = labourData.Reject_Reason || "This labour attendance is older than 15 days or not present";
+  
+//       // Update the labour status only if it's not 'Disable'
+//       if (labourData.status !== 'Disable') {
+//         await pool.request()
+//           .input('id', sql.Int, id)
+//           .input('status', sql.VarChar, 'Resubmitted')
+//           .input('isApproved', sql.Int, 3)
+//           .input('ResubmitLabourDate', sql.DateTime, now)
+//           .query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved, ResubmitLabourDate = @ResubmitLabourDate WHERE id = @id');
+//       }
+  
+//       // Insert into RejectLabours table
+//       await pool.request()
+//         .input('userId', sql.Int, labourData.id)
+//         .input('name', sql.VarChar, labourData.name)
+//         .input('status', sql.VarChar, labourData.status === 'Disable' ? 'Disable' : 'Resubmitted')
+//         .input('Reject_Reason', sql.VarChar, rejectReason) // might be empty on resubmission
+//         .input('OnboardName', sql.VarChar, labourData.OnboardName)
+//         .input('aadhaarNumber', sql.VarChar, labourData.aadhaarNumber)
+//         .input('isApproved', sql.Int, labourData.status === 'Disable' ? labourData.isApproved : 3) // isApproved is 3 for resubmitted
+//         .query('INSERT INTO RejectLabours (userId, name, status, Reject_Reason, OnboardName, aadhaarNumber, isApproved) VALUES (@userId, @name, @status, @Reject_Reason, @OnboardName, @aadhaarNumber, @isApproved)');
+  
+//       return labour.recordset[0];
+//     } catch (error) {
+//       console.error("Error in resubmitLabour:", error);
+//       throw error;
+//     }
+//   };
+
+
+
 async function resubmit(id) {
     try {
         const pool = await poolPromise;
+      const now = new Date();
         const labour = await pool.request()
             .input('id', sql.Int, id)
             .query('SELECT * FROM labourOnboarding WHERE id = @id');
@@ -818,7 +1087,8 @@ async function resubmit(id) {
             .input('id', sql.Int, id)
             .input('status', sql.VarChar, 'Resubmitted')
             .input('isApproved', sql.Int, 3)
-            .query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved WHERE id = @id');
+             .input('ResubmitLabourDate', sql.DateTime, now)
+          .query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved, ResubmitLabourDate = @ResubmitLabourDate WHERE id = @id');
 
         // Insert into RejectLabours table
         await pool.request()
@@ -829,6 +1099,46 @@ async function resubmit(id) {
             .input('OnboardName', sql.VarChar, labourData.OnboardName)
             .input('aadhaarNumber', sql.VarChar, labourData.aadhaarNumber)
             .input('isApproved', sql.Int, 3) // isApproved is 3 for resubmitted
+            .query('INSERT INTO RejectLabours (userId, name, status, Reject_Reason, OnboardName, aadhaarNumber, isApproved) VALUES (@userId, @name, @status, @Reject_Reason, @OnboardName, @aadhaarNumber, @isApproved)');
+
+        return result.rowsAffected[0];
+    } catch (error) {
+        console.error("Error in resubmitLabour:", error);
+        throw error;
+    }
+};
+
+
+// Edit labour functionlity button 
+async function editLabour(id) {
+    try {
+        const pool = await poolPromise;
+        const now = new Date(); 
+        const labour = await pool.request()
+            .input('id', sql.Int, id)
+            .query('SELECT * FROM labourOnboarding WHERE id = @id');
+        
+        if (labour.recordset.length === 0) {
+            return 0; // labour not found
+        }
+
+        const labourData = labour.recordset[0];
+
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .input('status', sql.VarChar, 'Approved')
+            .input('isApproved', sql.Int, 1)
+            .input('EditLabourDate', sql.DateTime, now)
+            .query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved, EditLabourDate = @EditLabourDate WHERE id = @id');
+
+        await pool.request()
+            .input('userId', sql.Int, labourData.id)
+            .input('name', sql.VarChar, labourData.name)
+            .input('status', sql.VarChar, 'Approved')
+            .input('Reject_Reason', sql.VarChar, labourData.Reject_Reason) 
+            .input('OnboardName', sql.VarChar, labourData.OnboardName)
+            .input('aadhaarNumber', sql.VarChar, labourData.aadhaarNumber)
+            .input('isApproved', sql.Int, 1) 
             .query('INSERT INTO RejectLabours (userId, name, status, Reject_Reason, OnboardName, aadhaarNumber, isApproved) VALUES (@userId, @name, @status, @Reject_Reason, @OnboardName, @aadhaarNumber, @isApproved)');
 
         return result.rowsAffected[0];
@@ -888,6 +1198,8 @@ module.exports = {
     getFormDataByAadhaar,
     updateLabour,
     registerDataUpdate,
-    updateData
+    updateData,
+    editLabour,
+    updateDataDisableStatus
     // updateLabour
 };
