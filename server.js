@@ -375,6 +375,15 @@ app.put('/labours/updatelabour/:id', upload.fields([
     { name: 'photoSrc' }
 ]), labourController.updateRecord);
 
+
+app.put('/labours/updatelabourDisableStatus/:id', upload.fields([
+    { name: 'uploadAadhaarFront' },
+    { name: 'uploadAadhaarBack' },
+    { name: 'uploadIdProof' },
+    { name: 'uploadInductionDoc' },
+    { name: 'photoSrc' }
+]), labourController.updateRecordWithDisable);
+
 app.use('/labours', labourRoutes);
 app.use('/users', userRoutes);
 app.use('/api', dataRoutes);
