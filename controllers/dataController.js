@@ -560,7 +560,7 @@ console.log("payrollUnit : " + payrollUnit);
 const saveApiResponsePayload = async (req, res) => {
   const {
     userId,
-    LabourID,
+    labourID: LabourID,
     name,
     aadharNumber,
     employeeMasterPayload,
@@ -598,7 +598,7 @@ const saveApiResponsePayload = async (req, res) => {
     `;
 
     // // Logging the extracted and full response data
-    // console.log('employeeMasterResponseId:', employeeMasterResponseId);
+    console.log('LabourID.....check:', LabourID);
     // console.log('employeeMasterLedgerId:', employeeMasterLedgerId);
     // console.log('employeeMasterUserId:', employeeMasterUserId);
     // console.log('employeeCompanyID:', employeeCompanyID);
@@ -672,6 +672,74 @@ const updateEmployeeMaster = async (req, res) => {
 // ATTENDANCE LABOUR CODE 
 
 // Get labors whose attendance is older than 15 days or not present
+// const getLaboursWithOldAttendance = async (req, res) => {
+//   try {
+//     const poolLabour = await poolPromise;
+//     const poolAttendance = await poolPromise3; // Ensure poolAttendance is initialized
+
+//     const { page = 1, limit = 1000 } = req.query;
+//     const offset = (page - 1) * limit;
+
+//     const today = new Date();
+//     const startDate = new Date(today);
+//     startDate.setDate(startDate.getDate() - 15);
+
+//     const todaySQL = today.toISOString().slice(0, 10);
+//     const startDateSQL = startDate.toISOString().slice(0, 10);
+
+//     // Fetch labor data with pagination
+//     const labourResult = await poolLabour.request().query(`
+//       SELECT * FROM labourOnboarding
+//       ORDER BY id
+//       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
+//     `);
+
+//     const labourIds = labourResult.recordset.map(labour => labour.LabourID);
+
+//     if (labourIds.length === 0) {
+//       return res.status(200).json({ labors: [] });
+//     }
+
+//     // Fetch attendance data for the last 15 days for these labour IDs
+//     const attendanceResult = await poolAttendance.request()
+//       .input('StartDate', sql.Date, startDateSQL)
+//       .input('TodayDate', sql.Date, todaySQL)
+//       .query(`
+//         SELECT user_id 
+//         FROM [etimetracklite11.8].[dbo].[Attendance] 
+//         WHERE punch_date BETWEEN @StartDate AND @TodayDate
+//         AND user_id IN (${labourIds.map(id => `'${id}'`).join(",")})
+//       `);
+
+//     const attendedLabourIds = attendanceResult.recordset.map(att => att.user_id);
+
+//     const laboursWithNoAttendance = labourResult.recordset.filter(labour => !attendedLabourIds.includes(labour.LabourID));
+
+//     // Update their status to Disable and add Reject_Reason
+//     for (let labour of laboursWithNoAttendance) {
+//       labour.Reject_Reason = "This labour attendance is older than 15 days or not present";
+      
+//       await poolLabour.request()
+//         .input('id', sql.Int, labour.id)
+//         .input('status', sql.VarChar, 'Disable')
+//         .input('isApproved', sql.Int, 4)
+//         .input('Reject_Reason', sql.VarChar, labour.Reject_Reason)
+//         .query(`
+//           UPDATE labourOnboarding 
+//           SET status = @status, isApproved = @isApproved, Reject_Reason = @Reject_Reason
+//           WHERE id = @id
+//         `);
+//     }
+
+//     res.status(200).json({ labors: laboursWithNoAttendance });
+//   } catch (err) {
+//     console.error("Error fetching labors:", err);
+//     res.status(500).json({ error: "Error fetching labors" });
+//   }
+// };
+
+
+
 const getLaboursWithOldAttendance = async (req, res) => {
   try {
     const poolLabour = await poolPromise;
@@ -681,15 +749,21 @@ const getLaboursWithOldAttendance = async (req, res) => {
     const offset = (page - 1) * limit;
 
     const today = new Date();
-    const startDate = new Date(today);
-    startDate.setDate(startDate.getDate() - 15);
+    let startDate = new Date(today);
+
+    // Set start date to 15 days ago
+    startDate.setDate(today.getDate() - 15);
 
     const todaySQL = today.toISOString().slice(0, 10);
     const startDateSQL = startDate.toISOString().slice(0, 10);
 
-    // Fetch labor data with pagination
+    // Fetch labor data with pagination, excluding labors created/approved in the last 15 days
+    // Also exclude labors with status 'Resubmitted' (IsApproved = 3) or 'Rejected' (IsApproved = 2)
     const labourResult = await poolLabour.request().query(`
-      SELECT * FROM labourOnboarding
+      SELECT * FROM labourOnboarding 
+      WHERE (DATEDIFF(DAY, CreationDate, GETDATE()) > 15 OR CreationDate IS NULL)
+      AND (status != 'Resubmitted' OR IsApproved != 3)
+      AND (status != 'Rejected' OR IsApproved != 2)
       ORDER BY id
       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
     `);
@@ -700,7 +774,7 @@ const getLaboursWithOldAttendance = async (req, res) => {
       return res.status(200).json({ labors: [] });
     }
 
-    // Fetch attendance data for the last 15 days for these labour IDs
+    // Fetch attendance data, excluding Sundays (weekday = 1 for Monday and weekday = 7 for Sunday)
     const attendanceResult = await poolAttendance.request()
       .input('StartDate', sql.Date, startDateSQL)
       .input('TodayDate', sql.Date, todaySQL)
@@ -708,27 +782,31 @@ const getLaboursWithOldAttendance = async (req, res) => {
         SELECT user_id 
         FROM [etimetracklite11.8].[dbo].[Attendance] 
         WHERE punch_date BETWEEN @StartDate AND @TodayDate
+        AND DATEPART(dw, punch_date) != 1  -- Exclude Sundays
         AND user_id IN (${labourIds.map(id => `'${id}'`).join(",")})
       `);
 
     const attendedLabourIds = attendanceResult.recordset.map(att => att.user_id);
 
+    // Find labors without attendance in the last 15 days
     const laboursWithNoAttendance = labourResult.recordset.filter(labour => !attendedLabourIds.includes(labour.LabourID));
 
-    // Update their status to Disable and add Reject_Reason
+    // Update their status to Disable and add Reject_Reason, but only if not Resubmitted or Rejected
     for (let labour of laboursWithNoAttendance) {
-      labour.Reject_Reason = "This labour attendance is older than 15 days or not present";
-      
-      await poolLabour.request()
-        .input('id', sql.Int, labour.id)
-        .input('status', sql.VarChar, 'Disable')
-        .input('isApproved', sql.Int, 4)
-        .input('Reject_Reason', sql.VarChar, labour.Reject_Reason)
-        .query(`
-          UPDATE labourOnboarding 
-          SET status = @status, isApproved = @isApproved, Reject_Reason = @Reject_Reason
-          WHERE id = @id
-        `);
+      if (labour.status !== 'Resubmitted' && labour.isApproved !== 3 && labour.status !== 'Rejected' && labour.isApproved !== 2) {
+        labour.Reject_Reason = "This labour attendance is older than 15 days or not present";
+
+        await poolLabour.request()
+          .input('id', sql.Int, labour.id)
+          .input('status', sql.VarChar, 'Disable')
+          .input('isApproved', sql.Int, 4)
+          .input('Reject_Reason', sql.VarChar, labour.Reject_Reason)
+          .query(`
+            UPDATE labourOnboarding 
+            SET status = @status, isApproved = @isApproved, Reject_Reason = @Reject_Reason
+            WHERE id = @id
+          `);
+      }
     }
 
     res.status(200).json({ labors: laboursWithNoAttendance });
@@ -737,8 +815,6 @@ const getLaboursWithOldAttendance = async (req, res) => {
     res.status(500).json({ error: "Error fetching labors" });
   }
 };
-
-
 
 
 
