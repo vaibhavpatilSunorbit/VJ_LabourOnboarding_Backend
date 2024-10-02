@@ -22,6 +22,10 @@ router.post('/essl/addEmployee', labourController.esslapi);
 router.get('/commandstatus/:commandId', labourController.getCommandStatus);
 router.put('/updatelabourDisableStatus/:id', labourController.updateRecordWithDisable);
 
+// router.get('/getEsslStatuses', labourController.getEsslStatuses);
+// router.get('/getEmployeeMasterStatuses', labourController.getEmployeeMasterStatuses);
+router.post('/getCombinedStatuses', labourController.getUserStatusController);
+// router.get('/labour-status', labourController.getLabourStatus);
 
 
 module.exports = router;

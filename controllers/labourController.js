@@ -1405,6 +1405,51 @@ async function getCommandStatus(req, res) {
 };
 
 
+async function getUserStatusController(req, res) {
+    try {
+        const labourIds = req.body.labourIds; // Get array of labour IDs from request body
+        if (!labourIds || !Array.isArray(labourIds)) {
+            return res.status(400).json({ error: 'Invalid labourIds array' });
+        }
+
+        const combinedStatuses = await labourModel.getLabourStatuses(labourIds); // Pass array of IDs to model
+        res.status(200).json(combinedStatuses);
+    } catch (error) {
+        console.error("Error in controller:", error.message, error.stack);
+        res.status(500).json({ error: 'Failed to fetch combined statuses' });
+    }
+}
+
+// async function getLabourStatus(req, res) {
+//     try {
+//         const labourId = parseInt(req.query.id || req.params.id); // parse the id from query or route params
+        
+//         // Validate if labourId is a valid number
+//         if (isNaN(labourId)) {
+//             return res.status(400).json({ message: 'Invalid labour ID' });
+//         }
+
+//         const pool = await poolPromise;
+
+//         // Use the parsed id in the SQL query
+//         const result = await pool.request()
+//             .input('labourId', sql.Int, labourId) // Ensure labourId is passed as an integer
+//             .query(`
+//                 SELECT lo.id AS labourId, lo.name, aep.esslStatus, arp.employeeMasterStatus 
+//                 FROM [LabourOnboardingForm_TEST].[dbo].[labourOnboarding] lo
+//                 LEFT JOIN [LabourOnboardingForm_TEST].[dbo].[API_EsslPayloads] aep ON lo.id = aep.userId
+//                 LEFT JOIN [LabourOnboardingForm_TEST].[dbo].[API_ResponsePayloads] arp ON lo.id = arp.userId
+//                 WHERE lo.id = @labourId
+//             `);
+
+//         return res.status(200).json(result.recordset);
+//     } catch (err) {
+//         console.error('Error fetching labour statuses:', err);
+//         return res.status(500).json({ message: 'Error fetching data' });
+//     }
+// }
+
+
 module.exports = {
     handleCheckAadhaar,
     getNextUniqueID,
@@ -1424,6 +1469,10 @@ module.exports = {
     createRecordUpdate,
     getCommandStatus,
     editbuttonLabour,
-    updateRecordWithDisable
+    updateRecordWithDisable,
+    getUserStatusController,
+    // getLabourStatus
+    // getEsslStatuses,
+    // getEmployeeMasterStatuses
     // updateLabour
 };

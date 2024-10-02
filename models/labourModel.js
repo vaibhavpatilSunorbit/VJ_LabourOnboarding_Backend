@@ -440,7 +440,7 @@ async function updateDataDisableStatus(labourData) {
     } catch (error) {
         throw error;
     };
-
+};
     // try {
     //     console.log("labourData:", labourData);
 
@@ -582,7 +582,7 @@ async function updateDataDisableStatus(labourData) {
     //     console.error('Error updating data:', error);
     //     throw error;
     // }
-};
+// };
 
 
 
@@ -1022,91 +1022,91 @@ async function getApprovedLabours() {
 // }
 
 
-
-// async function resubmit(id) {
-//     try {
-//       const pool = await poolPromise;
-//       const now = new Date();
-//       const labour = await pool.request()
-//         .input('id', sql.Int, id)
-//         .query('SELECT * FROM labourOnboarding WHERE id = @id');
-      
-//       if (labour.recordset.length === 0) {
-//         return 0; // labour not found
-//       }
-  
-//       const labourData = labour.recordset[0];
-//       let rejectReason = labourData.Reject_Reason || "This labour attendance is older than 15 days or not present";
-  
-//       // Update the labour status only if it's not 'Disable'
-//       if (labourData.status !== 'Disable') {
-//         await pool.request()
-//           .input('id', sql.Int, id)
-//           .input('status', sql.VarChar, 'Resubmitted')
-//           .input('isApproved', sql.Int, 3)
-//           .input('ResubmitLabourDate', sql.DateTime, now)
-//           .query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved, ResubmitLabourDate = @ResubmitLabourDate WHERE id = @id');
-//       }
-  
-//       // Insert into RejectLabours table
-//       await pool.request()
-//         .input('userId', sql.Int, labourData.id)
-//         .input('name', sql.VarChar, labourData.name)
-//         .input('status', sql.VarChar, labourData.status === 'Disable' ? 'Disable' : 'Resubmitted')
-//         .input('Reject_Reason', sql.VarChar, rejectReason) // might be empty on resubmission
-//         .input('OnboardName', sql.VarChar, labourData.OnboardName)
-//         .input('aadhaarNumber', sql.VarChar, labourData.aadhaarNumber)
-//         .input('isApproved', sql.Int, labourData.status === 'Disable' ? labourData.isApproved : 3) // isApproved is 3 for resubmitted
-//         .query('INSERT INTO RejectLabours (userId, name, status, Reject_Reason, OnboardName, aadhaarNumber, isApproved) VALUES (@userId, @name, @status, @Reject_Reason, @OnboardName, @aadhaarNumber, @isApproved)');
-  
-//       return labour.recordset[0];
-//     } catch (error) {
-//       console.error("Error in resubmitLabour:", error);
-//       throw error;
-//     }
-//   };
-
-
-
+// This Below resubmit code WITH any status === Disable logic
 async function resubmit(id) {
     try {
-        const pool = await poolPromise;
+      const pool = await poolPromise;
       const now = new Date();
-        const labour = await pool.request()
-            .input('id', sql.Int, id)
-            .query('SELECT * FROM labourOnboarding WHERE id = @id');
-        
-        if (labour.recordset.length === 0) {
-            return 0; // labour not found
-        }
-
-        const labourData = labour.recordset[0];
-
-        // Update the labour status
-        const result = await pool.request()
-            .input('id', sql.Int, id)
-            .input('status', sql.VarChar, 'Resubmitted')
-            .input('isApproved', sql.Int, 3)
-             .input('ResubmitLabourDate', sql.DateTime, now)
-          .query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved, ResubmitLabourDate = @ResubmitLabourDate WHERE id = @id');
-
-        // Insert into RejectLabours table
+      const labour = await pool.request()
+        .input('id', sql.Int, id)
+        .query('SELECT * FROM labourOnboarding WHERE id = @id');
+      
+      if (labour.recordset.length === 0) {
+        return 0; // labour not found
+      }
+  
+      const labourData = labour.recordset[0];
+      let rejectReason = labourData.Reject_Reason || "This labour attendance is older than 15 days or not present";
+  
+      // Update the labour status only if it's not 'Disable'
+      if (labourData.status !== 'Disable') {
         await pool.request()
-            .input('userId', sql.Int, labourData.id)
-            .input('name', sql.VarChar, labourData.name)
-            .input('status', sql.VarChar, 'Resubmitted')
-            .input('Reject_Reason', sql.VarChar, labourData.Reject_Reason) // might be empty on resubmission
-            .input('OnboardName', sql.VarChar, labourData.OnboardName)
-            .input('aadhaarNumber', sql.VarChar, labourData.aadhaarNumber)
-            .input('isApproved', sql.Int, 3) // isApproved is 3 for resubmitted
-            .query('INSERT INTO RejectLabours (userId, name, status, Reject_Reason, OnboardName, aadhaarNumber, isApproved) VALUES (@userId, @name, @status, @Reject_Reason, @OnboardName, @aadhaarNumber, @isApproved)');
-
-        return result.rowsAffected[0];
+          .input('id', sql.Int, id)
+          .input('status', sql.VarChar, 'Resubmitted')
+          .input('isApproved', sql.Int, 3)
+          .input('ResubmitLabourDate', sql.DateTime, now)
+          .query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved, ResubmitLabourDate = @ResubmitLabourDate WHERE id = @id');
+      }
+  
+      // Insert into RejectLabours table
+      await pool.request()
+        .input('userId', sql.Int, labourData.id)
+        .input('name', sql.VarChar, labourData.name)
+        .input('status', sql.VarChar, labourData.status === 'Disable' ? 'Disable' : 'Resubmitted')
+        .input('Reject_Reason', sql.VarChar, rejectReason) // might be empty on resubmission
+        .input('OnboardName', sql.VarChar, labourData.OnboardName)
+        .input('aadhaarNumber', sql.VarChar, labourData.aadhaarNumber)
+        .input('isApproved', sql.Int, labourData.status === 'Disable' ? labourData.isApproved : 3) // isApproved is 3 for resubmitted
+        .query('INSERT INTO RejectLabours (userId, name, status, Reject_Reason, OnboardName, aadhaarNumber, isApproved) VALUES (@userId, @name, @status, @Reject_Reason, @OnboardName, @aadhaarNumber, @isApproved)');
+  
+      return labour.recordset[0];
     } catch (error) {
-        console.error("Error in resubmitLabour:", error);
-        throw error;
+      console.error("Error in resubmitLabour:", error);
+      throw error;
     }
-};
+  };
+
+
+// This Below resubmit code without any status === Disable logic
+// async function resubmit(id) {
+//     try {
+//         const pool = await poolPromise;
+//       const now = new Date();
+//         const labour = await pool.request()
+//             .input('id', sql.Int, id)
+//             .query('SELECT * FROM labourOnboarding WHERE id = @id');
+        
+//         if (labour.recordset.length === 0) {
+//             return 0; // labour not found
+//         }
+
+//         const labourData = labour.recordset[0];
+
+//         // Update the labour status
+//         const result = await pool.request()
+//             .input('id', sql.Int, id)
+//             .input('status', sql.VarChar, 'Resubmitted')
+//             .input('isApproved', sql.Int, 3)
+//              .input('ResubmitLabourDate', sql.DateTime, now)
+//           .query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved, ResubmitLabourDate = @ResubmitLabourDate WHERE id = @id');
+
+//         // Insert into RejectLabours table
+//         await pool.request()
+//             .input('userId', sql.Int, labourData.id)
+//             .input('name', sql.VarChar, labourData.name)
+//             .input('status', sql.VarChar, 'Resubmitted')
+//             .input('Reject_Reason', sql.VarChar, labourData.Reject_Reason) // might be empty on resubmission
+//             .input('OnboardName', sql.VarChar, labourData.OnboardName)
+//             .input('aadhaarNumber', sql.VarChar, labourData.aadhaarNumber)
+//             .input('isApproved', sql.Int, 3) // isApproved is 3 for resubmitted
+//             .query('INSERT INTO RejectLabours (userId, name, status, Reject_Reason, OnboardName, aadhaarNumber, isApproved) VALUES (@userId, @name, @status, @Reject_Reason, @OnboardName, @aadhaarNumber, @isApproved)');
+
+//         return result.rowsAffected[0];
+//     } catch (error) {
+//         console.error("Error in resubmitLabour:", error);
+//         throw error;
+//     }
+// };
 
 
 // Edit labour functionlity button 
@@ -1161,7 +1161,7 @@ async function getLabourByAadhaar(aadhaarNumber) {
         console.error('Error fetching labour by Aadhaar:', error);
         throw error;
     }
-}
+};
 
 // Function to get form data by Aadhaar number
 async function getFormDataByAadhaar(aadhaarNumber) {
@@ -1175,8 +1175,97 @@ async function getFormDataByAadhaar(aadhaarNumber) {
         console.error('Error fetching form data by Aadhaar:', error);
         throw error;
     }
-}
+};
 
+
+// async function getCombinedStatuses() {
+//     try {
+//         const pool = await poolPromise;
+ 
+//         // Query both tables
+//         const esslResult = await pool.request()
+//             .query('SELECT userId, esslStatus FROM [dbo].[API_EsslPayloads]');
+//             console.log("Essl Status Query Result:", esslResult.recordset);
+//         const employeeMasterResult = await pool.request()
+//             .query('SELECT userId, employeeMasterStatus FROM [dbo].[API_ResponsePayloads]');
+//             console.log("Employee Master Status Query Result:", employeeMasterResult.recordset);
+
+//         // Handle and validate userId properly
+//         const esslStatusMap = esslResult.recordset.reduce((map, record) => {
+//             const userId = validateId(record.userId);
+//             console.log(userId,"sadasdasdsadsad") // Ensure valid userId (as an int)
+//             if (userId !== null) {
+//                 map[userId] = record.esslStatus;
+//             }
+//             return map;
+//         }, {});
+
+//         const employeeMasterStatusMap = employeeMasterResult.recordset.reduce((map, record) => {
+//             const userId = validateId(record.userId); // Ensure valid userId (as an int)
+//             if (userId !== null) {
+//                 map[userId] = record.employeeMasterStatus;
+//             }
+//             return map;
+//         }, {});
+
+//         // Combine the two results
+//         const combinedStatuses = Object.keys(esslStatusMap).map(userId => ({
+//             userId: parseInt(userId, 10), // Ensure userId is an integer
+//             esslStatus: esslStatusMap[userId],
+//             employeeMasterStatus: employeeMasterStatusMap[userId] || 'not found'
+//         }));
+
+//         return combinedStatuses;
+//     } catch (error) {
+//         console.error('Error fetching combined statuses:', error);
+//         throw error;
+//     }
+// }
+
+// // Validate userId to ensure it's a valid integer
+// function validateId(id) {
+//     if (typeof id === 'number' && !isNaN(id) && id !== null && id !== undefined) {
+//         return id;
+//     } else {
+//         console.warn(`Invalid userId: ${id}`);
+//         return null; // Skip invalid userIds
+//     }
+// }
+
+
+
+
+async function getLabourStatuses(labourIds) {
+    try {
+        // Convert labourIds to a comma-separated string for SQL query
+        const labourIdsString = labourIds.map(id => `'${id}'`).join(',');
+
+        const pool = await poolPromise;
+        const result = await pool.request()
+        .query(`
+           SELECT 
+                    COALESCE(e.userId, r.userId) AS userId,
+                    CAST(COALESCE(e.LabourID, r.LabourID) AS VARCHAR(50)) AS LabourID,
+                    COALESCE(e.name, r.name) AS name,
+                    ISNULL(e.esslStatus, '-') AS esslStatus,
+                    CASE 
+                        WHEN r.employeeMasterStatus = 'true' OR r.employeeMasterStatus = 1 THEN 'true'
+                        ELSE '-'
+                    END AS employeeMasterStatus
+                FROM [dbo].[API_EsslPayloads] e
+                FULL OUTER JOIN [dbo].[API_ResponsePayloads] r
+                ON CAST(e.LabourID AS VARCHAR(50)) = CAST(r.LabourID AS VARCHAR(50))
+                WHERE e.LabourID IS NOT NULL OR r.LabourID IS NOT NULL
+                AND COALESCE(e.LabourID, r.LabourID) IN (${labourIdsString});
+        `);
+
+
+        return result.recordset;
+    } catch (error) {
+        console.error("Error in getLabourStatuses:", error.message, error.stack);
+        throw new Error('Error fetching labour statuses');
+    }
+};
 
 
 module.exports = {
@@ -1200,6 +1289,10 @@ module.exports = {
     registerDataUpdate,
     updateData,
     editLabour,
-    updateDataDisableStatus
+    updateDataDisableStatus,
+    // getCombinedStatuses
+    getLabourStatuses
+    // getEsslStatuses,
+    // getEmployeeMasterStatuses
     // updateLabour
 };
