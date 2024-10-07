@@ -25,6 +25,7 @@ router.put('/updatelabourDisableStatus/:id', labourController.updateRecordWithDi
 // router.get('/getEsslStatuses', labourController.getEsslStatuses);
 // router.get('/getEmployeeMasterStatuses', labourController.getEmployeeMasterStatuses);
 router.post('/getCombinedStatuses', labourController.getUserStatusController);
+router.put('/updateHideResubmit/:id', labourController.updateHideResubmitLabour);
 // router.get('/labour-status', labourController.getLabourStatus);
 
 

@@ -1,4 +1,5 @@
-
+const cron = require('node-cron');
+const logger = require('../logger')
 const { sql, poolPromise2 } = require('../config/dbConfig2');
 const { poolPromise3 } = require('../config/dbConfig3');
 const { poolPromise } = require('../config/dbConfig');
@@ -740,13 +741,16 @@ const updateEmployeeMaster = async (req, res) => {
 
 
 
-const getLaboursWithOldAttendance = async (req, res) => {
+let cachedLabours = null; // This will hold the results of the cron job
+let lastUpdate = null;
+
+const getLaboursWithOldAttendance = async () => {
   try {
     const poolLabour = await poolPromise;
     const poolAttendance = await poolPromise3; // Ensure poolAttendance is initialized
 
-    const { page = 1, limit = 1000 } = req.query;
-    const offset = (page - 1) * limit;
+    // const { page = 1, limit = 1000 } = req.query;
+    // const offset = (page - 1) * limit;
 
     const today = new Date();
     let startDate = new Date(today);
@@ -765,13 +769,14 @@ const getLaboursWithOldAttendance = async (req, res) => {
       AND (status != 'Resubmitted' OR IsApproved != 3)
       AND (status != 'Rejected' OR IsApproved != 2)
       ORDER BY id
-      OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
     `);
 
     const labourIds = labourResult.recordset.map(labour => labour.LabourID);
 
     if (labourIds.length === 0) {
-      return res.status(200).json({ labors: [] });
+      logger.info('No labours found for updating attendance.');
+      // return res.status(200).json({ labors: [] });
+      return [];
     }
 
     // Fetch attendance data, excluding Sundays (weekday = 1 for Monday and weekday = 7 for Sunday)
@@ -808,16 +813,45 @@ const getLaboursWithOldAttendance = async (req, res) => {
           `);
       }
     }
+    logger.info(`Updated ${laboursWithNoAttendance.length} labours to 'Disable' status.`);
+    // res.status(200).json({ labors: laboursWithNoAttendance });
+    cachedLabours = laboursWithNoAttendance;
+    lastUpdate = new Date(); // Track the last time the cron job ran
 
-    res.status(200).json({ labors: laboursWithNoAttendance });
+    return laboursWithNoAttendance;
   } catch (err) {
-    console.error("Error fetching labors:", err);
-    res.status(500).json({ error: "Error fetching labors" });
+    // console.error("Error fetching labors:", err);
+    logger.error(`Error during getLaboursWithOldAttendance: ${err.message}`, err);
+    throw err;
+    // res.status(500).json({ error: "Error fetching labors" });
   }
 };
 
+cron.schedule('2 19 * * *', async () => {
+  logger.info('Running labour attendance check at 10.37 AM');
+  try {
+    await getLaboursWithOldAttendance();  // Cache the results at 2 AM
+  } catch (err) {
+    logger.error('Cron job failed', err);
+  }
+});
 
+// Serve cached results to the frontend
+const fetchCachedLabours = async (req, res) => {
+  try {
+    // Check if cached data exists
+    if (!cachedLabours) {
+      // No cached data available yet
+      return res.status(503).json({ error: 'Data is not available yet, please check back later.' });
+    }
 
+    // Return cached data
+    res.status(200).json({ labours: cachedLabours, lastUpdate });
+  } catch (err) {
+    console.error('Error in fetching cached labours data:', err);
+    res.status(500).json({ error: "Failed to fetch cached labours data", details: err.message });
+  }
+};
 
 module.exports = {
   getProjectNames,
@@ -839,6 +873,7 @@ module.exports = {
   saveApiResponsePayload,
   updateEmployeeMaster,
   getLaboursWithOldAttendance,
+  fetchCachedLabours 
   // resubmitLabor
 };
 

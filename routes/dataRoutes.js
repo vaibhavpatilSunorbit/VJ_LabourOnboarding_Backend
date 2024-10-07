@@ -1,6 +1,6 @@
 
 const express = require('express');
-const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, getDesignations, getCompanyNamesByProjectId, getDevices, getAttendanceLogs, approveLabour, getProjectDeviceStatus,updateProjectDeviceStatus, deleteProjectDeviceStatus, getProjectDeviceStatusSS, fetchDynamicData, fetchOrgDynamicData, addFvEmpId, updateEmployeeMaster, saveApiResponsePayload, getLaboursWithOldAttendance } = require('../controllers/dataController');
+const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, getDesignations, getCompanyNamesByProjectId, getDevices, getAttendanceLogs, approveLabour, getProjectDeviceStatus,updateProjectDeviceStatus, deleteProjectDeviceStatus, getProjectDeviceStatusSS, fetchDynamicData, fetchOrgDynamicData, addFvEmpId, updateEmployeeMaster, saveApiResponsePayload, getLaboursWithOldAttendance, fetchCachedLabours  } = require('../controllers/dataController');
 const {addEmployee} =require("../controllers/sendLabourData")
 const router = express.Router();
 
@@ -23,7 +23,7 @@ router.get('/fetchOrgDynamicData', fetchOrgDynamicData);
 router.put('/addFvEmpId/:Id', addFvEmpId);
 router.post('/updateEmployeeMaster', updateEmployeeMaster);
 router.post('/saveApiResponsePayload', saveApiResponsePayload);
-router.get('/laboursoldattendance', getLaboursWithOldAttendance);
+router.get('/laboursoldattendance', fetchCachedLabours );
 // router.post('/resubmitattendancelabour', resubmitLabor);
 
 module.exports = router;

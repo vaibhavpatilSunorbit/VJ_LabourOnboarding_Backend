@@ -1418,7 +1418,31 @@ async function getUserStatusController(req, res) {
         console.error("Error in controller:", error.message, error.stack);
         res.status(500).json({ error: 'Failed to fetch combined statuses' });
     }
+};
+
+
+
+async function updateHideResubmitLabour(req, res) {
+    try {
+        const { id } = req.params; // Labour ID comes from the URL parameters
+        const { hideResubmit } = req.body; // hideResubmit value comes from the request body
+
+        // Call the model function to update hideResubmit
+        const updated = await labourModel.updateHideResubmit(id, hideResubmit);
+        
+        if (updated === 0) {
+            return res.status(404).json({ error: 'Record not found' });
+        }
+        return res.json({ success: true, message: 'hideResubmit updated successfully' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
 }
+
+
+
+
 
 // async function getLabourStatus(req, res) {
 //     try {
@@ -1471,6 +1495,7 @@ module.exports = {
     editbuttonLabour,
     updateRecordWithDisable,
     getUserStatusController,
+    updateHideResubmitLabour
     // getLabourStatus
     // getEsslStatuses,
     // getEmployeeMasterStatuses
