@@ -1052,11 +1052,13 @@ async function resubmit(id) {
       await pool.request()
         .input('userId', sql.Int, labourData.id)
         .input('name', sql.VarChar, labourData.name)
-        .input('status', sql.VarChar, labourData.status === 'Disable' ? 'Disable' : 'Resubmitted')
+        // .input('status', sql.VarChar, labourData.status === 'Disable' ? 'Disable' : 'Resubmitted')
+        .input('status', sql.VarChar, 'Resubmitted')
         .input('Reject_Reason', sql.VarChar, rejectReason) // might be empty on resubmission
         .input('OnboardName', sql.VarChar, labourData.OnboardName)
         .input('aadhaarNumber', sql.VarChar, labourData.aadhaarNumber)
-        .input('isApproved', sql.Int, labourData.status === 'Disable' ? labourData.isApproved : 3) // isApproved is 3 for resubmitted
+        // .input('isApproved', sql.Int, labourData.status === 'Disable' ? labourData.isApproved : 3) // isApproved is 3 for resubmitted
+        .input('isApproved', sql.Int, 3)
         .query('INSERT INTO RejectLabours (userId, name, status, Reject_Reason, OnboardName, aadhaarNumber, isApproved) VALUES (@userId, @name, @status, @Reject_Reason, @OnboardName, @aadhaarNumber, @isApproved)');
   
       return labour.recordset[0];
@@ -1268,6 +1270,25 @@ async function getLabourStatuses(labourIds) {
 };
 
 
+
+
+
+async function updateHideResubmit(labourId, hideResubmitValue) {
+    try {
+        const pool = await poolPromise;
+        const request = pool.request()
+            .input('id', sql.Int, labourId)
+            .input('hideResubmit', sql.Bit, hideResubmitValue); // Use Bit for boolean values
+
+        const result = await request.query('UPDATE labourOnboarding SET hideResubmit = @hideResubmit WHERE id = @id');
+        return result.rowsAffected[0]; // Return number of affected rows
+    } catch (error) {
+        throw error;
+    }
+}
+
+
+
 module.exports = {
     checkAadhaarExists,
     getNextUniqueID,
@@ -1291,7 +1312,8 @@ module.exports = {
     editLabour,
     updateDataDisableStatus,
     // getCombinedStatuses
-    getLabourStatuses
+    getLabourStatuses,
+    updateHideResubmit
     // getEsslStatuses,
     // getEmployeeMasterStatuses
     // updateLabour
