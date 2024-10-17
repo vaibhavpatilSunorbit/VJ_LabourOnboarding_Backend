@@ -22,3 +22,40 @@
 {"level":"info","message":"Updated 780 labours to 'Disable' status.","timestamp":"2024-10-08T13:33:09.728Z"}
 {"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-09T13:32:00.635Z"}
 {"level":"info","message":"Updated 787 labours to 'Disable' status.","timestamp":"2024-10-09T13:33:04.619Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-14T09:51:00.205Z"}
+{"level":"error","message":"Error deleting labour with ID: JC0075: axios is not defined","timestamp":"2024-10-14T09:51:15.092Z"}
+{"level":"warn","message":"No serial number found for LabourID: undefined","timestamp":"2024-10-15T13:20:23.183Z"}
+{"level":"error","message":"Error during getLaboursWithOldAttendance: Cannot read properties of null (reading 'LabourID')","timestamp":"2024-10-15T13:20:23.192Z"}
+{"level":"error","message":"Cron job failed Cannot read properties of null (reading 'LabourID')","stack":"TypeError: Cannot read properties of null (reading 'LabourID')\n    at sendDeleteUserRequest (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\dataController.js:868:60)\n    at getLaboursWithOldAttendance (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\dataController.js:989:31)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Task._execution (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\dataController.js:1022:5)","timestamp":"2024-10-15T13:20:23.193Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-15T13:24:00.144Z"}
+{"level":"info","message":"Updated 834 new labours to 'Disable' status.","timestamp":"2024-10-15T13:24:12.753Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-15T13:26:00.753Z"}
+{"level":"info","message":"Updated 834 new labours to 'Disable' status.","timestamp":"2024-10-15T13:26:14.532Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-15T13:29:00.873Z"}
+{"level":"warn","message":"No serial number found for LabourID: JC0366","timestamp":"2024-10-15T13:31:21.091Z"}
+{"level":"info","message":"Updated 834 new labours to 'Disable' status.","timestamp":"2024-10-16T04:33:24.624Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-16T11:58:00.446Z"}
+{"level":"warn","message":"No serial number found for LabourID: JC0366","timestamp":"2024-10-16T12:00:21.131Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-16T12:18:00.209Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-16T12:27:00.245Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-16T12:28:00.553Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-16T12:32:00.499Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-16T12:36:00.247Z"}
+{"level":"warn","message":"No serial number found for LabourID: JC0366","timestamp":"2024-10-16T12:38:22.869Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-16T12:47:00.693Z"}
+{"level":"error","message":"Error during getLaboursWithOldAttendance: soapEnvelope is not defined","timestamp":"2024-10-16T12:49:18.585Z"}
+{"level":"error","message":"Cron job failed soapEnvelope is not defined","stack":"ReferenceError: soapEnvelope is not defined\n    at sendDeleteUserRequest (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\dataController.js:925:53)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async getLaboursWithOldAttendance (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\dataController.js:992:25)\n    at async Task._execution (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\dataController.js:1025:5)","timestamp":"2024-10-16T12:49:18.585Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-16T12:55:00.879Z"}
+{"level":"error","message":"Error during getLaboursWithOldAttendance: soapEnvelope is not defined","timestamp":"2024-10-16T12:57:19.874Z"}
+{"level":"error","message":"Cron job failed soapEnvelope is not defined","stack":"ReferenceError: soapEnvelope is not defined\n    at sendDeleteUserRequest (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\dataController.js:940:53)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async getLaboursWithOldAttendance (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\dataController.js:1007:25)\n    at async Task._execution (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\dataController.js:1040:5)","timestamp":"2024-10-16T12:57:19.875Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-16T13:09:00.996Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-16T13:10:00.554Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM vaibhafiaiffofjdfjfjfejfoiejfoewifjewoif","timestamp":"2024-10-16T13:12:00.354Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM vaibhafiaiffofjdfjfjfejfoiejfoewifjewoif","timestamp":"2024-10-16T13:13:00.488Z"}
+{"level":"info","message":"Running labour attendance check at 10.16 AM labours Attendancea at 17-10-2024","timestamp":"2024-10-17T04:46:00.010Z"}
+{"level":"info","message":"Running labour attendance check at 10.16 AM labours Attendancea at 17-10-2024","timestamp":"2024-10-17T04:47:00.085Z"}
+{"level":"info","message":"Updated 877 labours to 'Disable' status.","timestamp":"2024-10-17T04:48:18.263Z"}
+{"level":"info","message":"Running labour attendance check at 10.37 AM","timestamp":"2024-10-17T05:20:00.029Z"}
+{"level":"info","message":"Running labour attendance check at 4:11 PM","timestamp":"2024-10-17T13:10:00.221Z"}
+{"level":"warn","message":"No serial number found for LabourID: JC3935","timestamp":"2024-10-17T13:10:09.768Z"}
+{"level":"warn","message":"No serial number found for LabourID: JC3953","timestamp":"2024-10-17T13:10:10.199Z"}
