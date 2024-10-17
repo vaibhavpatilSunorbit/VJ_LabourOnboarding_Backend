@@ -1,8 +1,10 @@
 const cron = require('node-cron');
+const axios = require('axios');
 const logger = require('../logger')
 const { sql, poolPromise2 } = require('../config/dbConfig2');
 const { poolPromise3 } = require('../config/dbConfig3');
 const { poolPromise } = require('../config/dbConfig');
+const xml2js = require("xml2js")
 
 const getProjectNames = async (req, res) => {
   try {
@@ -670,38 +672,170 @@ const updateEmployeeMaster = async (req, res) => {
 
 
 
-// ATTENDANCE LABOUR CODE 
 
-// Get labors whose attendance is older than 15 days or not present
-// const getLaboursWithOldAttendance = async (req, res) => {
+const saveTransferData = async (req, res) => {
+  try {
+  const {
+    userId, LabourID, name, currentSite, transferSite,currentSiteName,transferSiteName,
+    esslStatus, esslCommandId, esslPayload, esslApiResponse
+  } = req.body;
+
+  // Validate required fields
+  if (
+    !userId ||
+    !LabourID ||
+    !name ||
+    currentSite === undefined ||
+    transferSite === undefined
+  ) {
+    return res.status(400).json({
+      message:
+        'Missing required fields. Ensure userId, LabourID, name, currentSite, and transferSite are provided.',
+    });
+  }
+
+  // Ensure `currentSite` and `transferSite` are valid integers
+  const sanitizedCurrentSite = parseInt(currentSite);
+  const sanitizedTransferSite = parseInt(transferSite);
+
+  const parsedResponse = JSON.parse(esslApiResponse);
+  const esslResponseStatus = parsedResponse.Status || 'Unknown'; // Handle missing status gracefully
+
+  if (isNaN(sanitizedCurrentSite) || isNaN(sanitizedTransferSite)) {
+    return res.status(400).json({
+      message: 'Invalid site values. Both currentSite and transferSite must be integers.',
+    });
+  }
+
+  const query = `
+  INSERT INTO [LabourOnboardingForm_TEST].[dbo].[API_TransferSite] 
+  ([userId], [LabourID], [name], [currentSite], [currentSiteName], 
+   [transferSite], [transferSiteName], [esslStatus], [esslCommandId], 
+   [esslPayload], [esslApiResponse], [esslResponseStatus], 
+   [createdAt], [updatedAt])
+  VALUES (@userId, @LabourID, @name, @currentSite, @currentSiteName, 
+          @transferSite, @transferSiteName, @esslStatus, @esslCommandId, 
+          @esslPayload, @esslApiResponse, @esslResponseStatus, 
+          GETDATE(), GETDATE())
+`;
+
+const pool = await poolPromise;
+
+  // Execute SQL query with validated inputs
+  const result = await pool
+    .request()
+    .input('userId', sql.Int, userId)
+    .input('LabourID', sql.NVarChar(50), LabourID)
+    .input('name', sql.NVarChar(255), name)
+    .input('currentSite', sql.Int, sanitizedCurrentSite)
+    .input('currentSiteName', sql.NVarChar(255), currentSiteName)
+    .input('transferSite', sql.Int, sanitizedTransferSite)
+    .input('transferSiteName', sql.NVarChar(255), transferSiteName)
+    .input('esslStatus', sql.NVarChar(50), esslStatus || 'Pending')
+    .input('esslCommandId', sql.Int, parseInt(esslCommandId) || 0)
+    .input('esslPayload', sql.VarChar(sql.MAX), esslPayload || '')
+    .input('esslApiResponse', sql.NVarChar(sql.MAX), esslApiResponse || '')
+    .input('esslResponseStatus', sql.NVarChar(50), esslResponseStatus) // Store parsed status
+    .query(query);
+
+  if (result.rowsAffected && result.rowsAffected[0] > 0) {
+    console.log('Transfer data inserted successfully:', result);
+    res.status(201).json({
+      message: 'Transfer data saved successfully.',
+      data: result,
+    });
+  } else {
+    res.status(400).json({
+      message: 'Transfer data not saved. No rows affected.',
+    });
+  }
+} catch (error) {
+  console.error('Error saving transfer data:', error);
+  res.status(500).json({
+    message: 'Failed to save transfer data.',
+    error: error.message,
+  });
+}
+};
+
+
+const getAllLaboursWithTransferDetails = async (req, res) => {
+  try {
+    const { labourIds } = req.body; // Receive labourIds from the request body
+
+    if (!labourIds || labourIds.length === 0) {
+      return res.status(400).json({ message: 'No labour IDs provided.' });
+    }
+
+    // SQL query to fetch transfer site names for the provided labour IDs
+    const query = `
+      SELECT LabourID, transferSiteName 
+      FROM [LabourOnboardingForm_TEST].[dbo].[API_TransferSite] 
+      WHERE LabourID IN (${labourIds.map((id) => `'${id}'`).join(', ')})
+    `;
+
+    const pool = await poolPromise;
+    const result = await pool.request().query(query);
+
+    if (result.recordset.length > 0) {
+      res.status(200).json(result.recordset); // Send the fetched data as response
+    } else {
+      res.status(404).json({ message: 'No transfer data found for the given Labour IDs.' });
+    }
+  } catch (error) {
+    console.error('Error fetching transfer site names:', error);
+    res.status(500).json({
+      message: 'Failed to fetch transfer site names.',
+      error: error.message,
+    });
+  }
+};
+
+
+
+
+
+
+
+// let cachedLabours = null; // This will hold the results of the cron job
+// let lastUpdate = null;
+
+// const getLaboursWithOldAttendance = async () => {
 //   try {
 //     const poolLabour = await poolPromise;
 //     const poolAttendance = await poolPromise3; // Ensure poolAttendance is initialized
 
-//     const { page = 1, limit = 1000 } = req.query;
-//     const offset = (page - 1) * limit;
+//     // const { page = 1, limit = 1000 } = req.query;
+//     // const offset = (page - 1) * limit;
 
 //     const today = new Date();
-//     const startDate = new Date(today);
-//     startDate.setDate(startDate.getDate() - 15);
+//     let startDate = new Date(today);
+
+//     // Set start date to 15 days ago
+//     startDate.setDate(today.getDate() - 15);
 
 //     const todaySQL = today.toISOString().slice(0, 10);
 //     const startDateSQL = startDate.toISOString().slice(0, 10);
 
-//     // Fetch labor data with pagination
+//     // Fetch labor data with pagination, excluding labors created/approved in the last 15 days
+//     // Also exclude labors with status 'Resubmitted' (IsApproved = 3) or 'Rejected' (IsApproved = 2)
 //     const labourResult = await poolLabour.request().query(`
-//       SELECT * FROM labourOnboarding
+//       SELECT * FROM labourOnboarding 
+//       WHERE (DATEDIFF(DAY, CreationDate, GETDATE()) > 15 OR CreationDate IS NULL)
+//       AND (status != 'Resubmitted' OR IsApproved != 3)
+//       AND (status != 'Rejected' OR IsApproved != 2)
 //       ORDER BY id
-//       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
 //     `);
 
 //     const labourIds = labourResult.recordset.map(labour => labour.LabourID);
 
 //     if (labourIds.length === 0) {
-//       return res.status(200).json({ labors: [] });
+//       logger.info('No labours found for updating attendance.');
+//       // return res.status(200).json({ labors: [] });
+//       return [];
 //     }
 
-//     // Fetch attendance data for the last 15 days for these labour IDs
+//     // Fetch attendance data, excluding Sundays (weekday = 1 for Monday and weekday = 7 for Sunday)
 //     const attendanceResult = await poolAttendance.request()
 //       .input('StartDate', sql.Date, startDateSQL)
 //       .input('TodayDate', sql.Date, todaySQL)
@@ -709,60 +843,233 @@ const updateEmployeeMaster = async (req, res) => {
 //         SELECT user_id 
 //         FROM [etimetracklite11.8].[dbo].[Attendance] 
 //         WHERE punch_date BETWEEN @StartDate AND @TodayDate
+//         AND DATEPART(dw, punch_date) != 1  -- Exclude Sundays
 //         AND user_id IN (${labourIds.map(id => `'${id}'`).join(",")})
 //       `);
 
 //     const attendedLabourIds = attendanceResult.recordset.map(att => att.user_id);
 
+//     // Find labors without attendance in the last 15 days
 //     const laboursWithNoAttendance = labourResult.recordset.filter(labour => !attendedLabourIds.includes(labour.LabourID));
 
-//     // Update their status to Disable and add Reject_Reason
+//     // Update their status to Disable and add Reject_Reason, but only if not Resubmitted or Rejected
 //     for (let labour of laboursWithNoAttendance) {
-//       labour.Reject_Reason = "This labour attendance is older than 15 days or not present";
-      
-//       await poolLabour.request()
-//         .input('id', sql.Int, labour.id)
-//         .input('status', sql.VarChar, 'Disable')
-//         .input('isApproved', sql.Int, 4)
-//         .input('Reject_Reason', sql.VarChar, labour.Reject_Reason)
-//         .query(`
-//           UPDATE labourOnboarding 
-//           SET status = @status, isApproved = @isApproved, Reject_Reason = @Reject_Reason
-//           WHERE id = @id
-//         `);
+//       if (labour.status !== 'Resubmitted' && labour.isApproved !== 3 && labour.status !== 'Rejected' && labour.isApproved !== 2) {
+//         labour.Reject_Reason = "This labour attendance is older than 15 days or not present";
+
+//         await poolLabour.request()
+//           .input('id', sql.Int, labour.id)
+//           .input('status', sql.VarChar, 'Disable')
+//           .input('isApproved', sql.Int, 4)
+//           .input('Reject_Reason', sql.VarChar, labour.Reject_Reason)
+//           .query(`
+//             UPDATE labourOnboarding 
+//             SET status = @status, isApproved = @isApproved, Reject_Reason = @Reject_Reason
+//             WHERE id = @id
+//           `);
+//       }
+//     }
+//     logger.info(`Updated ${laboursWithNoAttendance.length} labours to 'Disable' status.`);
+//     // res.status(200).json({ labors: laboursWithNoAttendance });
+//     cachedLabours = laboursWithNoAttendance;
+//     lastUpdate = new Date(); // Track the last time the cron job ran
+
+//     return laboursWithNoAttendance;
+//   } catch (err) {
+//     // console.error("Error fetching labors:", err);
+//     logger.error(`Error during getLaboursWithOldAttendance: ${err.message}`, err);
+//     throw err;
+//     // res.status(500).json({ error: "Error fetching labors" });
+//   }
+// };
+
+// cron.schedule('17 10 * * *', async () => {
+//   logger.info('Running labour attendance check at 10.16 AM labours Attendancea at 17-10-2024');
+//   try {
+//     await getLaboursWithOldAttendance();  // Cache the results at 2 AM
+//   } catch (err) {
+//     logger.error('Cron job failed', err);
+//   }
+// });
+
+// // Serve cached results to the frontend
+// const fetchCachedLabours = async (req, res) => {
+//   try {
+//     // Check if cached data exists
+//     if (!cachedLabours) {
+//       // No cached data available yet
+//       return res.status(503).json({ error: 'Data is not available yet, please check back later.' });
 //     }
 
-//     res.status(200).json({ labors: laboursWithNoAttendance });
+//     res.status(200).json({ labours: cachedLabours, lastUpdate });
 //   } catch (err) {
-//     console.error("Error fetching labors:", err);
-//     res.status(500).json({ error: "Error fetching labors" });
+//     console.error('Error in fetching cached labours data:', err);
+//     res.status(500).json({ error: "Failed to fetch cached labours data", details: err.message });
 //   }
 // };
 
 
 
-let cachedLabours = null; // This will hold the results of the cron job
+
+
+// ATTENDANCE LABOUR CODE 
+
+let cachedLabours = [];
+let previousLabours = [];
 let lastUpdate = null;
 
+// Helper function to get the SerialNumber based on the labour's BusinessUnit
+const getSerialNumberByLabourID = async (labourID) => {
+  console.log(`Fetching SerialNumber for LabourID: ${labourID}`);
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input('LabourID', sql.NVarChar, labourID)
+      .query(`
+        SELECT pds.SerialNumber
+        FROM ProjectDeviceStatus pds
+        JOIN labourOnboarding lob ON pds.BusinessUnit = lob.BusinessUnit
+        WHERE lob.LabourID = @LabourID
+      `);
+
+    if (result.recordset.length === 0) {
+      logger.warn(`No serial number found for LabourID: ${labourID}`);
+      console.log(`No serial number found for LabourID: ${labourID}`);
+      return null;
+    }
+    const serialNumber = result.recordset[0].SerialNumber;
+    console.log(`Found SerialNumber: ${serialNumber} for LabourID: ${labourID}`);
+    return serialNumber;
+  } catch (error) {
+    logger.error(`Error fetching serial number for LabourID: ${labourID}`, error);
+    console.error(`Error fetching serial number for LabourID: ${labourID}`, error);
+    throw error;
+  }
+};
+
+// Save SOAP request and response logs to the database
+const saveLogToDatabase = async (userId, labourID, serialNumber, soapRequestPayload, soapResponsePayload, status, rejectReason = null, attendanceStatus = 'N/A', commandId = 'N/A') => {
+  console.log(`Saving log for LabourID: ${labourID}, status: ${status}`);
+  try {
+    const pool = await poolPromise;
+    await pool.request()
+      .input('userId', sql.Int, userId)
+      .input('LabourID', sql.NVarChar, labourID || '')
+      .input('SerialNumber', sql.VarChar, serialNumber || 'N/A') // Handle null values
+      .input('soapRequestPayload', sql.NVarChar(sql.MAX), typeof soapRequestPayload === 'string' ? soapRequestPayload.trim() : JSON.stringify(soapRequestPayload || '{}'))
+      .input('soapResponsePayload', sql.NVarChar(sql.MAX), typeof soapResponsePayload === 'string' ? soapResponsePayload.trim() : JSON.stringify(soapResponsePayload || '{}'))
+      .input('status', sql.VarChar, status || 'Unknown')
+      .input('RejectReason', sql.VarChar, rejectReason || 'N/A') // Default to N/A if null
+      .input('attendanceStatus', sql.VarChar, attendanceStatus || 'N/A') // Handle attendanceStatus
+      .input('CommandId', sql.VarChar, commandId || 'N/A')
+      .query(`
+        INSERT INTO LabourAttendanceLogs 
+         (userId, LabourID, SerialNumber, soapRequestPayload, soapResponsePayload, status, RejectReason,attendanceStatus, CommandId, CreatedAt)
+        VALUES (@userId, @LabourID, @SerialNumber, @soapRequestPayload, @soapResponsePayload, @status, @RejectReason, @attendanceStatus, @CommandId, GETDATE())
+      `);
+
+    console.log(`Log saved successfully for LabourID: ${labourID}`);
+  } catch (error) {
+    console.error(`Error saving log for LabourID: ${labourID}`, error);
+  }
+};
+
+// Send SOAP request to delete user
+const sendDeleteUserRequest = async (labour) => {
+  const labourID = labour?.LabourID; // Safely extract LabourID from labour object
+  const userId = labour?.id; // Extract userId from labour object
+  let attendanceStatus = 'Disable'; 
+
+  if (!labourID || typeof labourID !== 'string') {
+    console.error(`Invalid LabourID for labour:`, labour);
+    return false; // Early return if LabourID is invalid
+  }
+  console.log(`Sending SOAP request for LabourID: ${labourID}`);
+  try {
+    const serialNumber = await getSerialNumberByLabourID(labourID);
+    if (!serialNumber) {
+      console.log(`No SerialNumber found for LabourID: ${labourID}`);
+      attendanceStatus = 'Disable'; // Mark attendanceStatus as Disable if no serial number
+      await saveLogToDatabase(userId, labourID, null, {}, {}, 'Error', 'SerialNumber not found', attendanceStatus, null);
+      return false;
+    }
+
+    const soapEnvelope = `
+      <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+        <soap:Body>
+          <DeleteUser xmlns="http://tempuri.org/">
+            <APIKey>11</APIKey>
+            <EmployeeCode>${labourID}</EmployeeCode>
+            <SerialNumber>${serialNumber}</SerialNumber>
+            <UserName>test</UserName>
+            <UserPassword>Test@123</UserPassword>
+            <CommandId>25</CommandId>
+          </DeleteUser>
+        </soap:Body>
+      </soap:Envelope>`;
+
+      console.log(`SOAP Request for LabourID: ${labourID}`, soapEnvelope);
+
+    const response = await axios.post(
+      'https://essl.vjerp.com:8530/iclock/WebAPIService.asmx?op=DeleteUser',
+      soapEnvelope,
+      {
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+          'SOAPAction': 'http://tempuri.org/DeleteUser',
+        },
+      }
+    );
+
+    console.log(`SOAP Response for LabourID: ${labourID}`, response.data);
+    const parsedResponse = await xml2js.parseStringPromise(response.data, { trim: true, explicitArray: false });
+    const soapResponseBody = parsedResponse['soap:Envelope']['soap:Body']; // Only store the body part
+
+    const status = soapResponseBody?.DeleteUserResponse?.DeleteUserResult === 'success' ? 'success' : 'Failure';
+    const CommandId = soapResponseBody?.DeleteUserResponse?.CommandId || 'N/A';
+
+    // Save the SOAP request/response in the database
+    await saveLogToDatabase(userId, labourID, serialNumber, soapEnvelope, JSON.stringify(soapResponseBody), status, null, attendanceStatus, CommandId);
+
+    return status === 'Success';
+  } catch (error) {
+    console.error(`Error sending SOAP request for LabourID: ${labourID}`, error);
+
+    await saveLogToDatabase(userId, labourID, null, soapEnvelope, JSON.stringify({ message: error.message }), 'Error', 'SOAP request failed', attendanceStatus, null);
+    return false;
+  }
+};
+
+
+const isLabourAlreadyLogged = async (labourID) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input('LabourID', sql.NVarChar, labourID)
+      .query(`
+        SELECT COUNT(*) as count FROM LabourAttendanceLogs WHERE LabourID = @LabourID
+      `);
+    return result.recordset[0].count > 0; // Return true if LabourID exists
+  } catch (error) {
+    console.error(`Error checking LabourAttendanceLogs for LabourID: ${labourID}`, error);
+    return false; // Assume not logged if error occurs
+  }
+};
+
+// Main function to get labours with old attendance and process them
 const getLaboursWithOldAttendance = async () => {
+  console.log('Fetching labours with old attendance...');
   try {
     const poolLabour = await poolPromise;
-    const poolAttendance = await poolPromise3; // Ensure poolAttendance is initialized
-
-    // const { page = 1, limit = 1000 } = req.query;
-    // const offset = (page - 1) * limit;
+    const poolAttendance = await poolPromise3;
 
     const today = new Date();
     let startDate = new Date(today);
-
-    // Set start date to 15 days ago
     startDate.setDate(today.getDate() - 15);
 
     const todaySQL = today.toISOString().slice(0, 10);
     const startDateSQL = startDate.toISOString().slice(0, 10);
 
-    // Fetch labor data with pagination, excluding labors created/approved in the last 15 days
-    // Also exclude labors with status 'Resubmitted' (IsApproved = 3) or 'Rejected' (IsApproved = 2)
     const labourResult = await poolLabour.request().query(`
       SELECT * FROM labourOnboarding 
       WHERE (DATEDIFF(DAY, CreationDate, GETDATE()) > 15 OR CreationDate IS NULL)
@@ -772,14 +1079,12 @@ const getLaboursWithOldAttendance = async () => {
     `);
 
     const labourIds = labourResult.recordset.map(labour => labour.LabourID);
-
+    console.log(`Found ${labourIds.length} labours for processing.`);
     if (labourIds.length === 0) {
       logger.info('No labours found for updating attendance.');
-      // return res.status(200).json({ labors: [] });
       return [];
     }
 
-    // Fetch attendance data, excluding Sundays (weekday = 1 for Monday and weekday = 7 for Sunday)
     const attendanceResult = await poolAttendance.request()
       .input('StartDate', sql.Date, startDateSQL)
       .input('TodayDate', sql.Date, todaySQL)
@@ -787,50 +1092,73 @@ const getLaboursWithOldAttendance = async () => {
         SELECT user_id 
         FROM [etimetracklite11.8].[dbo].[Attendance] 
         WHERE punch_date BETWEEN @StartDate AND @TodayDate
-        AND DATEPART(dw, punch_date) != 1  -- Exclude Sundays
         AND user_id IN (${labourIds.map(id => `'${id}'`).join(",")})
       `);
 
     const attendedLabourIds = attendanceResult.recordset.map(att => att.user_id);
+    console.log(`Found ${attendedLabourIds.length} labours with attendance.`);
 
-    // Find labors without attendance in the last 15 days
-    const laboursWithNoAttendance = labourResult.recordset.filter(labour => !attendedLabourIds.includes(labour.LabourID));
+    const laboursWithNoAttendance = labourResult.recordset.filter(
+      labour => !attendedLabourIds.includes(labour.LabourID)
+    );
 
-    // Update their status to Disable and add Reject_Reason, but only if not Resubmitted or Rejected
+    console.log(`Found ${laboursWithNoAttendance.length} labours with no attendance.`);
+
+    let newLabourCount = 0;
+
     for (let labour of laboursWithNoAttendance) {
-      if (labour.status !== 'Resubmitted' && labour.isApproved !== 3 && labour.status !== 'Rejected' && labour.isApproved !== 2) {
+      if (!labour.LabourID) {
+        console.log(`Invalid LabourID for labour with id: ${labour.id}`);
+        continue;
+      }
+
+      const alreadyLogged = await isLabourAlreadyLogged(labour.LabourID);
+      if (alreadyLogged) {
+        console.log(`LabourID: ${labour.LabourID} is already logged. Skipping SOAP request.`);
+        continue; // Skip if LabourID is already logged
+      }
+
+      console.log(`Processing LabourID: ${labour.LabourID}`);
+      if (labour.status !== 'Resubmitted' && labour.isApproved !== 3 &&
+          labour.status !== 'Rejected' && labour.isApproved !== 2) {
         labour.Reject_Reason = "This labour attendance is older than 15 days or not present";
 
-        await poolLabour.request()
-          .input('id', sql.Int, labour.id)
-          .input('status', sql.VarChar, 'Disable')
-          .input('isApproved', sql.Int, 4)
-          .input('Reject_Reason', sql.VarChar, labour.Reject_Reason)
-          .query(`
-            UPDATE labourOnboarding 
-            SET status = @status, isApproved = @isApproved, Reject_Reason = @Reject_Reason
-            WHERE id = @id
-          `);
+        const success = await sendDeleteUserRequest(labour);  // Pass full labour object
+        if (success) {
+          console.log(`Successfully processed LabourID: ${labour.LabourID}`);
+          await poolLabour.request()
+            .input('id', sql.Int, labour.id)
+            .input('status', sql.VarChar, 'Disable')
+            .input('isApproved', sql.Int, 4)
+            .input('Reject_Reason', sql.VarChar, labour.Reject_Reason)
+            .query(`
+              UPDATE labourOnboarding 
+              SET status = @status, isApproved = @isApproved, Reject_Reason = @Reject_Reason
+              WHERE id = @id
+            `);
+          newLabourCount++; // Increment count of processed labours
+        }
       }
     }
-    logger.info(`Updated ${laboursWithNoAttendance.length} labours to 'Disable' status.`);
-    // res.status(200).json({ labors: laboursWithNoAttendance });
-    cachedLabours = laboursWithNoAttendance;
-    lastUpdate = new Date(); // Track the last time the cron job ran
 
-    return laboursWithNoAttendance;
-  } catch (err) {
-    // console.error("Error fetching labors:", err);
-    logger.error(`Error during getLaboursWithOldAttendance: ${err.message}`, err);
-    throw err;
-    // res.status(500).json({ error: "Error fetching labors" });
+    logger.info(`Updated ${newLabourCount} new labours to 'Disable' status today.`);
+    cachedLabours = [...cachedLabours, ...laboursWithNoAttendance];
+    previousLabours = [...laboursWithNoAttendance];
+    lastUpdate = new Date();
+
+    return newLabourCount; // Return the number of new labours processed
+  } catch (error) {
+    console.error('Error during getLaboursWithOldAttendance:', error);
+    logger.error(`Error during getLaboursWithOldAttendance: ${error.message}`);
+    throw error;
   }
 };
 
-cron.schedule('2 19 * * *', async () => {
-  logger.info('Running labour attendance check at 10.37 AM');
+cron.schedule('40 18 * * *', async () => {
+  logger.info('Running labour attendance check at 4:11 PM');
   try {
-    await getLaboursWithOldAttendance();  // Cache the results at 2 AM
+    const newLaboursProcessed = await getLaboursWithOldAttendance();  // Cache the results and get count
+    logger.info(`${newLaboursProcessed} new labours were processed for deletion today.`);
   } catch (err) {
     logger.error('Cron job failed', err);
   }
@@ -840,7 +1168,7 @@ cron.schedule('2 19 * * *', async () => {
 const fetchCachedLabours = async (req, res) => {
   try {
     // Check if cached data exists
-    if (!cachedLabours) {
+    if (!cachedLabours || cachedLabours.length === 0) {
       // No cached data available yet
       return res.status(503).json({ error: 'Data is not available yet, please check back later.' });
     }
@@ -873,7 +1201,9 @@ module.exports = {
   saveApiResponsePayload,
   updateEmployeeMaster,
   getLaboursWithOldAttendance,
-  fetchCachedLabours 
+  fetchCachedLabours,
+  saveTransferData,
+  getAllLaboursWithTransferDetails 
   // resubmitLabor
 };
 
