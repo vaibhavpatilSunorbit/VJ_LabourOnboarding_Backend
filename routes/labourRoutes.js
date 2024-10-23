@@ -28,5 +28,8 @@ router.post('/getCombinedStatuses', labourController.getUserStatusController);
 router.put('/updateHideResubmit/:id', labourController.updateHideResubmitLabour);
 // router.get('/labour-status', labourController.getLabourStatus);
 
+router.get('/attendance/:labourId', labourController.getAttendance);
+router.post('/wages/submit', labourController.submitWagesController);
+
 
 module.exports = router;

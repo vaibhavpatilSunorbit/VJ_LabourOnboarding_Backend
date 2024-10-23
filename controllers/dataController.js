@@ -1154,8 +1154,8 @@ const getLaboursWithOldAttendance = async () => {
   }
 };
 
-cron.schedule('40 18 * * *', async () => {
-  logger.info('Running labour attendance check at 4:11 PM');
+cron.schedule('40 12 * * *', async () => {
+  logger.info('Running labour attendance check at 12:40 PM');
   try {
     const newLaboursProcessed = await getLaboursWithOldAttendance();  // Cache the results and get count
     logger.info(`${newLaboursProcessed} new labours were processed for deletion today.`);
