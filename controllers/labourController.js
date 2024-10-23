@@ -1,4 +1,3 @@
-const labourModel = require('../models/labourModel');
 const { sql, poolPromise2 } = require('../config/dbConfig2');
 const { poolPromise3 } = require('../config/dbConfig3');
 const { poolPromise } = require('../config/dbConfig');
@@ -8,6 +7,7 @@ const axios = require('axios')
 const multer = require('multer');
 const { upload } = require('../server');
 const xml2js = require('xml2js');
+const labourModel = require('../models/labourModel');                       
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 const baseUrl = 'http://localhost:4000/uploads/';
@@ -1441,7 +1441,123 @@ async function updateHideResubmitLabour(req, res) {
 }
 
 
+//   -----------------------------------   LABOUR APP PHASE 2    DATE -  20-10-2024   -------   ////////////////  
+//   ------  ATTENDACE REPORT CODE HERE ----- Implement Date 22/10/2024 ---- //////////////////////////////
 
+async function getAttendance(req, res) {
+    try {
+        const { labourId } = req.params; // Labour ID from the URL parameter
+        const { month, year } = req.query; // Month and year from query params
+        console.log('Received request for attendance:', { labourId, month, year });
+
+        // Fetch attendance for the specific labour, month, and year
+        const attendance = await labourModel.getAttendanceByLabourId(labourId, month, year);
+        console.log('Attendance data fetched from the database:', attendance);
+
+        if (!attendance || attendance.length === 0) {
+            console.log('No attendance found for this labour in the selected month');
+            return res.status(404).json({ message: 'No attendance found for this labour in the selected month' });
+        }
+
+        const daysInMonth = new Date(year, month, 0).getDate(); // Get the number of days in the month
+
+        // Initialize the variables
+        let totalDays = daysInMonth;
+        let presentDays = 0;
+        let totalOvertimeHours = 0;
+        let monthlyAttendance = [];
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const punchesForDay = attendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
+
+            if (punchesForDay.length > 0) {
+                // Sort punches to get the first and last punch of the day
+                punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+
+                const firstPunch = punchesForDay[0].punch_time;
+                const lastPunch = punchesForDay[punchesForDay.length - 1].punch_time;
+
+                const totalHours = calculateHoursWorked(punchesForDay[0].punch_date, firstPunch, lastPunch);
+                const shiftHours = 8; // Assuming 8 hours shift
+                const overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
+
+                presentDays++;
+                totalOvertimeHours += overtime;
+
+                monthlyAttendance.push({
+                    date,
+                    firstPunch: `${date}T${firstPunch.toISOString().split('T')[1]}`,
+                    lastPunch: `${date}T${lastPunch.toISOString().split('T')[1]}`,
+                    status: 'P', // Present
+                    totalHours,
+                    overtime
+                });
+            } else {
+                monthlyAttendance.push({
+                    date,
+                    status: 'A', // Absent if no punch data
+                    totalHours: 0,
+                    overtime: 0
+                });
+            }
+        }
+
+        console.log('Calculated attendance:', {
+            totalDays,
+            presentDays,
+            totalOvertimeHours,
+            monthlyAttendance
+        });
+
+        // Return the calculated attendance data
+        res.json({
+            labourId,
+            totalDays,
+            presentDays,
+            totalOvertimeHours,
+            monthlyAttendance
+        });
+    } catch (err) {
+        console.error('Error getting attendance for month', err);
+        res.status(500).json({ message: 'Error getting attendance for the month' });
+    }
+};
+
+// Helper function to calculate hours worked between two times (dynamic date)
+function calculateHoursWorked(punchDate, firstPunch, lastPunch) {
+    // Ensure firstPunch and lastPunch times have the correct date
+    const punchDateStr = punchDate.toISOString().split('T')[0]; // Extract date from punchDate
+    const punchInTime = new Date(`${punchDateStr}T${firstPunch.toISOString().split('T')[1]}`); // Combine date and time
+    const punchOutTime = new Date(`${punchDateStr}T${lastPunch.toISOString().split('T')[1]}`); // Combine date and time
+
+    const totalHours = (punchOutTime - punchInTime) / (1000 * 60 * 60); // Convert milliseconds to hours
+    return totalHours.toFixed(2);  // Return hours with 2 decimal places
+}
+
+async function submitWagesController(req, res) {
+    try {
+        const { labourId, totalDays, presentDays, overtimeHours, totalWages } = req.body;
+        await submitWages(labourId, totalDays, presentDays, overtimeHours, totalWages);
+        res.json({ message: 'Wages submitted successfully' });
+    } catch (err) {
+        console.error('Error submitting wages', err);
+        res.status(500).json({ message: 'Error submitting wages' });
+    }
+}
+
+
+
+// async function submitWages(req, res) {
+//     try {
+//         const wagesData = req.body; // Array of wages data
+//         await WagesModel.submitWages(wagesData);
+//         res.status(200).json({ message: "Wages data submitted successfully!" });
+//     } catch (err) {
+//         console.error("Error submitting wages:", err);
+//         res.status(500).json({ message: "Server error, unable to submit wages" });
+//     }
+// }
 
 
 // async function getLabourStatus(req, res) {
@@ -1495,7 +1611,9 @@ module.exports = {
     editbuttonLabour,
     updateRecordWithDisable,
     getUserStatusController,
-    updateHideResubmitLabour
+    updateHideResubmitLabour,
+    getAttendance,
+    submitWagesController
     // getLabourStatus
     // getEsslStatuses,
     // getEmployeeMasterStatuses

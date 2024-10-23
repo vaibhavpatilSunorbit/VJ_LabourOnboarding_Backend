@@ -1288,6 +1288,52 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 }
 
 
+// ------------------------------    LABOUR APP PHASE 2 START HERE DATE 21-10-2024   ---------------------------
+//   ATTENDACE REPORT CODE HERE ----- Implement Date 22/10/2024 ---- //////////////////////////////
+
+async function getAttendanceByLabourId(labourId, month, year) {
+    try {
+        console.log('Fetching attendance from DB for:', { labourId, month, year });
+        const pool = await poolPromise3;
+        const result = await pool
+            .request()
+            .input('labourId', sql.NVarChar, labourId)
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .query(`
+                SELECT * FROM [dbo].[Attendance]
+                WHERE user_id = @labourId
+                AND MONTH(punch_date) = @month
+                AND YEAR(punch_date) = @year
+                ORDER BY punch_date, punch_time
+            `);
+            console.log('SQL Result:', result.recordset);
+        return result.recordset;
+    } catch (err) {
+        console.error('SQL error', err);
+        throw new Error('Error fetching attendance data');
+    }
+};
+
+async function submitWages(labourId, totalDays, presentDays, overtimeHours, totalWages) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .input('labourId', sql.Int, labourId)
+            .input('totalDays', sql.Int, totalDays)
+            .input('presentDays', sql.Int, presentDays)
+            .input('overtimeHours', sql.Float, overtimeHours)
+            .input('totalWages', sql.Decimal(10, 2), totalWages)
+            .query(`INSERT INTO [dbo].[Wages] (LabourID, total_days, present_days, overtime_hours, total_wages)
+                    VALUES (@labourId, @totalDays, @presentDays, @overtimeHours, @totalWages)`);
+        return result;
+    } catch (err) {
+        console.error('SQL error', err);
+        throw new Error('Error submitting wages');
+    }
+};
+
 
 module.exports = {
     checkAadhaarExists,
@@ -1313,7 +1359,9 @@ module.exports = {
     updateDataDisableStatus,
     // getCombinedStatuses
     getLabourStatuses,
-    updateHideResubmit
+    updateHideResubmit,
+    getAttendanceByLabourId,
+    submitWages
     // getEsslStatuses,
     // getEmployeeMasterStatuses
     // updateLabour
