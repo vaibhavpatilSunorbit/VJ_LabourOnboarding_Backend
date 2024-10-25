@@ -189,3 +189,9 @@
 {"level":"info","message":"Running labour attendance check at 12:40 PM","timestamp":"2024-10-23T07:10:00.017Z"}
 {"level":"info","message":"Updated 0 new labours to 'Disable' status today.","timestamp":"2024-10-23T07:11:48.884Z"}
 {"level":"info","message":"0 new labours were processed for deletion today.","timestamp":"2024-10-23T07:11:48.884Z"}
+{"level":"info","message":"Running labour attendance check at 12:40 PM","timestamp":"2024-10-24T07:10:00.335Z"}
+{"level":"info","message":"Updated 0 new labours to 'Disable' status today.","timestamp":"2024-10-24T07:12:41.086Z"}
+{"level":"info","message":"0 new labours were processed for deletion today.","timestamp":"2024-10-24T07:12:41.090Z"}
+{"level":"info","message":"Running labour attendance check at 12:40 PM","timestamp":"2024-10-25T07:10:00.057Z"}
+{"level":"info","message":"Updated 0 new labours to 'Disable' status today.","timestamp":"2024-10-25T07:11:42.601Z"}
+{"level":"info","message":"0 new labours were processed for deletion today.","timestamp":"2024-10-25T07:11:42.606Z"}
