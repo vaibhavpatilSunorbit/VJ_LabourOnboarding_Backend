@@ -1379,6 +1379,46 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 
 
 // Updated Model (model.js)
+// async function getAttendanceByLabourId(labourId, month, year) {
+//     try {
+//         console.log('Fetching attendance from DB for:', { labourId, month, year });
+//         const pool = await poolPromise3;
+//         const result = await pool
+//             .request()
+//             .input('labourId', sql.NVarChar, labourId)
+//             .input('month', sql.Int, month)
+//             .input('year', sql.Int, year)
+//             .query(`
+//                 SELECT * FROM [dbo].[Attendance]
+//                 WHERE user_id = @labourId
+//                 AND MONTH(punch_date) = @month
+//                 AND YEAR(punch_date) = @year
+//                 ORDER BY punch_date, punch_time
+//             `);
+//         // console.log('SQL Result:', result.recordset);
+//         return result.recordset;
+//     } catch (err) {
+//         console.error('SQL error', err);
+//         throw new Error('Error fetching attendance data');
+//     }
+// };
+
+// // Fetch Approved Labour IDs
+// async function getAllApprovedLabourIds() {
+//     try {
+//         console.log('Attempting to connect to the database...');
+//         const pool = await poolPromise;
+//         const result = await pool
+//             .request()
+//             .query(`SELECT LabourID AS labourId FROM [dbo].[labourOnboarding] WHERE status = 'Approved'`);
+//         console.log('Fetched approved labour IDs:', result.recordset);
+//         return result.recordset; // Returns an array of approved labour IDs
+//     } catch (err) {
+//         console.error('SQL error fetching approved labour IDs', err);
+//         throw new Error('Error fetching approved labour IDs');
+//     }
+// }
+
 async function getAttendanceByLabourId(labourId, month, year) {
     try {
         console.log('Fetching attendance from DB for:', { labourId, month, year });
@@ -1395,7 +1435,7 @@ async function getAttendanceByLabourId(labourId, month, year) {
                 AND YEAR(punch_date) = @year
                 ORDER BY punch_date, punch_time
             `);
-        // console.log('SQL Result:', result.recordset);
+        console.log('SQL Result:', result.recordset);
         return result.recordset;
     } catch (err) {
         console.error('SQL error', err);
@@ -1403,21 +1443,39 @@ async function getAttendanceByLabourId(labourId, month, year) {
     }
 };
 
-// Fetch Approved Labour IDs
-async function getAllApprovedLabourIds() {
+// Fetch Approved Labour IDs with Working Hours
+async function getAllApprovedLabours() {
     try {
         console.log('Attempting to connect to the database...');
         const pool = await poolPromise;
         const result = await pool
             .request()
-            .query(`SELECT LabourID AS labourId FROM [dbo].[labourOnboarding] WHERE status = 'Approved'`);
-        console.log('Fetched approved labour IDs:', result.recordset);
-        return result.recordset; // Returns an array of approved labour IDs
+            .query(`SELECT LabourID AS labourId, workingHours FROM [dbo].[labourOnboarding] WHERE status = 'Approved'`);
+        console.log('Fetched approved labours:', result.recordset);
+        return result.recordset; // Returns an array of approved labour IDs and working hours
     } catch (err) {
         console.error('SQL error fetching approved labour IDs', err);
         throw new Error('Error fetching approved labour IDs');
     }
 }
+
+// Fetch Labour Details by ID
+async function getLabourDetailsById(labourId) {
+    try {
+        console.log('Fetching labour details from DB for:', labourId);
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .input('labourId', sql.NVarChar, labourId)
+            .query(`SELECT LabourID AS labourId, workingHours FROM [dbo].[labourOnboarding] WHERE LabourID = @labourId`);
+        console.log('Fetched labour details:', result.recordset[0]);
+        return result.recordset[0];
+    } catch (err) {
+        console.error('SQL error fetching labour details', err);
+        throw new Error('Error fetching labour details');
+    }
+}
+
 
 
 
@@ -1469,9 +1527,12 @@ module.exports = {
     updateHideResubmit,
     getAttendanceByLabourId,
     submitWages,
-    getAllApprovedLabourIds,
+    // getAllApprovedLabourIds,
     // getAttendanceForAllLabours
     // getEsslStatuses,
-    // getEmployeeMasterStatuses
-    // updateLabour
+    // getEmployeeMasterStatuses,
+    // updateLabour,
+    getAllApprovedLabours,
+    getLabourDetailsById
+
 };
