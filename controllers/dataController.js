@@ -708,7 +708,7 @@ const saveTransferData = async (req, res) => {
   }
 
   const query = `
-  INSERT INTO [LabourOnboardingForm_TEST].[dbo].[API_TransferSite] 
+  INSERT INTO [dbo].[API_TransferSite] 
   ([userId], [LabourID], [name], [currentSite], [currentSiteName], 
    [transferSite], [transferSiteName], [esslStatus], [esslCommandId], 
    [esslPayload], [esslApiResponse], [esslResponseStatus], 
@@ -907,6 +907,12 @@ const getAllLaboursWithTransferDetails = async (req, res) => {
 //     res.status(500).json({ error: "Failed to fetch cached labours data", details: err.message });
 //   }
 // };
+
+
+
+
+
+
 
 
 

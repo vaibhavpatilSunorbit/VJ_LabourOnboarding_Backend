@@ -671,17 +671,17 @@ async function getAll() {
 }
 
 // Function to get a record by ID
-async function getById(id) {
-    try {
-        const pool = await poolPromise;
-        const result = await pool.request()
-            .input('id', sql.Int, id)
-            .query('SELECT * FROM labourOnboarding WHERE id = @id');
-        return result.recordset[0];
-    } catch (error) {
-        throw error;
-    }
-}
+// async function getById(id) {
+//     try {
+//         const pool = await poolPromise;
+//         const result = await pool.request()
+//             .input('id', sql.Int, id)
+//             .query('SELECT * FROM labourOnboarding WHERE id = @id');
+//         return result.recordset[0];
+//     } catch (error) {
+//         throw error;
+//     }
+// }
 
 
 // async function update(id, updatedData) {
@@ -1291,6 +1291,94 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 // ------------------------------    LABOUR APP PHASE 2 START HERE DATE 21-10-2024   ---------------------------
 //   ATTENDACE REPORT CODE HERE ----- Implement Date 22/10/2024 ---- //////////////////////////////
 
+// async function getAttendanceByLabourId(labourId, month, year) {
+//     try {
+//         console.log('Fetching attendance from DB for:', { labourId, month, year });
+//         const pool = await poolPromise3;
+//         const result = await pool
+//             .request()
+//             .input('labourId', sql.NVarChar, labourId)
+//             .input('month', sql.Int, month)
+//             .input('year', sql.Int, year)
+//             .query(`
+//                 SELECT * FROM [dbo].[Attendance]
+//                 WHERE user_id = @labourId
+//                 AND MONTH(punch_date) = @month
+//                 AND YEAR(punch_date) = @year
+//                 ORDER BY punch_date, punch_time
+//             `);
+//             console.log('SQL Result:', result.recordset);
+//         return result.recordset;
+//     } catch (err) {
+//         console.error('SQL error', err);
+//         throw new Error('Error fetching attendance data');
+//     }
+// };
+
+
+
+// // Fetch Approved Labour IDs
+// async function getAllApprovedLabourIds() {
+//     try {
+//         console.log('Attempting to connect to the database...');
+        
+//         const pool = await poolPromise;
+        
+//         console.log('Connected to the database. Executing query...');
+        
+//         const result = await pool
+//             .request()
+//             .query(`SELECT LabourID AS labourId FROM [dbo].[labourOnboarding] WHERE status = 'Approved'`);
+        
+//         console.log('Fetched approved labour IDs:', result.recordset);
+        
+//         return result.recordset; // Returns an array of approved labour IDs
+//     } catch (err) {
+//         console.error('SQL error fetching approved labour IDs', err);
+//         throw new Error('Error fetching approved labour IDs');
+//     }
+// }
+
+// // Fetch Attendance for All Approved Labour IDs for a Given Month and Year
+// async function getAttendanceForAllLabours(labourId, month, year) {
+//     try {
+//         // Parse and validate parameters
+//         const parsedLabourId = parseInt(labourId, 10);
+//         const parsedMonth = parseInt(month, 10);
+//         const parsedYear = parseInt(year, 10);
+
+//         if (isNaN(parsedLabourId) || isNaN(parsedMonth) || isNaN(parsedYear)) {
+//             console.error('Invalid parameter(s):', { labourId, month, year });
+//             throw new Error('Invalid labourId, month, or year');
+//         }
+
+//         const pool = await poolPromise3;
+
+//         const result = await pool
+//             .request()
+//             .input('labourId', sql.Int, parsedLabourId)
+//             .input('month', sql.Int, parsedMonth)
+//             .input('year', sql.Int, parsedYear)
+//             .query(`
+//                 SELECT * FROM [dbo].[Attendance]
+//                 WHERE user_id = @labourId
+//                 AND MONTH(punch_date) = @month
+//                 AND YEAR(punch_date) = @year
+//                 ORDER BY punch_date, punch_time
+//             `);
+
+//         console.log(`Fetched attendance for labour ID ${labourIds}:`, result.recordset);
+//         return result.recordset;
+//     } catch (err) {
+//         console.error('SQL error fetching attendance data', err);
+//         throw new Error('Error fetching attendance data');
+//     }
+// }
+
+
+
+
+// Updated Model (model.js)
 async function getAttendanceByLabourId(labourId, month, year) {
     try {
         console.log('Fetching attendance from DB for:', { labourId, month, year });
@@ -1307,13 +1395,32 @@ async function getAttendanceByLabourId(labourId, month, year) {
                 AND YEAR(punch_date) = @year
                 ORDER BY punch_date, punch_time
             `);
-            console.log('SQL Result:', result.recordset);
+        // console.log('SQL Result:', result.recordset);
         return result.recordset;
     } catch (err) {
         console.error('SQL error', err);
         throw new Error('Error fetching attendance data');
     }
 };
+
+// Fetch Approved Labour IDs
+async function getAllApprovedLabourIds() {
+    try {
+        console.log('Attempting to connect to the database...');
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .query(`SELECT LabourID AS labourId FROM [dbo].[labourOnboarding] WHERE status = 'Approved'`);
+        console.log('Fetched approved labour IDs:', result.recordset);
+        return result.recordset; // Returns an array of approved labour IDs
+    } catch (err) {
+        console.error('SQL error fetching approved labour IDs', err);
+        throw new Error('Error fetching approved labour IDs');
+    }
+}
+
+
+
 
 async function submitWages(labourId, totalDays, presentDays, overtimeHours, totalWages) {
     try {
@@ -1340,7 +1447,7 @@ module.exports = {
     getNextUniqueID,
     registerData,
     getAll,
-    getById,
+    // getById,
     // update,
     deleteById,
     getImagePathsById,
@@ -1361,7 +1468,9 @@ module.exports = {
     getLabourStatuses,
     updateHideResubmit,
     getAttendanceByLabourId,
-    submitWages
+    submitWages,
+    getAllApprovedLabourIds,
+    // getAttendanceForAllLabours
     // getEsslStatuses,
     // getEmployeeMasterStatuses
     // updateLabour

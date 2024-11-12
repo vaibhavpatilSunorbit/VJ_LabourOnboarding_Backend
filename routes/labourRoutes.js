@@ -9,7 +9,7 @@ router.get('/', labourController.getAllRecords);
 router.get('/', labourController.getAllLabours);
 router.get('/approved', labourController.getApprovedLabours);
 router.get('/search', labourController.searchLabours);  
-router.get('/:id', labourController.getRecordById);
+// router.get('/:id', labourController.getRecordById);
 router.post('/:id/updateRecord', labourController.createRecordUpdate);
 router.delete('/:id', labourController.deleteRecord);
 router.put('/updatelabour/:id', labourController.updateRecord);
@@ -29,6 +29,7 @@ router.put('/updateHideResubmit/:id', labourController.updateHideResubmitLabour)
 // router.get('/labour-status', labourController.getLabourStatus);
 
 router.get('/attendance/:labourId', labourController.getAttendance);
+router.get('/attendance', labourController.getAllLaboursAttendance);
 router.post('/wages/submit', labourController.submitWagesController);
 
 
