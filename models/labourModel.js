@@ -671,17 +671,17 @@ async function getAll() {
 }
 
 // Function to get a record by ID
-// async function getById(id) {
-//     try {
-//         const pool = await poolPromise;
-//         const result = await pool.request()
-//             .input('id', sql.Int, id)
-//             .query('SELECT * FROM labourOnboarding WHERE id = @id');
-//         return result.recordset[0];
-//     } catch (error) {
-//         throw error;
-//     }
-// }
+async function getById(id) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .query('SELECT * FROM labourOnboarding WHERE id = @id');
+        return result.recordset[0];
+    } catch (error) {
+        throw error;
+    }
+}
 
 
 // async function update(id, updatedData) {
@@ -1435,7 +1435,7 @@ async function getAttendanceByLabourId(labourId, month, year) {
                 AND YEAR(punch_date) = @year
                 ORDER BY punch_date, punch_time
             `);
-        console.log('SQL Result:', result.recordset);
+        // console.log('SQL Result:', result.recordset);
         return result.recordset;
     } catch (err) {
         console.error('SQL error', err);
@@ -1505,7 +1505,7 @@ module.exports = {
     getNextUniqueID,
     registerData,
     getAll,
-    // getById,
+    getById,
     // update,
     deleteById,
     getImagePathsById,
