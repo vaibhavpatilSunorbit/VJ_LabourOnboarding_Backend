@@ -14,6 +14,7 @@ router.delete('/:id', labourController.deleteRecord);
 router.put('/updatelabour/:id', labourController.updateRecord);
 router.put('/update/:id', labourController.updateRecordLabour);
 router.put('/approve/:id', labourController.approveLabour);
+router.put('/approveDisableLabour/:id', labourController.approveDisableLabour);
 router.put('/reject/:id', labourController.rejectLabour);
 router.put('/resubmit/:id', labourController.resubmitLabour);
 router.put('/editLabour/:id', labourController.editbuttonLabour);
@@ -34,7 +35,7 @@ router.get('/attendance', labourController.getAllLaboursAttendance);
 router.get('/cachedattendance', labourController.getCachedAttendance);
 router.post('/wages/submit', labourController.submitWagesController);
 
-
+// ------------------------------------------------------- IMP ROUTE AND GET USING VIEW DETAILS FOR LABOUR --------------------------------------------------
 router.get('/:id', labourController.getRecordById);
 
 

@@ -367,14 +367,6 @@ async function updateData(labourData) {
 
 
 
-
-
-
-
-
-
-
-
 async function updateDataDisableStatus(labourData) {
     try {
         const pool = await poolPromise;
@@ -656,6 +648,80 @@ async function registerDataUpdate(labourData) {
         throw error;
     }
   }
+
+// -----------------------------------------------------------------------------------------------------------------------------------
+
+async function registerDataUpdateDisable(labourData) {
+    try {
+        const pool = await poolPromise;
+        const request = pool.request();
+        
+      //   request.input('LabourID', sql.VarChar, labourData.LabourID);
+      //   request.input('location', labourData.location);
+        
+      //   Object.keys(labourData).forEach((key, index) => {
+      //       if (key !== 'LabourID' && key !== 'location') {
+      //           request.input(key, sql.VarChar, labourData[key]);
+      //       }
+      //   });
+  
+  
+      const toUpperCaseFields = [
+          'address', 'name', 'taluka', 'district', 'village', 'state', 
+          'bankName', 'branch', 'ifscCode', 'contractorName', 'Inducted_By', 'OnboardName', 'title', 
+        ];
+    
+        // Helper function to set input with uppercase conversion
+        // const setInputWithUpperCase = (key, value) => {
+        //   request.input(key, sql.VarChar, value ? value.toUpperCase() : '');
+        // };
+
+        const setInputWithUpperCase = (key, value) => {
+            const valueAsString = value ? String(value) : '';
+            request.input(key, sql.VarChar, valueAsString ? valueAsString.toUpperCase() : '');
+          };
+    
+        request.input('LabourID', sql.VarChar, labourData.LabourID);
+        request.input('location', sql.VarChar, labourData.location);
+        // request.input('isResubmit', sql.Bit, labourData.isResubmit);
+
+        const finalOnboardName = labourData.OnboardName ? labourData.OnboardName : ''; // Fallback to empty string if undefined
+        labourData.OnboardName = finalOnboardName;
+    
+        Object.keys(labourData).forEach((key) => {
+          if (key !== 'LabourID' && key !== 'location') {
+            if (toUpperCaseFields.includes(key)) {
+              setInputWithUpperCase(key, labourData[key]);
+            } else {
+              request.input(key, sql.VarChar, labourData[key]);
+            }
+          }
+        });
+  
+        const result = await request.query(`
+        INSERT INTO labourOnboarding (
+          LabourID, labourOwnership, uploadAadhaarFront, uploadAadhaarBack, uploadIdProof, name, aadhaarNumber,
+          dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date, From_Date, Period, address, pincode, taluka, district, village,
+          state, emergencyContact, photoSrc, bankName, branch, accountNumber, ifscCode, projectName, 
+          labourCategory, department, workingHours, contractorName, contractorNumber, designation,
+          status, isApproved, title, Marital_Status, companyName, Induction_Date, Inducted_By, uploadInductionDoc, OnboardName, ValidTill, location, ConfirmDate, retirementDate, SalaryBu, WorkingBu, CreationDate, businessUnit, departmentId, designationId, labourCategoryId, departmentName, isResubmit) 
+          VALUES (
+          @LabourID, @labourOwnership, @uploadAadhaarFront, @uploadAadhaarBack, @uploadIdProof, @name, @aadhaarNumber,
+          @dateOfBirth, @contactNumber, @gender, @dateOfJoining, @Group_Join_Date, @From_Date, @Period, @address, @pincode, @taluka, @district, @village,
+          @state, @emergencyContact, @photoSrc, @bankName, @branch, @accountNumber, @ifscCode, @projectName,
+          @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
+          'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId, @departmentName, @isResubmit)
+        `);
+        console.log('Data successfully inserted for OnboardName Resubmmit button:', labourData.OnboardName);
+        return result.recordset;
+    } catch (error) {
+        throw error;
+    }
+  }
+  
+// -----------------------------------------------------------------------------------------------------------------------------------
+
+
   
 
 
@@ -935,6 +1001,39 @@ async function approveLabour(id, nextID) {
     }
 }
 
+// ------------------------------------  approve Disable labour changes 14-11-2024 -------------
+
+async function approveDisableLabours(id, labourID) {
+    try {
+        const pool = await poolPromise;
+        const now = new Date();
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .input('LabourID', sql.NVarChar, labourID)
+            .input('ApproveLabourDate', sql.DateTime, now)
+            .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID, ApproveLabourDate = @ApproveLabourDate WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
+        
+        console.log('Database update result:', result);
+
+        if (result.rowsAffected[0] > 0) {
+            const approvedResult = await pool.request()
+                .input('id', sql.Int, id)
+                .query("SELECT * FROM labourOnboarding WHERE id = @id AND status = 'Approved'");
+            
+            return approvedResult.recordset[0];
+        } else {
+            return null;
+        }
+    } catch (error) {
+        console.error("Error in approveLabour:", error);
+        throw error;
+    }
+}
+
+// ------------------------------------------------------------ end ----------------------------
+
+
+
 // async function rejectLabour(id, rejectReason) {
 //     try {
 //         const pool = await poolPromise;
@@ -1046,6 +1145,11 @@ async function resubmit(id) {
           .input('isApproved', sql.Int, 3)
           .input('ResubmitLabourDate', sql.DateTime, now)
           .query('UPDATE labourOnboarding SET status = @status, isApproved = @isApproved, ResubmitLabourDate = @ResubmitLabourDate WHERE id = @id');
+      }else{
+        await pool.request()
+        .input('id', sql.Int, id)
+        .input('isResubmit', sql.Bit, 1)
+        .query('UPDATE labourOnboarding SET isResubmit = @isResubmit WHERE id = @id');
       }
   
       // Insert into RejectLabours table
@@ -1059,6 +1163,7 @@ async function resubmit(id) {
         .input('aadhaarNumber', sql.VarChar, labourData.aadhaarNumber)
         // .input('isApproved', sql.Int, labourData.status === 'Disable' ? labourData.isApproved : 3) // isApproved is 3 for resubmitted
         .input('isApproved', sql.Int, 3)
+        
         .query('INSERT INTO RejectLabours (userId, name, status, Reject_Reason, OnboardName, aadhaarNumber, isApproved) VALUES (@userId, @name, @status, @Reject_Reason, @OnboardName, @aadhaarNumber, @isApproved)');
   
       return labour.recordset[0];
@@ -1419,6 +1524,8 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 //     }
 // }
 
+// ------------------------------------------------------------------------  LABOUR PHASE 2 -------------------------------------------
+
 async function getAttendanceByLabourId(labourId, month, year) {
     try {
         console.log('Fetching attendance from DB for:', { labourId, month, year });
@@ -1477,6 +1584,107 @@ async function getLabourDetailsById(labourId) {
 }
 
 
+// // Fetch attendance by Labour ID
+// async function getAttendanceByLabourId(labourId, month, year) {
+//     try {
+//         console.log('Fetching attendance from DB for:', { labourId, month, year });
+//         const pool = await poolPromise3;
+//         const result = await pool
+//             .request()
+//             .input('labourId', sql.NVarChar, labourId)
+//             .input('month', sql.Int, month)
+//             .input('year', sql.Int, year)
+//             .query(`
+//                 SELECT * FROM [dbo].[Attendance]
+//                 WHERE user_id = @labourId
+//                 AND MONTH(punch_date) = @month
+//                 AND YEAR(punch_date) = @year
+//                 ORDER BY punch_date, punch_time
+//             `);
+//         return result.recordset;
+//     } catch (err) {
+//         console.error('SQL error', err);
+//         throw new Error('Error fetching attendance data');
+//     }
+// };
+
+// // Fetch approved Labour IDs with working hours
+// async function getAllApprovedLabours() {
+//     try {
+//         console.log('Attempting to connect to the database...');
+//         const pool = await poolPromise;
+//         const result = await pool
+//             .request()
+//             .query(`SELECT LabourID AS labourId, workingHours FROM [dbo].[labourOnboarding] WHERE status = 'Approved'`);
+//         console.log('Fetched approved labours:', result.recordset);
+//         return result.recordset; // Returns an array of approved labour IDs and working hours
+//     } catch (err) {
+//         console.error('SQL error fetching approved labour IDs', err);
+//         throw new Error('Error fetching approved labour IDs');
+//     }
+// }
+
+// // Fetch labour details by ID
+// async function getLabourDetailsById(labourId) {
+//     try {
+//         console.log('Fetching labour details from DB for:', labourId);
+//         const pool = await poolPromise;
+//         const result = await pool
+//             .request()
+//             .input('labourId', sql.NVarChar, labourId)
+//             .query(`SELECT LabourID AS labourId, workingHours FROM [dbo].[labourOnboarding] WHERE LabourID = @labourId`);
+//         console.log('Fetched labour details:', result.recordset[0]);
+//         return result.recordset[0];
+//     } catch (err) {
+//         console.error('SQL error fetching labour details', err);
+//         throw new Error('Error fetching labour details');
+//     }
+// }
+
+// // Helper function to determine if a given date is a holiday
+// async function isHoliday(date) {
+//     try {
+//         const pool = await poolPromise;
+//         const result = await pool.request()
+//             .input('date', sql.Date, date)
+//             .query(`
+//                 SELECT * 
+//                 FROM [dbo].[HolidayDate] 
+//                 WHERE HolidayDate = @date
+//             `);
+//         return result.recordset.length > 0;
+//     } catch (err) {
+//         console.error('Error checking if date is a holiday', err);
+//         throw new Error('Error checking if date is a holiday');
+//     }
+// }
+
+// // Helper function to determine if a given date is a weekly off
+// async function isWeeklyOff(labourId, date) {
+//     // Fetch weekly off details from the database or configuration
+//     // For simplicity, assume that Sunday is a fixed weekly off
+//     try {
+//         const dayOfWeek = new Date(date).getDay();
+//         return dayOfWeek === 0; // 0 represents Sunday
+//     } catch (err) {
+//         console.error('Error checking if date is a weekly off', err);
+//         throw new Error('Error checking if date is a weekly off');
+//     }
+// }
+
+// // Helper function to handle attendance approval
+// async function approveAttendance(labourId, date) {
+//     try {
+//         const pool = await poolPromise;
+//         await pool.request()
+//             .input('labourId', sql.NVarChar(50), labourId) // Adjusted length to prevent truncation
+//             .input('date', sql.Date, date)
+//             .query(`UPDATE [dbo].[DailyAttendance] SET status = 'Approved' WHERE LabourID = @labourId AND punch_date = @date`);
+//     } catch (err) {
+//         console.error('Error approving attendance', err);
+//         throw new Error('Error approving attendance');
+//     }
+// }
 
 
 
@@ -1519,6 +1727,7 @@ module.exports = {
     getFormDataByAadhaar,
     updateLabour,
     registerDataUpdate,
+    registerDataUpdateDisable,
     updateData,
     editLabour,
     updateDataDisableStatus,
@@ -1527,12 +1736,16 @@ module.exports = {
     updateHideResubmit,
     getAttendanceByLabourId,
     submitWages,
+    approveDisableLabours,
     // getAllApprovedLabourIds,
     // getAttendanceForAllLabours
     // getEsslStatuses,
     // getEmployeeMasterStatuses,
     // updateLabour,
     getAllApprovedLabours,
-    getLabourDetailsById
+    getLabourDetailsById,
+    // isHoliday,
+    // isWeeklyOff,
+    // approveAttendance
 
 };
