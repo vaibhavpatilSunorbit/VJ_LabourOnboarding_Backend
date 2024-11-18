@@ -787,10 +787,10 @@ async function updateRecordWithDisable(req, res) {
         console.log('Request Files:', req.files); 
 
         const {
-            labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
+            LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, isResubmit
         } = req.body;
 
         let finalOnboardName = Array.isArray(OnboardName) ? OnboardName.filter(name => name !== 'null' && name.trim() !== '')[0] : OnboardName;
@@ -801,7 +801,10 @@ async function updateRecordWithDisable(req, res) {
         }
 
         console.log('Cleaned OnboardName Resubmitted button:', finalOnboardName);
-
+        if (!LabourID || !isResubmit) {
+            console.error('LabourID is missing from request body.');
+            return res.status(400).json({ msg: 'LabourID is required.' });
+        }
 
         const labourCategoryMap = {
             'SKILLED': 1,
@@ -974,8 +977,8 @@ async function updateRecordWithDisable(req, res) {
 
         console.log('Received OnboardName Resubmmit button functionlity:', finalOnboardName);
 
-        const data = await labourModel.registerDataUpdate({
-            labourOwnership,
+        const data = await labourModel.registerDataUpdateDisable({
+            LabourID, labourOwnership,
             uploadAadhaarFront: frontImageUrl,
             uploadAadhaarBack: backImageUrl,
             uploadIdProof: IdProofImageUrl,
@@ -991,7 +994,7 @@ async function updateRecordWithDisable(req, res) {
             ValidTill: validTillDate.toISOString().split('T')[0],
             retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location,
             CreationDate: creationDate.toISOString(), departmentId: safeDepartmentId, departmentName, designationId: safeDesignationId,
-            labourCategoryId: safeLabourCategoryId
+            labourCategoryId: safeLabourCategoryId, isResubmit
         });
 
 
@@ -1179,6 +1182,32 @@ async function approveLabour(req, res) {
         res.status(500).json({ message: 'Internal server error' });
     }
 }
+
+// --------------------------------  changes disabel approve 14-11-2024 --------------
+async function approveDisableLabour(req, res) {
+    const id = parseInt(req.params.id, 10);
+    const { labourID } = req.body;
+    console.log('labourID++++++',req.body)
+
+    if (isNaN(id) || !labourID) {
+        return res.status(400).json({ message: 'Invalid input parameters' });
+    }
+
+    try {
+        const result = await labourModel.approveDisableLabours(id, labourID);
+        if (result) {
+            res.json({ success: true, message: 'Labour approved successfully.', data: result });
+        } else {
+            res.status(404).json({ message: 'Labour not found or already approved.' });
+        }
+    } catch (error) {
+        console.error('Error in approveDisableLabour:', error.message);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+
+// ---------------------------------------------------  End -----------------------------------------
 
 async function rejectLabour(req, res) {
     // console.log('Fetching rejected labours...');
@@ -1673,7 +1702,6 @@ async function updateHideResubmitLabour(req, res) {
 
 
 
-
 // Cache for attendance data
 let cachedAttendance = null;
 // Create a separate logger for this cron job
@@ -1687,6 +1715,20 @@ const cronLogger = createLogger({
         new transports.File({ filename: 'cron_attendance.log' })
     ]
 });
+
+function formatTimeToHoursMinutes(timeString) {
+    try {
+        const date = new Date(timeString);
+        if (isNaN(date.getTime())) return "-";
+        const hours = date.getUTCHours().toString().padStart(2, "0");
+        const minutes = date.getUTCMinutes().toString().padStart(2, "0");
+        const seconds = date.getUTCSeconds().toString().padStart(2, "0");
+        return `${hours}:${minutes}:${seconds}`;
+    } catch (error) {
+        return "-";
+    }
+}
+
 
 async function getAttendance(req, res) {
     try {
@@ -1741,8 +1783,8 @@ async function getAttendance(req, res) {
 
                 monthlyAttendance.push({
                     date,
-                    firstPunch: `${date}T${firstPunch.toISOString().split('T')[1]}`,
-                    lastPunch: `${date}T${lastPunch.toISOString().split('T')[1]}`,
+                    firstPunch: formatTimeToHoursMinutes(firstPunch), // Format time
+                    lastPunch: formatTimeToHoursMinutes(lastPunch),   // Format time
                     status: 'P', // Present
                     totalHours,
                     overtime
@@ -1849,8 +1891,8 @@ async function getAllLaboursAttendance(req, res) {
 
                     monthlyAttendance.push({
                         date,
-                        firstPunch: `${date}T${firstPunch.toISOString().split('T')[1]}`,
-                        lastPunch: `${date}T${lastPunch.toISOString().split('T')[1]}`,
+                        firstPunch: formatTimeToHoursMinutes(firstPunch), // Format time
+                        lastPunch: formatTimeToHoursMinutes(lastPunch),   // Format time
                         status: 'P',
                         totalHours,
                         overtime
@@ -1920,98 +1962,161 @@ function calculateHoursWorked(punchDate, firstPunch, lastPunch) {
     return totalHours.toFixed(2);  // Return hours with 2 decimal places
 }
 
-cron.schedule('32 10 * * *', async () => {
-    cronLogger.info('Starting cron job to fetch and cache attendance data');
+cron.schedule('0 11,41 18 * * *', async () => {
+    cronLogger.info('Starting cron job to fetch and save daily attendance data');
     try {
         const currentDate = new Date();
-        const currentMonth = currentDate.getMonth() + 1;
-        const currentYear = currentDate.getFullYear();
-
+        const dateString = currentDate.toISOString().split('T')[0]; // Format: YYYY-MM-DD
         const approvedLabours = await labourModel.getAllApprovedLabours();
-        const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
-        const results = [];
 
-        for (let i = 0; i < approvedLabours.length; i++) {
-            const { labourId, workingHours } = approvedLabours[i];
-            cronLogger.info(`Fetching attendance for labour ID: ${labourId}`);
-            const labourAttendance = await labourModel.getAttendanceByLabourId(labourId, currentMonth, currentYear);
-            // cronLogger.info(`Fetched attendance for labour ID ${labourId}:`, { labourAttendance });
+        for (let labour of approvedLabours) {
+            const { labourId, workingHours } = labour;
+
+            const attendanceData = await labourModel.getAttendanceByLabourId(labourId, currentDate.getMonth() + 1, currentDate.getFullYear());
+            const punchesForDay = attendanceData.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === dateString);
+
+            let status = 'A'; // Default to Absent
+            let firstPunch = null;
+            let lastPunch = null;
+            let totalHours = 0;
+            let overtimeHours = 0;
 
             const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
             const halfDayHours = shiftHours === 9 ? 4.5 : 4;
-            const maxOvertimeHours = 120;
-            let presentDays = 0;
-            let totalOvertimeHours = 0;
-            let monthlyAttendance = [];
 
-            for (let day = 1; day <= daysInMonth; day++) {
-                const date = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const punchesForDay = labourAttendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
+            if (punchesForDay.length > 0) {
+                punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
 
-                if (punchesForDay.length > 0) {
-                    punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+                firstPunch = punchesForDay[0].punch_time;
+                lastPunch = punchesForDay[punchesForDay.length - 1].punch_time;
 
-                    const firstPunch = punchesForDay[0].punch_time;
-                    const lastPunch = punchesForDay[punchesForDay.length - 1].punch_time;
+                totalHours = calculateHoursWorked(punchesForDay[0].punch_date, firstPunch, lastPunch);
+                overtimeHours = totalHours > shiftHours ? totalHours - shiftHours : 0;
 
-                    const totalHours = calculateHoursWorked(punchesForDay[0].punch_date, firstPunch, lastPunch);
-                    let overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
-
-                    // Apply half-day logic
-                    if (totalHours > halfDayHours && totalHours < shiftHours) {
-                        overtime = 0; // No overtime if hours are between half-day and full shift
-                    }
-
-                    presentDays++;
-                    totalOvertimeHours += overtime;
-
-                    monthlyAttendance.push({
-                        date,
-                        firstPunch: `${date}T${firstPunch.toISOString().split('T')[1]}`,
-                        lastPunch: `${date}T${lastPunch.toISOString().split('T')[1]}`,
-                        status: 'P',
-                        totalHours,
-                        overtime
-                    });
-                } else {
-                    monthlyAttendance.push({
-                        date,
-                        status: 'A',
-                        totalHours: 0,
-                        overtime: 0
-                    });
+                if (totalHours > halfDayHours) {
+                    status = 'P'; // Present
                 }
             }
 
-            // Cap the total overtime hours to the maximum allowed
-            totalOvertimeHours = Math.min(totalOvertimeHours, maxOvertimeHours);
+            // Insert the attendance record into the database
+            const pool = await poolPromise;
+            await pool.request()
+                .input('LabourID', sql.NVarChar, labourId)
+                .input('Date', sql.Date, dateString)
+                .input('FirstPunch', sql.DateTime, firstPunch)
+                .input('LastPunch', sql.DateTime, lastPunch)
+                .input('Status', sql.NVarChar, status)
+                .input('TotalHours', sql.Float, totalHours)
+                .input('OvertimeHours', sql.Float, overtimeHours)
+                .input('ShiftHours', sql.Int, shiftHours)
+                .query(`
+                    INSERT INTO [dbo].[DailyAttendance] (
+                        LabourID, Date, FirstPunch, LastPunch, Status, TotalHours, OvertimeHours, ShiftHours
+                    )
+                    VALUES (@LabourID, @Date, @FirstPunch, @LastPunch, @Status, @TotalHours, @OvertimeHours, @ShiftHours)
+                `);
 
-            const calculatedAttendance = {
-                labourId,
-                totalDays: daysInMonth,
-                presentDays,
-                totalOvertimeHours,
-                shift: workingHours,
-                monthlyAttendance
-            };
-
-            cronLogger.info('Calculated attendance for labour ID:', { labourId, calculatedAttendance });
-            console.log('Calculated attendance for labour ID newly attendance:', labourId, calculatedAttendance);
-
-            results.push(calculatedAttendance);
+            cronLogger.info(`Attendance saved for Labour ID: ${labourId} on ${dateString}`);
         }
 
-        // Log the calculated attendance for all labours
-        cronLogger.info('Calculated attendance for all approved labours:', { results });
-
-        cronLogger.info('Completed fetching attendance for all approved labours:', { results });
-
-        // Cache the results
-        cachedAttendance = results;
+        cronLogger.info('Daily attendance data fetched and saved successfully.');
     } catch (err) {
-        cronLogger.error('Error during cron job to fetch attendance data', err);
+        cronLogger.error('Error during daily attendance cron job', err);
     }
 });
+
+// cron.schedule('32 11 * * *', async () => {
+//     cronLogger.info('Starting cron job to fetch and cache attendance data');
+//     try {
+//         const currentDate = new Date();
+//         const currentMonth = currentDate.getMonth() + 1;
+//         const currentYear = currentDate.getFullYear();
+
+//         const approvedLabours = await labourModel.getAllApprovedLabours();
+//         const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+//         const results = [];
+
+//         for (let i = 0; i < approvedLabours.length; i++) {
+//             const { labourId, workingHours } = approvedLabours[i];
+//             cronLogger.info(`Fetching attendance for labour ID: ${labourId}`);
+//             const labourAttendance = await labourModel.getAttendanceByLabourId(labourId, currentMonth, currentYear);
+//             // cronLogger.info(`Fetched attendance for labour ID ${labourId}:`, { labourAttendance });
+
+//             const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+//             const halfDayHours = shiftHours === 9 ? 4.5 : 4;
+//             const maxOvertimeHours = 120;
+//             let presentDays = 0;
+//             let totalOvertimeHours = 0;
+//             let monthlyAttendance = [];
+
+//             for (let day = 1; day <= daysInMonth; day++) {
+//                 const date = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+//                 const punchesForDay = labourAttendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
+
+//                 if (punchesForDay.length > 0) {
+//                     punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+
+//                     const firstPunch = punchesForDay[0].punch_time;
+//                     const lastPunch = punchesForDay[punchesForDay.length - 1].punch_time;
+
+//                     const totalHours = calculateHoursWorked(punchesForDay[0].punch_date, firstPunch, lastPunch);
+//                     let overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
+
+//                     // Apply half-day logic
+//                     if (totalHours > halfDayHours && totalHours < shiftHours) {
+//                         overtime = 0; // No overtime if hours are between half-day and full shift
+//                     }
+
+//                     presentDays++;
+//                     totalOvertimeHours += overtime;
+
+//                     monthlyAttendance.push({
+//                         date,
+//                         firstPunch: `${date}T${firstPunch.toISOString().split('T')[1]}`,
+//                         lastPunch: `${date}T${lastPunch.toISOString().split('T')[1]}`,
+//                         status: 'P',
+//                         totalHours,
+//                         overtime
+//                     });
+//                 } else {
+//                     monthlyAttendance.push({
+//                         date,
+//                         status: 'A',
+//                         totalHours: 0,
+//                         overtime: 0
+//                     });
+//                 }
+//             }
+
+//             // Cap the total overtime hours to the maximum allowed
+//             totalOvertimeHours = Math.min(totalOvertimeHours, maxOvertimeHours);
+
+//             const calculatedAttendance = {
+//                 labourId,
+//                 totalDays: daysInMonth,
+//                 presentDays,
+//                 totalOvertimeHours,
+//                 shift: workingHours,
+//                 monthlyAttendance
+//             };
+
+//             cronLogger.info('Calculated attendance for labour ID:', { labourId, calculatedAttendance });
+//             console.log('Calculated attendance for labour ID newly attendance:', labourId, calculatedAttendance);
+
+//             results.push(calculatedAttendance);
+//         }
+
+//         // Log the calculated attendance for all labours
+//         cronLogger.info('Calculated attendance for all approved labours:', { results });
+
+//         cronLogger.info('Completed fetching attendance for all approved labours:', { results });
+
+//         // Cache the results
+//         cachedAttendance = results;
+//     } catch (err) {
+//         cronLogger.error('Error during cron job to fetch attendance data', err);
+//     }
+// });
 
 
 
@@ -2349,6 +2454,7 @@ cron.schedule('32 10 * * *', async () => {
 
 
 
+
 async function submitWagesController(req, res) {
     try {
         const { labourId, totalDays, presentDays, overtimeHours, totalWages } = req.body;
@@ -2429,7 +2535,8 @@ module.exports = {
     getAttendance,
     submitWagesController,
     getAllLaboursAttendance,
-    getCachedAttendance
+    getCachedAttendance,
+    approveDisableLabour
     // getLabourStatus
     // getEsslStatuses,
     // getEmployeeMasterStatuses
