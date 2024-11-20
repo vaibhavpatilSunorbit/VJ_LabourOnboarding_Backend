@@ -1581,8 +1581,172 @@ async function getLabourDetailsById(labourId) {
         console.error('SQL error fetching labour details', err);
         throw new Error('Error fetching labour details');
     }
+};
+
+
+
+
+// Helper function to determine if a given date is a holiday
+async function isHoliday(date) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('date', sql.Date, date)
+            .query(`
+                SELECT * 
+                FROM [dbo].[HolidayDate] 
+                WHERE HolidayDate = @date
+            `);
+        return result.recordset.length > 0;
+    } catch (err) {
+        console.error('Error checking if date is a holiday', err);
+        throw new Error('Error checking if date is a holiday');
+    }
 }
 
+// Check if weekly off exists
+async function getWeeklyOff(LabourID, offDate) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .input('LabourID', sql.NVarChar, LabourID)
+            .input('offDate', sql.Date, offDate)
+            .query(`
+                SELECT * 
+                FROM [dbo].[WeeklyOffs] 
+                WHERE LabourID = @LabourID AND offDate = @offDate
+            `);
+        return result.recordset[0]; // Return the record if it exists
+    } catch (err) {
+        console.error('Error fetching weekly off:', err);
+        throw new Error('Error fetching weekly off');
+    }
+}
+
+// Add a new weekly off
+async function addWeeklyOff(LabourID, offDate, addedBy) {
+    try {
+        const pool = await poolPromise;
+        await pool
+            .request()
+            .input('LabourID', sql.NVarChar, LabourID)
+            .input('offDate', sql.Date, offDate)
+            .input('addedBy', sql.NVarChar, addedBy)
+            .query(`
+                INSERT INTO [dbo].[WeeklyOffs] (LabourID, offDate, addedBy)
+                VALUES (@LabourID, @offDate, @addedBy)
+            `);
+        return true;
+    } catch (err) {
+        console.error('Error adding weekly off:', err);
+        return false;
+    }
+}
+
+// Save multiple weekly offs
+async function saveWeeklyOffs(LabourID, weeklyOffDates) {
+    try {
+        const pool = await poolPromise;
+
+        // Delete existing weekly offs for this labour for the same month
+        await pool
+            .request()
+            .input('LabourID', sql.NVarChar, LabourID)
+            .query(`
+                DELETE FROM [dbo].[WeeklyOffs]
+                WHERE LabourID = @LabourID 
+                  AND MONTH(offDate) = MONTH(GETDATE())
+                  AND YEAR(offDate) = YEAR(GETDATE())
+            `);
+
+        // Insert new weekly off dates
+        for (const date of weeklyOffDates) {
+            await pool
+                .request()
+                .input('LabourID', sql.NVarChar, LabourID)
+                .input('offDate', sql.Date, date)
+                .query(`
+                    INSERT INTO [dbo].[WeeklyOffs] (LabourID, offDate)
+                    VALUES (@LabourID, @offDate)
+                `);
+        }
+
+        return true;
+    } catch (err) {
+        console.error('Error saving weekly offs:', err);
+        return false;
+    }
+}
+
+
+// ------------------------------------------------------------------------------------------------------------------------------------------
+
+// Get miss punch count for a specific labour and date
+async function getMissPunchCount(labourId, punchDate) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .input("labourId", sql.NVarChar, labourId)
+            .input("punchDate", sql.Date, punchDate)
+            .query(`
+                SELECT COUNT(*) AS missPunchCount
+                FROM [dbo].[Attendance]
+                WHERE user_id = @labourId AND punch_date = @punchDate AND isMissPunch = 1
+            `);
+        return result.recordset[0];
+    } catch (err) {
+        console.error("SQL error fetching miss punch count", err);
+        throw new Error("Error fetching miss punch count");
+    }
+}
+
+// Add a miss punch entry
+async function addMissPunch(labourId, punchType, punchDate, punchTime) {
+    try {
+        const pool = await poolPromise;
+        await pool
+            .request()
+            .input("labourId", sql.NVarChar, labourId)
+            .input("punchType", sql.NVarChar, punchType)
+            .input("punchDate", sql.Date, punchDate)
+            .input("punchTime", sql.Time, punchTime)
+            .query(`
+                INSERT INTO [dbo].[Attendance] (user_id, punch_type, punch_date, punch_time, isMissPunch)
+                VALUES (@labourId, @punchType, @punchDate, @punchTime, 1)
+            `);
+        return true;
+    } catch (err) {
+        console.error("SQL error adding miss punch", err);
+        return false;
+    }
+}
+
+// Add an admin approval request
+async function addApprovalRequest(labourId, punchType, punchDate, punchTime) {
+    try {
+        const pool = await poolPromise;
+        await pool
+            .request()
+            .input("labourId", sql.NVarChar, labourId)
+            .input("punchType", sql.NVarChar, punchType)
+            .input("punchDate", sql.Date, punchDate)
+            .input("punchTime", sql.Time, punchTime)
+            .query(`
+                INSERT INTO [dbo].[AdminApprovals] (labour_id, punch_type, punch_date, punch_time, status)
+                VALUES (@labourId, @punchType, @punchDate, @punchTime, 'Pending')
+            `);
+        return true;
+    } catch (err) {
+        console.error("SQL error adding approval request", err);
+        return false;
+    }
+}
+
+
+
+// ---------------------------------------------------------------------------------------
 
 // // Fetch attendance by Labour ID
 // async function getAttendanceByLabourId(labourId, month, year) {
@@ -1688,25 +1852,6 @@ async function getLabourDetailsById(labourId) {
 
 
 
-async function submitWages(labourId, totalDays, presentDays, overtimeHours, totalWages) {
-    try {
-        const pool = await poolPromise;
-        const result = await pool
-            .request()
-            .input('labourId', sql.Int, labourId)
-            .input('totalDays', sql.Int, totalDays)
-            .input('presentDays', sql.Int, presentDays)
-            .input('overtimeHours', sql.Float, overtimeHours)
-            .input('totalWages', sql.Decimal(10, 2), totalWages)
-            .query(`INSERT INTO [dbo].[Wages] (LabourID, total_days, present_days, overtime_hours, total_wages)
-                    VALUES (@labourId, @totalDays, @presentDays, @overtimeHours, @totalWages)`);
-        return result;
-    } catch (err) {
-        console.error('SQL error', err);
-        throw new Error('Error submitting wages');
-    }
-};
-
 
 module.exports = {
     checkAadhaarExists,
@@ -1735,7 +1880,7 @@ module.exports = {
     getLabourStatuses,
     updateHideResubmit,
     getAttendanceByLabourId,
-    submitWages,
+    // submitAttendance,
     approveDisableLabours,
     // getAllApprovedLabourIds,
     // getAttendanceForAllLabours
@@ -1744,8 +1889,13 @@ module.exports = {
     // updateLabour,
     getAllApprovedLabours,
     getLabourDetailsById,
-    // isHoliday,
+    isHoliday,
     // isWeeklyOff,
+    getMissPunchCount,
+    addMissPunch,
+    addApprovalRequest,
+    addWeeklyOff,
+    saveWeeklyOffs
     // approveAttendance
 
 };

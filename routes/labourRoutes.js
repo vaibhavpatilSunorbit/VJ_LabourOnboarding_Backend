@@ -28,12 +28,14 @@ router.post('/getCombinedStatuses', labourController.getUserStatusController);
 router.put('/updateHideResubmit/:id', labourController.updateHideResubmitLabour);
 // router.get('/labour-status', labourController.getLabourStatus);
 
-// --------------------------------   ALL ROUTES ARE LABOUR PHASE 2 ------------------------
+// --------------------------------   ALL ROUTES ARE LABOUR PHASE 2 -----------------------------------------------------------------
 
 router.get('/attendance/:labourId', labourController.getAttendance);
 router.get('/attendance', labourController.getAllLaboursAttendance);
 router.get('/cachedattendance', labourController.getCachedAttendance);
-router.post('/wages/submit', labourController.submitWagesController);
+router.post('/attendance/submit', labourController.submitAttendanceController);
+router.post('/add', labourController.addWeeklyOff);
+router.post('/save', labourController.saveWeeklyOffs);
 
 // ------------------------------------------------------- IMP ROUTE AND GET USING VIEW DETAILS FOR LABOUR --------------------------------------------------
 router.get('/:id', labourController.getRecordById);

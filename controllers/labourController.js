@@ -10,7 +10,8 @@ const xml2js = require('xml2js');
 const labourModel = require('../models/labourModel');        
 const cron = require('node-cron');
 const logger = require('../logger'); // Assuming logger is defined in logger.js   
-const { createLogger, format, transports } = require('winston');            
+const { createLogger, format, transports } = require('winston');
+const { isHoliday } = require('../models/labourModel');            
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 const baseUrl = 'http://localhost:4000/uploads/';
@@ -1750,7 +1751,6 @@ async function getAttendance(req, res) {
         const shiftHours = labourDetails.workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
         const halfDayHours = shiftHours === 9 ? 4.5 : 4;
         const maxOvertimeHours = 120; // Maximum OT cap for the month
-
         const daysInMonth = new Date(year, month, 0).getDate(); // Get the number of days in the month
 
         // Initialize the variables
@@ -1762,9 +1762,9 @@ async function getAttendance(req, res) {
         for (let day = 1; day <= daysInMonth; day++) {
             const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const punchesForDay = attendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
+            const isHolidayFlag = await isHoliday(date);
 
-            if (punchesForDay.length > 0) {
-                // Sort punches to get the first and last punch of the day
+            if (punchesForDay.length > 0 && !isHolidayFlag) {
                 punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
 
                 const firstPunch = punchesForDay[0].punch_time;
@@ -1783,21 +1783,29 @@ async function getAttendance(req, res) {
 
                 monthlyAttendance.push({
                     date,
-                    firstPunch: formatTimeToHoursMinutes(firstPunch), // Format time
-                    lastPunch: formatTimeToHoursMinutes(lastPunch),   // Format time
-                    status: 'P', // Present
+                    firstPunch: formatTimeToHoursMinutes(firstPunch),
+                    lastPunch: formatTimeToHoursMinutes(lastPunch),
+                    status: 'P',
                     totalHours,
                     overtime
+                });
+            } else if (isHolidayFlag) {
+                monthlyAttendance.push({
+                    date,
+                    status: 'H', // Holiday
+                    totalHours: 0,
+                    overtime: 0
                 });
             } else {
                 monthlyAttendance.push({
                     date,
-                    status: 'A', // Absent if no punch data
+                    status: 'A', // Absent
                     totalHours: 0,
                     overtime: 0
                 });
             }
         }
+        console.log('monthlyAttendance++',monthlyAttendance)
 
         // Cap the total overtime hours to the maximum allowed
         totalOvertimeHours = Math.min(totalOvertimeHours, maxOvertimeHours);
@@ -2455,17 +2463,119 @@ cron.schedule('0 11,41 18 * * *', async () => {
 
 
 
-async function submitWagesController(req, res) {
+async function submitAttendanceController(req, res) {
     try {
-        const { labourId, totalDays, presentDays, overtimeHours, totalWages } = req.body;
-        await submitWages(labourId, totalDays, presentDays, overtimeHours, totalWages);
-        res.json({ message: 'Wages submitted successfully' });
-    } catch (err) {
-        console.error('Error submitting wages', err);
-        res.status(500).json({ message: 'Error submitting wages' });
+        const { labourId, punchType, punchDate, punchTime } = req.body;
+
+        if (!labourId || !punchType || !punchDate || !punchTime) {
+            return res.status(400).json({ message: "All fields are required." });
+        }
+
+        // Fetch existing miss punch count for the labour
+        const labourPunchCount = await labourModel.getMissPunchCount(labourId, punchDate);
+
+        if (!labourPunchCount) {
+            return res.status(404).json({ message: "Labour data not found." });
+        }
+
+        // Check if miss punch entries exceed the limit of 3
+        if (labourPunchCount.missPunchCount >= 3) {
+            // Route to admin for approval
+            const adminApproval = await labourModel.addApprovalRequest(labourId, punchType, punchDate, punchTime);
+            if (adminApproval) {
+                return res.status(200).json({ message: "Punch entry sent for admin approval." });
+            } else {
+                return res.status(500).json({ message: "Failed to send for admin approval." });
+            }
+        }
+
+        // If within limit, add the punch directly
+        const success = await labourModel.addMissPunch(labourId, punchType, punchDate, punchTime);
+        if (success) {
+            return res.status(200).json({ message: "Punch entry added successfully." });
+        } else {
+            return res.status(500).json({ message: "Failed to add punch entry." });
+        }
+    } catch (error) {
+        logger.error("Error handling punch entry:", error);
+        res.status(500).json({ message: "Error handling punch entry." });
     }
 }
 
+
+// Add a weekly off for a labour
+async function addWeeklyOff(req, res) {
+    try {
+        const { LabourID, offDate, addedBy } = req.body;
+
+        if (!LabourID || !offDate) {
+            return res.status(400).json({ message: 'Labour ID and Off Date are required.' });
+        }
+
+        // Check if the weekly off already exists
+        const existingOff = await labourModel.getWeeklyOff(LabourID, offDate);
+        if (existingOff) {
+            return res.status(409).json({ message: 'Weekly off already exists for this date.' });
+        }
+
+        // Add the weekly off to the database
+        const success = await labourModel.addWeeklyOff(LabourID, offDate, addedBy);
+        if (success) {
+            return res.status(200).json({ message: 'Weekly off added successfully.' });
+        } else {
+            return res.status(500).json({ message: 'Failed to add weekly off.' });
+        }
+    } catch (err) {
+        console.error('Error adding weekly off:', err);
+        res.status(500).json({ message: 'Error adding weekly off.' });
+    }
+}
+
+// Check if a date is a weekly off for a labour
+async function isWeeklyOff(LabourID, date) {
+    try {
+        const result = await labourModel.getWeeklyOff(LabourID, date);
+        return !!result; // Returns true if the date is a weekly off
+    } catch (err) {
+        console.error('Error checking if date is a weekly off', err);
+        throw new Error('Error checking if date is a weekly off');
+    }
+}
+
+// Save multiple weekly offs for a month
+async function saveWeeklyOffs(req, res) {
+    try {
+        const { LabourID, month, year, weeklyOffCount } = req.body;
+
+        if (!LabourID || !month || !year || weeklyOffCount === undefined) {
+            return res.status(400).json({ message: 'Labour ID, month, year, and weekly off count are required.' });
+        }
+
+        // Calculate Sundays for the month
+        const sundays = [];
+        const daysInMonth = new Date(year, month, 0).getDate();
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = new Date(year, month - 1, day);
+            if (date.getDay() === 0) {
+                sundays.push(date.toISOString().split('T')[0]);
+            }
+        }
+
+        // Adjust the Sundays based on the weeklyOffCount
+        const weeklyOffDates = sundays.slice(0, weeklyOffCount);
+
+        // Save the weekly offs to the database
+        const success = await labourModel.saveWeeklyOffs(LabourID, weeklyOffDates);
+        if (success) {
+            return res.status(200).json({ message: 'Weekly offs saved successfully.' });
+        } else {
+            return res.status(500).json({ message: 'Failed to save weekly offs.' });
+        }
+    } catch (err) {
+        console.error('Error saving weekly offs:', err);
+        res.status(500).json({ message: 'Error saving weekly offs.' });
+    }
+}
 
 
 // async function submitWages(req, res) {
@@ -2533,10 +2643,13 @@ module.exports = {
     getUserStatusController,
     updateHideResubmitLabour,
     getAttendance,
-    submitWagesController,
+    submitAttendanceController,
     getAllLaboursAttendance,
     getCachedAttendance,
-    approveDisableLabour
+    approveDisableLabour,
+    addWeeklyOff,
+    isWeeklyOff,
+    saveWeeklyOffs
     // getLabourStatus
     // getEsslStatuses,
     // getEmployeeMasterStatuses
