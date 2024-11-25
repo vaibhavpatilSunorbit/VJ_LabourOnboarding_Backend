@@ -1746,6 +1746,80 @@ async function addApprovalRequest(labourId, punchType, punchDate, punchTime) {
 
 
 
+async function insertIntoLabourAttendanceSummary(summary) {
+    try {
+        const pool = await poolPromise;
+        const existingRecord = await pool
+            .request()
+            .input('LabourId', sql.NVarChar, summary.labourId)
+            .input('SelectedMonth', sql.NVarChar, summary.selectedMonth)
+            .query(`
+                SELECT COUNT(*) AS count 
+                FROM LabourAttendanceSummary 
+                WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
+            `);
+
+        if (existingRecord.recordset[0].count > 0) {
+            console.log(`Record already exists for LabourId: ${summary.labourId} in month: ${summary.selectedMonth}`);
+            return; // Skip insertion
+        }
+
+        const query = `
+            INSERT INTO LabourAttendanceSummary (
+                LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, 
+                TotalOvertimeHours, Shift, CreationDate, SelectedMonth
+            ) VALUES (
+                @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, 
+                @TotalOvertimeHours, @Shift, @CreationDate, @SelectedMonth
+            )
+        `;
+
+        await pool
+            .request()
+            .input('LabourId', sql.NVarChar, summary.labourId)
+            .input('TotalDays', sql.Int, summary.totalDays)
+            .input('PresentDays', sql.Int, summary.presentDays)
+            .input('HalfDays', sql.Int, summary.halfDays)
+            .input('AbsentDays', sql.Int, summary.absentDays)
+            .input('TotalOvertimeHours', sql.Float, summary.totalOvertimeHours)
+            .input('Shift', sql.NVarChar, summary.shift)
+            .input('CreationDate', sql.DateTime, summary.creationDate)
+            .input('SelectedMonth', sql.NVarChar, summary.selectedMonth)
+            .query(query);
+
+        console.log(`Inserted summary for LabourId: ${summary.labourId}`);
+    } catch (err) {
+        console.error('Error inserting into LabourAttendanceSummary:', err);
+        throw err;
+    }
+}
+
+
+async function insertIntoLabourAttendanceDetails(details) {
+    const pool = await poolPromise;
+    const query = `
+        INSERT INTO LabourAttendanceDetails (
+            LabourId, Date, FirstPunch, LastPunch, TotalHours, Overtime, 
+            Status, CreationDate
+        ) VALUES (
+            @LabourId, @Date, @FirstPunch, @LastPunch, @TotalHours, @Overtime, 
+            @Status, @CreationDate
+        )
+    `;
+    await pool
+        .request()
+        .input('LabourId', sql.NVarChar, details.labourId)
+        .input('Date', sql.Date, details.date)
+        .input('FirstPunch', sql.NVarChar, details.firstPunch)
+        .input('LastPunch', sql.NVarChar, details.lastPunch)
+        .input('TotalHours', sql.Float, details.totalHours)
+        .input('Overtime', sql.Float, details.overtime)
+        .input('Status', sql.NVarChar, details.status)
+        .input('CreationDate', sql.DateTime, details.creationDate)
+        .query(query);
+}
+
+
 // ---------------------------------------------------------------------------------------
 
 // // Fetch attendance by Labour ID
@@ -1895,7 +1969,9 @@ module.exports = {
     addMissPunch,
     addApprovalRequest,
     addWeeklyOff,
-    saveWeeklyOffs
+    saveWeeklyOffs,
+    insertIntoLabourAttendanceSummary,
+    insertIntoLabourAttendanceDetails
     // approveAttendance
 
 };
