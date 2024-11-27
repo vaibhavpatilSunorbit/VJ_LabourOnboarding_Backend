@@ -1820,6 +1820,256 @@ async function insertIntoLabourAttendanceDetails(details) {
 }
 
 
+async function deleteAttendanceDetails(month, year) {
+    try {
+        const pool = await poolPromise;
+        await pool.request()
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .query(`
+                DELETE FROM [dbo].[LabourAttendanceDetails]
+                WHERE MONTH(Date) = @month AND YEAR(Date) = @year
+            `);
+    } catch (error) {
+        console.error('Error deleting attendance details:', error);
+        throw new Error('Error deleting attendance details');
+    }
+};
+
+async function deleteAttendanceSummary(month, year) {
+    try {
+        const pool = await poolPromise;
+        await pool.request()
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .query(`
+                DELETE FROM [dbo].[LabourAttendanceSummary]
+                WHERE MONTH(SelectedMonth) = @month AND YEAR(SelectedMonth) = @year
+            `);
+    } catch (error) {
+        console.error('Error deleting attendance summary:', error);
+        throw new Error('Error deleting attendance summary');
+    }
+};
+
+
+// ------------------------------------------------  fetch attendance model ---------------------
+
+
+async function fetchAttendanceByMonthYear(month, year) {
+    try {
+        const formattedMonth = `${year}-${month.toString().padStart(2, '0')}`;
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('selectedMonth', sql.NVarChar, formattedMonth)
+            .query(`
+                SELECT 
+                    LabourId,
+                    TotalDays,
+                    PresentDays,
+                    HalfDays,
+                    AbsentDays,
+                    TotalOvertimeHours,
+                    Shift,
+                    CreationDate,
+                    SelectedMonth
+                FROM [dbo].[LabourAttendanceSummary]
+                WHERE SelectedMonth = @selectedMonth
+            `);
+        return result.recordset;
+    } catch (error) {
+        console.error('Error fetching attendance by month and year:', error);
+        throw error;
+    }
+};
+
+
+
+async function fetchAttendanceSummary() {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`
+            SELECT 
+                LabourId,
+                TotalDays,
+                PresentDays,
+                HalfDays,
+                AbsentDays,
+                TotalOvertimeHours,
+                Shift,
+                CreationDate,
+                SelectedMonth
+            FROM [dbo].[LabourAttendanceSummary]
+        `);
+        return result.recordset;
+    } catch (error) {
+        console.error('Error fetching attendance summary:', error);
+        throw error;
+    }
+};
+
+async function fetchAttendanceDetailsByMonthYear(month, year) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .query(`
+                SELECT 
+                    LabourId,
+                    TotalDays,
+                    PresentDays,
+                    HalfDays,
+                    AbsentDays,
+                    TotalOvertimeHours,
+                    Shift,
+                    SelectedMonth
+                FROM [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceSummary]
+                WHERE 
+                    MONTH(CONVERT(DATE, SelectedMonth + '-01')) = @month 
+                    AND YEAR(CONVERT(DATE, SelectedMonth + '-01')) = @year
+            `);
+        return result.recordset;
+    } catch (error) {
+        console.error('Error fetching attendance details for all labours:', error);
+        throw error;
+    }
+}
+
+
+async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month, year) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('labourId', sql.NVarChar, labourId)
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .query(`
+                SELECT 
+                    AttendanceId,
+                    LabourId,
+                    Date,
+                    FirstPunch,
+                    LastPunch,
+                    TotalHours,
+                    Overtime,
+                    Status,
+                    CreationDate
+                FROM [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceDetails]
+                WHERE 
+                    LabourId = @labourId
+                    AND MONTH(Date) = @month 
+                    AND YEAR(Date) = @year
+            `);
+        return result.recordset;
+    } catch (error) {
+        console.error('Error fetching attendance details for a single labour:', error);
+        throw error;
+    }
+}
+
+async function fetchAttendanceDetails(labourId, month, year, attendance) {
+    try {
+        const pool = await poolPromise;
+        const transaction = new sql.Transaction(pool);
+
+        await transaction.begin();
+
+        // Delete existing attendance for the labour in the given month
+        await transaction.request()
+            .input('labourId', sql.NVarChar, labourId)
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .query(`
+                DELETE FROM [dbo].[LabourAttendanceDetails]
+                WHERE LabourId = @labourId 
+                AND MONTH(Date) = @month 
+                AND YEAR(Date) = @year
+            `);
+
+        // Insert new attendance records
+        const insertQuery = `
+            INSERT INTO [dbo].[LabourAttendanceDetails] (
+                LabourId, Date, FirstPunch, LastPunch, TotalHours, Overtime, Status, CreationDate
+            ) VALUES (@labourId, @date, @firstPunch, @lastPunch, @totalHours, @overtime, @status, GETDATE())
+        `;
+
+        const request = transaction.request();
+        for (const record of attendance) {
+            await request
+                .input('labourId', sql.NVarChar, labourId)
+                .input('date', sql.Date, record.date)
+                .input('firstPunch', sql.Time, record.firstPunch || null)
+                .input('lastPunch', sql.Time, record.lastPunch || null)
+                .input('totalHours', sql.Float, record.totalHours || 0)
+                .input('overtime', sql.Float, record.overtime || 0)
+                .input('status', sql.NVarChar, record.status)
+                .query(insertQuery);
+        }
+
+        await transaction.commit();
+    } catch (error) {
+        console.error('Error saving full month attendance:', error);
+        throw error;
+    }
+};
+
+
+
+
+async function upsertAttendance({
+    labourId,
+    date,
+    firstPunchManually,
+    lastPunchManually,
+    overtimeManually,
+    remarkManually,
+}) {
+    const query = `
+        MERGE INTO [LabourAttendanceDetails] AS Target
+        USING (
+            SELECT 
+                @labourId AS LabourId, 
+                @date AS Date, 
+                @firstPunchManually AS FirstPunchManually, 
+                @lastPunchManually AS LastPunchManually, 
+                @overtimeManually AS OvertimeManually, 
+                @remarkManually AS RemarkManually
+        ) AS Source
+        ON Target.LabourId = Source.LabourId AND Target.Date = Source.Date
+        WHEN MATCHED THEN 
+            UPDATE SET 
+                FirstPunchManually = Source.FirstPunchManually,
+                LastPunchManually = Source.LastPunchManually,
+                OvertimeManually = Source.OvertimeManually,
+                RemarkManually = Source.RemarkManually
+        WHEN NOT MATCHED THEN 
+            INSERT (LabourId, Date, FirstPunchManually, LastPunchManually, OvertimeManually, RemarkManually)
+            VALUES (Source.LabourId, Source.Date, Source.FirstPunchManually, Source.LastPunchManually, Source.OvertimeManually, Source.RemarkManually);
+    `;
+
+    try {
+        const pool = await poolPromise; // Get the connection pool
+        const request = pool.request(); // Create a new request
+
+        // Add parameters
+        request.input('labourId', sql.VarChar, labourId);
+        request.input('date', sql.Date, date);
+        request.input('firstPunchManually', sql.VarChar, firstPunchManually);
+        request.input('lastPunchManually', sql.VarChar, lastPunchManually);
+        request.input('overtimeManually', sql.Float, overtimeManually);
+        request.input('remarkManually', sql.VarChar, remarkManually);
+
+        // Execute the query
+        await request.query(query);
+
+        console.log('Upsert successful');
+    } catch (error) {
+        console.error('Error performing upsert:', error);
+        throw error;
+    }
+}
+
 // ---------------------------------------------------------------------------------------
 
 // // Fetch attendance by Labour ID
@@ -1971,7 +2221,15 @@ module.exports = {
     addWeeklyOff,
     saveWeeklyOffs,
     insertIntoLabourAttendanceSummary,
-    insertIntoLabourAttendanceDetails
+    insertIntoLabourAttendanceDetails,
+    deleteAttendanceDetails,
+    deleteAttendanceSummary,
+    fetchAttendanceSummary,
+    fetchAttendanceDetails,
+    fetchAttendanceByMonthYear,
+    fetchAttendanceDetailsByMonthYear,
+    fetchAttendanceDetailsByMonthYearForSingleLabour,
+    upsertAttendance
     // approveAttendance
 
 };

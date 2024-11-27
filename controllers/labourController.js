@@ -14,8 +14,8 @@ const { createLogger, format, transports } = require('winston');
 const { isHoliday } = require('../models/labourModel');            
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
-const baseUrl = 'http://localhost:4000/uploads/';
-// const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+// const baseUrl = 'http://localhost:4000/uploads/';
+const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
 // const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
@@ -2582,6 +2582,171 @@ async function saveWeeklyOffs(req, res) {
     }
 }
 
+async function getDisabledMonthsAndYears(req, res) {
+    try {
+        const pool = await poolPromise;
+
+        // SQL Query to extract distinct years and months from SelectedMonth
+        const result = await pool.request().query(`
+            SELECT DISTINCT 
+                CAST(LEFT(SelectedMonth, 4) AS INT) AS Year, -- Extract year (first 4 characters)
+                CAST(RIGHT(SelectedMonth, 2) AS INT) AS Month -- Extract month (last 2 characters)
+            FROM [dbo].[LabourAttendanceSummary];
+        `);
+
+        // Map the results to return only month and year
+        const disabledPeriods = result.recordset.map(record => ({
+            month: record.Month,
+            year: record.Year,
+        }));
+
+        // Send the response
+        res.status(200).json(disabledPeriods);
+    } catch (err) {
+        console.error("Error fetching disabled months and years:", err);
+
+        // Send a proper error response
+        res.status(500).json({ message: "Error fetching disabled months and years", error: err.message });
+    }
+}
+
+async function deleteAttendance(req, res) {
+    const { month, year } = req.body;
+
+    if (!month || !year) {
+        return res.status(400).json({ message: 'Month and Year are required' });
+    }
+
+    try {
+        // Delete records from LabourAttendanceDetails
+        await labourModel.deleteAttendanceDetails(month, year);
+        // Delete records from LabourAttendanceSummary
+        await labourModel.deleteAttendanceSummary(month, year);
+
+        res.status(200).json({ message: 'Attendance deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting attendance:', error);
+        res.status(500).json({ message: 'Error deleting attendance', error });
+    }
+}
+
+
+// ------------------------------------------------- Fetch Attendance code ------------------------------
+
+async function getAttendanceSummary(req, res) {
+    try {
+        const summary = await labourModel.fetchAttendanceSummary();
+        res.status(200).json(summary);
+    } catch (error) {
+        console.error('Error fetching attendance summary:', error);
+        res.status(500).json({ message: 'Error fetching attendance summary' });
+    }
+};
+
+
+async function getAttendanceDetails(req, res) {
+    const { month, year } = req.query;
+
+    if (!month || !year) {
+        return res.status(400).json({ message: 'Month and Year are required' });
+    }
+
+    try {
+        const details = await labourModel.fetchAttendanceDetailsByMonthYear(month, year);
+        res.status(200).json(details);
+    } catch (error) {
+        console.error('Error fetching attendance details:', error);
+        res.status(500).json({ message: 'Error fetching attendance details' });
+    }
+}
+
+
+async function getAttendanceDetailsForSingleLabour(req, res) {
+    const { id: labourId } = req.params; // LabourId from route parameter
+    const { month, year } = req.query;
+
+    if (!labourId || !month || !year) {
+        return res.status(400).json({ message: 'Labour ID, Month, and Year are required' });
+    }
+
+    try {
+        const details = await labourModel.fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month, year);
+        res.status(200).json(details);
+    } catch (error) {
+        console.error('Error fetching attendance details for a single labour:', error);
+        res.status(500).json({ message: 'Error fetching attendance details' });
+    }
+}
+
+
+async function saveAttendance(req, res) {
+    const { labourId, month, year, attendance } = req.body;
+
+    if (!labourId || !month || !year || !attendance) {
+        return res.status(400).json({ message: 'Invalid input: Labour ID, Month, Year, and Attendance data are required' });
+    }
+
+    try {
+        await labourModel.saveFullMonthAttendance(labourId, month, year, attendance);
+        res.status(200).json({ message: 'Attendance saved successfully' });
+    } catch (error) {
+        console.error('Error saving attendance:', error);
+        res.status(500).json({ message: 'Error saving attendance' });
+    }
+};
+
+
+async function getAttendanceByMonthYear(req, res) {
+    const { month, year } = req.query;
+
+    if (!month || !year) {
+        return res.status(400).json({ message: 'Month and Year are required' });
+    }
+
+    try {
+        const attendance = await labourModel.fetchAttendanceByMonthYear(month, year);
+        res.status(200).json(attendance);
+    } catch (error) {
+        console.error('Error fetching attendance by month and year:', error);
+        res.status(500).json({ message: 'Error fetching attendance data' });
+    }
+};
+
+
+async function upsertAttendance(req, res) {
+    const {
+        labourId,
+        date,
+        firstPunchManually,
+        lastPunchManually,
+        overtimeManually,
+        remarkManually,
+    } = req.body;
+
+    // Validate input
+    if (!labourId || !date) {
+        return res.status(400).json({
+            message: 'Labour ID and date are required.',
+        });
+    }
+
+    try {
+        // Call the model to perform upsert
+        await labourModel.upsertAttendance({
+            labourId,
+            date,
+            firstPunchManually,
+            lastPunchManually,
+            overtimeManually,
+            remarkManually,
+        });
+
+        res.status(200).json({ message: 'Attendance updated successfully.' });
+    } catch (error) {
+        console.error('Error updating attendance+++++==:', error);
+        res.status(500).json({ message: 'Error updating attendance.' });
+    }
+}
 
 // async function submitWages(req, res) {
 //     try {
@@ -2654,7 +2819,15 @@ module.exports = {
     approveDisableLabour,
     addWeeklyOff,
     isWeeklyOff,
-    saveWeeklyOffs
+    saveWeeklyOffs,
+    getDisabledMonthsAndYears,
+    deleteAttendance,
+    getAttendanceSummary,
+    getAttendanceDetails,
+    saveAttendance,
+    getAttendanceByMonthYear,
+    getAttendanceDetailsForSingleLabour,
+    upsertAttendance
     // getLabourStatus
     // getEsslStatuses,
     // getEmployeeMasterStatuses

@@ -36,6 +36,16 @@ router.get('/cachedattendance', labourController.getCachedAttendance);
 router.post('/attendance/submit', labourController.submitAttendanceController);
 router.post('/add', labourController.addWeeklyOff);
 router.post('/save', labourController.saveWeeklyOffs);
+router.get('/disabledmonth', labourController.getDisabledMonthsAndYears);
+router.delete('/deleteAttendance', labourController.deleteAttendance);
+
+// ----------------------------------  fetch attendance -----------------
+router.get('/summary', labourController.getAttendanceSummary);
+router.get('/details', labourController.getAttendanceDetails);
+router.post('/save', labourController.saveAttendance);
+router.get('/attendancelabours', labourController.getAttendanceDetails);
+router.get('/attendancelaboursforsinglelabour/:id', labourController.getAttendanceDetailsForSingleLabour);
+router.post('/upsertAttendance', labourController.upsertAttendance);
 
 // ------------------------------------------------------- IMP ROUTE AND GET USING VIEW DETAILS FOR LABOUR --------------------------------------------------
 router.get('/:id', labourController.getRecordById);
