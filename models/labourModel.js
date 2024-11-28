@@ -954,7 +954,7 @@ async function search(query) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
-            .query('SELECT * FROM labourOnboarding WHERE name LIKE @query OR aadhaarNumber LIKE @query OR LabourID LIKE @query OR OnboardName LIKE @query');
+            .query('SELECT * FROM labourOnboarding WHERE name LIKE @query OR aadhaarNumber LIKE @query OR LabourID LIKE @query OR OnboardName LIKE @query OR workingHours LIKE @query');
         return result.recordset;
     } catch (error) {
         throw error;
@@ -1954,7 +1954,11 @@ async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month,
                     TotalHours,
                     Overtime,
                     Status,
-                    CreationDate
+                    CreationDate,
+                    FirstPunchManually,
+                    LastPunchManually,
+                    OvertimeManually,
+                    RemarkManually
                 FROM [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceDetails]
                 WHERE 
                     LabourId = @labourId
