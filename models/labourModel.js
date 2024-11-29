@@ -1766,10 +1766,10 @@ async function insertIntoLabourAttendanceSummary(summary) {
 
         const query = `
             INSERT INTO LabourAttendanceSummary (
-                LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, 
+                LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
                 TotalOvertimeHours, Shift, CreationDate, SelectedMonth
             ) VALUES (
-                @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, 
+                @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
                 @TotalOvertimeHours, @Shift, @CreationDate, @SelectedMonth
             )
         `;
@@ -1781,6 +1781,7 @@ async function insertIntoLabourAttendanceSummary(summary) {
             .input('PresentDays', sql.Int, summary.presentDays)
             .input('HalfDays', sql.Int, summary.halfDays)
             .input('AbsentDays', sql.Int, summary.absentDays)
+            .input('MissPunchDays', sql.Int, summary.missPunchDays)
             .input('TotalOvertimeHours', sql.Float, summary.totalOvertimeHours)
             .input('Shift', sql.NVarChar, summary.shift)
             .input('CreationDate', sql.DateTime, summary.creationDate)
@@ -1799,11 +1800,13 @@ async function insertIntoLabourAttendanceDetails(details) {
     const pool = await poolPromise;
     const query = `
         INSERT INTO LabourAttendanceDetails (
-            LabourId, Date, FirstPunch, LastPunch, TotalHours, Overtime, 
-            Status, CreationDate
+            LabourId, Date, FirstPunch, FirstPunchAttendanceId, FirstPunchDeviceId,
+            LastPunch, LastPunchAttendanceId, LastPunchDeviceId, 
+            TotalHours, Overtime, Status, CreationDate
         ) VALUES (
-            @LabourId, @Date, @FirstPunch, @LastPunch, @TotalHours, @Overtime, 
-            @Status, @CreationDate
+            @LabourId, @Date, @FirstPunch, @FirstPunchAttendanceId, @FirstPunchDeviceId,
+            @LastPunch, @LastPunchAttendanceId, @LastPunchDeviceId, 
+            @TotalHours, @Overtime, @Status, @CreationDate
         )
     `;
     await pool
@@ -1811,13 +1814,20 @@ async function insertIntoLabourAttendanceDetails(details) {
         .input('LabourId', sql.NVarChar, details.labourId)
         .input('Date', sql.Date, details.date)
         .input('FirstPunch', sql.NVarChar, details.firstPunch)
+        .input('FirstPunchAttendanceId', sql.Int, details.firstPunchAttendanceId)
+        .input('FirstPunchDeviceId', sql.NVarChar, details.firstPunchDeviceId)
         .input('LastPunch', sql.NVarChar, details.lastPunch)
+        .input('LastPunchAttendanceId', sql.Int, details.lastPunchAttendanceId)
+        .input('LastPunchDeviceId', sql.NVarChar, details.lastPunchDeviceId)
         .input('TotalHours', sql.Float, details.totalHours)
         .input('Overtime', sql.Float, details.overtime)
         .input('Status', sql.NVarChar, details.status)
         .input('CreationDate', sql.DateTime, details.creationDate)
         .query(query);
+
+    console.log(`Inserted details for LabourId: ${details.labourId} on Date: ${details.date}`);
 }
+
 
 
 async function deleteAttendanceDetails(month, year) {
