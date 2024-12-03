@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const labourController = require('../controllers/labourController');
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
 
 router.post('/check-aadhaar', labourController.handleCheckAadhaar);
 router.get('/next-id', labourController.getNextUniqueID);
@@ -46,6 +48,9 @@ router.post('/save', labourController.saveAttendance);
 router.get('/attendancelabours', labourController.getAttendanceDetails);
 router.get('/attendancelaboursforsinglelabour/:id', labourController.getAttendanceDetailsForSingleLabour);
 router.post('/upsertAttendance', labourController.upsertAttendance);
+
+router.get('/export', labourController.exportAttendance);
+router.post('/import', upload.single('file'), labourController.importAttendance);
 
 // ------------------------------------------------------- IMP ROUTE AND GET USING VIEW DETAILS FOR LABOUR --------------------------------------------------
 router.get('/:id', labourController.getRecordById);

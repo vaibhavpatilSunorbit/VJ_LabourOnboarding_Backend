@@ -11,7 +11,8 @@ const labourModel = require('../models/labourModel');
 const cron = require('node-cron');
 const logger = require('../logger'); // Assuming logger is defined in logger.js   
 const { createLogger, format, transports } = require('winston');
-const { isHoliday } = require('../models/labourModel');            
+const { isHoliday } = require('../models/labourModel');    
+const xlsx = require('xlsx');        
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 const baseUrl = 'http://localhost:4000/uploads/';
@@ -1719,6 +1720,52 @@ const cronLogger = createLogger({
 });
 
 
+
+let currentProcessingMonth = 11; // Start processing from August
+const processingYear = 2024; // Year to process
+
+async function getAllLaboursAttendanceCron() {
+    const endMonth = 12; // End month: November
+    const today = new Date();
+    const formattedToday = today.toISOString().split('T')[0];
+
+    console.log(`Cron Execution Date: ${formattedToday}`);
+    console.log(`Processing Attendance for Month: ${currentProcessingMonth}, Year: ${processingYear}`);
+
+    cronLogger.info(`Running cron job for Month: ${currentProcessingMonth}, Year: ${processingYear}`);
+
+    const req = { query: { month: currentProcessingMonth, year: processingYear } };
+    const res = {
+        status: (code) => ({
+            json: (data) => {
+                console.log(`Response Status: ${code}`);
+                console.log(`Response Data:`, data);
+                cronLogger.info(`Response for getAllLaboursAttendance: Status ${code}, Data: ${JSON.stringify(data)}`);
+            },
+        }),
+    };
+
+    try {
+        // Call the getAllLaboursAttendance function
+        console.log('Calling getAllLaboursAttendance function...');
+        await getAllLaboursAttendance(req, res);
+        console.log(`Cron job completed successfully for Month: ${currentProcessingMonth}, Year: ${processingYear}`);
+        cronLogger.info(`Cron job completed successfully for Month: ${currentProcessingMonth}, Year: ${processingYear}`);
+
+        // Update the month to process next
+        currentProcessingMonth++;
+        if (currentProcessingMonth > endMonth) {
+            console.log('All months processed. Stopping further processing.');
+            cronLogger.info('All months processed. Cron will no longer execute.');
+            currentProcessingMonth = null; // Stop processing beyond November
+        }
+    } catch (error) {
+        console.error(`Error running cron job for Month: ${currentProcessingMonth}, Year: ${processingYear}:`, error);
+        cronLogger.error(`Error running cron job for Month: ${currentProcessingMonth}, Year: ${processingYear}:`, error);
+    }
+}
+
+
 function formatTimeToHoursMinutes(timeString) {
     try {
         const date = new Date(timeString);
@@ -2015,68 +2062,82 @@ async function getCachedAttendance(req, res) {
 //     return totalHours.toFixed(2);  // Return hours with 2 decimal places
 // }
 
-cron.schedule('0 1 * * *', async () => {
-    cronLogger.info('Starting cron job to fetch and save daily attendance data');
-    try {
-        const currentDate = new Date();
-        const dateString = currentDate.toISOString().split('T')[0]; // Format: YYYY-MM-DD
-        const approvedLabours = await labourModel.getAllApprovedLabours();
+// cron.schedule('0 1 * * *', async () => {
+//     cronLogger.info('Starting cron job to fetch and save daily attendance data');
+//     try {
+//         const currentDate = new Date();
+//         const dateString = currentDate.toISOString().split('T')[0]; // Format: YYYY-MM-DD
+//         const approvedLabours = await labourModel.getAllApprovedLabours();
 
-        for (let labour of approvedLabours) {
-            const { labourId, workingHours } = labour;
+//         for (let labour of approvedLabours) {
+//             const { labourId, workingHours } = labour;
 
-            const attendanceData = await labourModel.getAttendanceByLabourId(labourId, currentDate.getMonth() + 1, currentDate.getFullYear());
-            const punchesForDay = attendanceData.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === dateString);
+//             const attendanceData = await labourModel.getAttendanceByLabourId(labourId, currentDate.getMonth() + 1, currentDate.getFullYear());
+//             const punchesForDay = attendanceData.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === dateString);
 
-            let status = 'A'; // Default to Absent
-            let firstPunch = null;
-            let lastPunch = null;
-            let totalHours = 0;
-            let overtimeHours = 0;
+//             let status = 'A'; // Default to Absent
+//             let firstPunch = null;
+//             let lastPunch = null;
+//             let totalHours = 0;
+//             let overtimeHours = 0;
 
-            const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
-            const halfDayHours = shiftHours === 9 ? 4.5 : 4;
+//             const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+//             const halfDayHours = shiftHours === 9 ? 4.5 : 4;
 
-            if (punchesForDay.length > 0) {
-                punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+//             if (punchesForDay.length > 0) {
+//                 punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
 
-                firstPunch = punchesForDay[0].punch_time;
-                lastPunch = punchesForDay[punchesForDay.length - 1].punch_time;
+//                 firstPunch = punchesForDay[0].punch_time;
+//                 lastPunch = punchesForDay[punchesForDay.length - 1].punch_time;
 
-                totalHours = calculateHoursWorked(punchesForDay[0].punch_date, firstPunch, lastPunch);
-                overtimeHours = totalHours > shiftHours ? totalHours - shiftHours : 0;
+//                 totalHours = calculateHoursWorked(punchesForDay[0].punch_date, firstPunch, lastPunch);
+//                 overtimeHours = totalHours > shiftHours ? totalHours - shiftHours : 0;
 
-                if (totalHours > halfDayHours) {
-                    status = 'P'; // Present
-                }
-            }
+//                 if (totalHours > halfDayHours) {
+//                     status = 'P'; // Present
+//                 }
+//             }
 
-            // Insert the attendance record into the database
-            const pool = await poolPromise;
-            await pool.request()
-                .input('LabourID', sql.NVarChar, labourId)
-                .input('Date', sql.Date, dateString)
-                .input('FirstPunch', sql.DateTime, firstPunch)
-                .input('LastPunch', sql.DateTime, lastPunch)
-                .input('Status', sql.NVarChar, status)
-                .input('TotalHours', sql.Float, totalHours)
-                .input('OvertimeHours', sql.Float, overtimeHours)
-                .input('ShiftHours', sql.Int, shiftHours)
-                .query(`
-                    INSERT INTO [dbo].[DailyAttendance] (
-                        LabourID, Date, FirstPunch, LastPunch, Status, TotalHours, OvertimeHours, ShiftHours
-                    )
-                    VALUES (@LabourID, @Date, @FirstPunch, @LastPunch, @Status, @TotalHours, @OvertimeHours, @ShiftHours)
-                `);
+//             // Insert the attendance record into the database
+//             const pool = await poolPromise;
+//             await pool.request()
+//                 .input('LabourID', sql.NVarChar, labourId)
+//                 .input('Date', sql.Date, dateString)
+//                 .input('FirstPunch', sql.DateTime, firstPunch)
+//                 .input('LastPunch', sql.DateTime, lastPunch)
+//                 .input('Status', sql.NVarChar, status)
+//                 .input('TotalHours', sql.Float, totalHours)
+//                 .input('OvertimeHours', sql.Float, overtimeHours)
+//                 .input('ShiftHours', sql.Int, shiftHours)
+//                 .query(`
+//                     INSERT INTO [dbo].[DailyAttendance] (
+//                         LabourID, Date, FirstPunch, LastPunch, Status, TotalHours, OvertimeHours, ShiftHours
+//                     )
+//                     VALUES (@LabourID, @Date, @FirstPunch, @LastPunch, @Status, @TotalHours, @OvertimeHours, @ShiftHours)
+//                 `);
 
-            cronLogger.info(`Attendance saved for Labour ID: ${labourId} on ${dateString}`);
-        }
+//             cronLogger.info(`Attendance saved for Labour ID: ${labourId} on ${dateString}`);
+//         }
 
-        cronLogger.info('Daily attendance data fetched and saved successfully.');
-    } catch (err) {
-        cronLogger.error('Error during daily attendance cron job', err);
+//         cronLogger.info('Daily attendance data fetched and saved successfully.');
+//     } catch (err) {
+//         cronLogger.error('Error during daily attendance cron job', err);
+//     }
+// });
+
+// Schedule cron job to run every 20 days at 1:00 AM
+cron.schedule('28 14 * * *', async () => {
+    cronLogger.info('Scheduled cron triggered...');
+    if (currentProcessingMonth) {
+        await getAllLaboursAttendanceCron();
+    } else {
+        console.log('No further months to process. Cron execution skipped.');
+        cronLogger.info('No further months to process. Cron execution skipped.');
     }
 });
+
+
+// --------------------------------------------------------------------------------
 
 // cron.schedule('32 11 * * *', async () => {
 //     cronLogger.info('Starting cron job to fetch and cache attendance data');
@@ -2789,6 +2850,79 @@ async function upsertAttendance(req, res) {
     }
 }
 
+// -------------------------------------------------------  EXCEL BUTTON FOR DOWNLOAD ----------------------
+
+const exportAttendance = async (req, res) => {
+    try {
+      const { startDate, endDate } = req.query;
+      const attendanceData = await labourModel.getAttendanceByDateRange(startDate, endDate);
+  
+      const workbook = xlsx.utils.book_new();
+      const worksheet = xlsx.utils.json_to_sheet(attendanceData);
+      xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Attendance');
+  
+      const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+      res.setHeader('Content-Disposition', 'attachment; filename=attendance.xlsx');
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).send({ message: error.message });
+    }
+  };
+  
+  const importAttendance = async (req, res) => {
+    try {
+      const workbook = xlsx.readFile(req.file.path);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const data = xlsx.utils.sheet_to_json(sheet);
+  
+      console.log('Excel data loaded:', data);
+  
+      // Convert Excel date serial to valid date string
+      const convertExcelDate = (serial) => {
+        const utcDays = Math.floor(serial - 25569);
+        const utcValue = utcDays * 86400;
+        const dateInfo = new Date(utcValue * 1000);
+        return dateInfo.toISOString().split('T')[0]; // Format YYYY-MM-DD
+      };
+  
+      // Normalize data
+      const validData = data.map((row) => ({
+        ...row,
+        Date: typeof row.Date === 'number' ? convertExcelDate(row.Date) : row.Date,
+      }));
+  
+      console.log('Normalized data:', validData);
+  
+      // Match rows
+      const { matchedRows, unmatchedRows } = await labourModel.getMatchedRows(validData);
+  
+      console.log('Matched rows:', matchedRows);
+      console.log('Unmatched rows:', unmatchedRows);
+  
+      // Update matched rows
+      if (matchedRows.length > 0) {
+        await labourModel.updateMatchedRows(matchedRows);
+        console.log(`${matchedRows.length} rows updated successfully.`);
+      }
+  
+      // Insert unmatched rows
+      if (unmatchedRows.length > 0) {
+        await labourModel.insertUnmatchedRows(unmatchedRows);
+        console.log(`${unmatchedRows.length} rows inserted successfully.`);
+      }
+  
+      res.send({
+        message: 'Data imported successfully',
+        matchedRows: matchedRows.length,
+        unmatchedRows: unmatchedRows.length,
+      });
+    } catch (error) {
+      console.error('Error importing data:', error);
+      res.status(500).send({ message: error.message });
+    }
+  };
+  
+
 // async function submitWages(req, res) {
 //     try {
 //         const wagesData = req.body; // Array of wages data
@@ -2868,7 +3002,9 @@ module.exports = {
     saveAttendance,
     getAttendanceByMonthYear,
     getAttendanceDetailsForSingleLabour,
-    upsertAttendance
+    upsertAttendance,
+    exportAttendance,
+    importAttendance
     // getLabourStatus
     // getEsslStatuses,
     // getEmployeeMasterStatuses
