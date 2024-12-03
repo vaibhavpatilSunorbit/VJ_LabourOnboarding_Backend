@@ -1873,16 +1873,7 @@ async function fetchAttendanceByMonthYear(month, year) {
         const result = await pool.request()
             .input('selectedMonth', sql.NVarChar, formattedMonth)
             .query(`
-                SELECT 
-                    LabourId,
-                    TotalDays,
-                    PresentDays,
-                    HalfDays,
-                    AbsentDays,
-                    TotalOvertimeHours,
-                    Shift,
-                    CreationDate,
-                    SelectedMonth
+                SELECT *
                 FROM [dbo].[LabourAttendanceSummary]
                 WHERE SelectedMonth = @selectedMonth
             `);
@@ -1899,16 +1890,7 @@ async function fetchAttendanceSummary() {
     try {
         const pool = await poolPromise;
         const result = await pool.request().query(`
-            SELECT 
-                LabourId,
-                TotalDays,
-                PresentDays,
-                HalfDays,
-                AbsentDays,
-                TotalOvertimeHours,
-                Shift,
-                CreationDate,
-                SelectedMonth
+            SELECT *
             FROM [dbo].[LabourAttendanceSummary]
         `);
         return result.recordset;
@@ -1925,15 +1907,7 @@ async function fetchAttendanceDetailsByMonthYear(month, year) {
             .input('month', sql.Int, month)
             .input('year', sql.Int, year)
             .query(`
-                SELECT 
-                    LabourId,
-                    TotalDays,
-                    PresentDays,
-                    HalfDays,
-                    AbsentDays,
-                    TotalOvertimeHours,
-                    Shift,
-                    SelectedMonth
+                SELECT *
                 FROM [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceSummary]
                 WHERE 
                     MONTH(CONVERT(DATE, SelectedMonth + '-01')) = @month 
@@ -1955,20 +1929,7 @@ async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month,
             .input('month', sql.Int, month)
             .input('year', sql.Int, year)
             .query(`
-                SELECT 
-                    AttendanceId,
-                    LabourId,
-                    Date,
-                    FirstPunch,
-                    LastPunch,
-                    TotalHours,
-                    Overtime,
-                    Status,
-                    CreationDate,
-                    FirstPunchManually,
-                    LastPunchManually,
-                    OvertimeManually,
-                    RemarkManually
+                SELECT *
                 FROM [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceDetails]
                 WHERE 
                     LabourId = @labourId
@@ -2067,7 +2028,7 @@ async function upsertAttendance({
         const request = pool.request(); // Create a new request
 
         // Add parameters
-        request.input('labourId', sql.VarChar, labourId);
+        request.input('labourId', sql.NVarChar, labourId);
         request.input('date', sql.Date, date);
         request.input('firstPunchManually', sql.VarChar, firstPunchManually);
         request.input('lastPunchManually', sql.VarChar, lastPunchManually);
@@ -2083,6 +2044,109 @@ async function upsertAttendance({
         throw error;
     }
 }
+
+// -------------------------------------------  EXCEL BUTTON DOWNLOAD   --------------------------------------------
+
+async function getAttendanceByDateRange(startDate, endDate) {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input('startDate', sql.Date, startDate)
+      .input('endDate', sql.Date, endDate)
+      .query(
+        `SELECT AttendanceId, LabourId, Date, FirstPunchManually, LastPunchManually, OvertimeManually, RemarkManually 
+         FROM LabourAttendanceDetails 
+         WHERE Date BETWEEN @startDate AND @endDate`
+      );
+    return result.recordset;
+  }
+  
+  async function getMatchedRows(data) {
+    const pool = await poolPromise;
+    const matchedRows = [];
+    const unmatchedRows = [];
+  
+    for (const row of data) {
+      const result = await pool
+        .request()
+        .input('AttendanceId', sql.Int, row.AttendanceId)
+        .input('LabourId', sql.VarChar(50), row.LabourId)
+        .input('Date', sql.Date, row.Date)
+        .query(
+          `SELECT AttendanceId, LabourId, Date 
+           FROM LabourAttendanceDetails
+           WHERE AttendanceId = @AttendanceId AND LabourId = @LabourId AND Date = @Date`
+        );
+  
+      if (result.recordset.length > 0) {
+        console.log(`Row matched:`, row);
+        matchedRows.push(row);
+      } else {
+        console.log(`Row unmatched:`, row);
+        unmatchedRows.push(row);
+      }
+    }
+  
+    return { matchedRows, unmatchedRows };
+  }
+  
+  async function updateMatchedRows(data) {
+    const pool = await poolPromise;
+  
+    for (const row of data) {
+      await pool
+        .request()
+        .input('AttendanceId', sql.Int, row.AttendanceId)
+        .input('LabourId', sql.VarChar(50), row.LabourId)
+        .input('Date', sql.Date, row.Date)
+        .input('FirstPunchManually', sql.NVarChar(255), row.FirstPunchManually || null)
+        .input('LastPunchManually', sql.NVarChar(255), row.LastPunchManually || null)
+        .input('OvertimeManually', sql.Decimal(18, 2), row.OvertimeManually || null)
+        .input('RemarkManually', sql.NVarChar(255), row.RemarkManually || null)
+        .query(
+          `UPDATE LabourAttendanceDetails
+           SET FirstPunchManually = @FirstPunchManually,
+               LastPunchManually = @LastPunchManually,
+               OvertimeManually = @OvertimeManually,
+               RemarkManually = @RemarkManually
+           WHERE AttendanceId = @AttendanceId AND LabourId = @LabourId AND Date = @Date`
+        );
+  
+      console.log(`Row updated:`, row);
+    }
+  }
+  
+  
+  
+  async function insertUnmatchedRows(data) {
+    const pool = await poolPromise;
+    const table = new sql.Table('LabourAttendanceDetails');
+    table.columns.add('AttendanceId', sql.Int);
+    table.columns.add('LabourId', sql.VarChar(50));
+    table.columns.add('Date', sql.Date);
+    table.columns.add('FirstPunchManually', sql.NVarChar(255));
+    table.columns.add('LastPunchManually', sql.NVarChar(255));
+    table.columns.add('OvertimeManually', sql.Decimal(18, 2));
+    table.columns.add('RemarkManually', sql.NVarChar(255));
+  
+    data.forEach((row) => {
+      table.rows.add(
+        row.AttendanceId,
+        row.LabourId,
+        row.Date,
+        row.FirstPunchManually || null,
+        row.LastPunchManually || null,
+        row.OvertimeManually || null,
+        row.RemarkManually || null
+      );
+      console.log(`Row to insert:`, row);
+    });
+  
+    await pool.request().bulk(table);
+    console.log(`All unmatched rows inserted.`);
+  }
+  
+  
 
 // ---------------------------------------------------------------------------------------
 
@@ -2243,7 +2307,12 @@ module.exports = {
     fetchAttendanceByMonthYear,
     fetchAttendanceDetailsByMonthYear,
     fetchAttendanceDetailsByMonthYearForSingleLabour,
-    upsertAttendance
+    upsertAttendance,
+    getAttendanceByDateRange,
+    // bulkInsertAttendance,
+    getMatchedRows,
+    updateMatchedRows,
+    insertUnmatchedRows,
     // approveAttendance
 
 };
