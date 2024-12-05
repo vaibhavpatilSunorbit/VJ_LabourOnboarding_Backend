@@ -44,7 +44,7 @@ router.delete('/deleteAttendance', labourController.deleteAttendance);
 // ----------------------------------  fetch attendance -----------------
 router.get('/summary', labourController.getAttendanceSummary);
 router.get('/details', labourController.getAttendanceDetails);
-router.post('/save', labourController.saveAttendance);
+router.post('/saveattendancemonthly', labourController.saveAttendance);
 router.get('/attendancelabours', labourController.getAttendanceDetails);
 router.get('/attendancelaboursforsinglelabour/:id', labourController.getAttendanceDetailsForSingleLabour);
 router.post('/upsertAttendance', labourController.upsertAttendance);
