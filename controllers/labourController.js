@@ -1720,49 +1720,34 @@ const cronLogger = createLogger({
 });
 
 
+async function runDailyAttendanceCron() {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
+    const formattedYesterday = yesterday.toISOString().split('T')[0];
 
-let currentProcessingMonth = 11; // Start processing from August
-const processingYear = 2024; // Year to process
+    console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
+    console.log(`Processing Attendance for Date: ${formattedYesterday}`);
 
-async function getAllLaboursAttendanceCron() {
-    const endMonth = 12; // End month: November
-    const today = new Date();
-    const formattedToday = today.toISOString().split('T')[0];
-
-    console.log(`Cron Execution Date: ${formattedToday}`);
-    console.log(`Processing Attendance for Month: ${currentProcessingMonth}, Year: ${processingYear}`);
-
-    cronLogger.info(`Running cron job for Month: ${currentProcessingMonth}, Year: ${processingYear}`);
-
-    const req = { query: { month: currentProcessingMonth, year: processingYear } };
-    const res = {
-        status: (code) => ({
-            json: (data) => {
-                console.log(`Response Status: ${code}`);
-                console.log(`Response Data:`, data);
-                cronLogger.info(`Response for getAllLaboursAttendance: Status ${code}, Data: ${JSON.stringify(data)}`);
-            },
-        }),
-    };
+    cronLogger.info(`Running cron job for Attendance Date: ${formattedYesterday}`);
 
     try {
-        // Call the getAllLaboursAttendance function
-        console.log('Calling getAllLaboursAttendance function...');
-        await getAllLaboursAttendance(req, res);
-        console.log(`Cron job completed successfully for Month: ${currentProcessingMonth}, Year: ${processingYear}`);
-        cronLogger.info(`Cron job completed successfully for Month: ${currentProcessingMonth}, Year: ${processingYear}`);
+        // Call the function to process attendance
+        console.log('Calling processLaboursAttendance function...');
+        await processLaboursAttendance(formattedYesterday);
+        console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
+     // Update attendance summary for all approved laborers
+     const approvedLabours = await labourModel.getAllApprovedLabours();
+     for (let labour of approvedLabours) {
+         const { labourId } = labour;
+         await labourModel.insertOrUpdateLabourAttendanceSummary(labourId, formattedYesterday);
+     }
 
-        // Update the month to process next
-        currentProcessingMonth++;
-        if (currentProcessingMonth > endMonth) {
-            console.log('All months processed. Stopping further processing.');
-            cronLogger.info('All months processed. Cron will no longer execute.');
-            currentProcessingMonth = null; // Stop processing beyond November
-        }
-    } catch (error) {
-        console.error(`Error running cron job for Month: ${currentProcessingMonth}, Year: ${processingYear}:`, error);
-        cronLogger.error(`Error running cron job for Month: ${currentProcessingMonth}, Year: ${processingYear}:`, error);
-    }
+     console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
+     cronLogger.info(`Cron job completed successfully for Date: ${formattedYesterday}`);
+ } catch (error) {
+     console.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
+     cronLogger.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
+ }
 }
 
 
@@ -2037,6 +2022,124 @@ async function getAllLaboursAttendance(req, res) {
 }
 
 
+async function processLaboursAttendance(date) {
+    try {
+        const attendanceDate = new Date(date);
+        if (isNaN(attendanceDate.getTime())) {
+            throw new Error('Invalid date format');
+        }
+
+        const approvedLabours = await labourModel.getAllApprovedLabours();
+
+        if (!approvedLabours || approvedLabours.length === 0) {
+            console.log('No approved labours found');
+            return;
+        }
+
+        for (let labour of approvedLabours) {
+            const { labourId, workingHours } = labour;
+            const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+            const halfDayHours = shiftHours === 9 ? 4.5 : 4;
+
+            let presentDays = 0;
+            let halfDays = 0;
+            let missPunchDays = 0;
+            let absentDays = 0;
+            let totalOvertimeHours = 0;
+            let dailyAttendance = [];
+
+            const labourAttendance = await labourModel.getAttendanceByLabourIdForDate(labourId, attendanceDate);
+
+            let status = 'A'; // Default to Absent
+            let totalHours = 0;
+            let overtime = 0;
+            let firstPunch = null;
+            let lastPunch = null;
+            let firstPunchAttendanceId = null;
+            let firstPunchDeviceId = null;
+            let lastPunchAttendanceId = null;
+            let lastPunchDeviceId = null;
+
+            if (labourAttendance.length > 0) {
+                labourAttendance.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+                firstPunch = labourAttendance[0];
+                lastPunch = labourAttendance[labourAttendance.length - 1];
+
+                totalHours = calculateHoursWorked(attendanceDate, firstPunch.punch_time, lastPunch.punch_time);
+
+                // Extract details for first and last punches
+                firstPunchAttendanceId = firstPunch.attendance_id;
+                firstPunchDeviceId = firstPunch.Device_id;
+                lastPunchAttendanceId = lastPunch.attendance_id;
+                lastPunchDeviceId = lastPunch.Device_id;
+
+                if (firstPunch && lastPunch && totalHours >= shiftHours) {
+                    status = 'P'; // Present
+                    presentDays++;
+                    overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
+                } else if (firstPunch && totalHours < halfDayHours) {
+                    status = 'MP'; // Miss Punch
+                    missPunchDays++;
+                } else if (totalHours >= halfDayHours) {
+                    status = 'HD'; // Half Day
+                    halfDays++;
+                } else {
+                    absentDays++;
+                }
+
+                totalOvertimeHours += overtime;
+            } else {
+                absentDays++;
+            }
+
+            dailyAttendance.push({
+                labourId,
+                date,
+                firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
+                firstPunchAttendanceId: firstPunchAttendanceId,
+                firstPunchDeviceId: firstPunchDeviceId,
+                lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
+                lastPunchAttendanceId: lastPunchAttendanceId,
+                lastPunchDeviceId: lastPunchDeviceId,
+                totalHours,
+                overtime: parseFloat(overtime.toFixed(1)),
+                status,
+                creationDate: new Date(),
+            });
+
+            // Insert into LabourAttendanceDetails
+            for (let dayAttendance of dailyAttendance) {
+                console.log(`Inserting Attendance for ${labourId} on ${dayAttendance.date}:`, dayAttendance);
+                await labourModel.insertIntoLabourAttendanceDetails(dayAttendance);
+            }
+
+            // Create and insert summary data
+            const summary = {
+                labourId,
+                totalDays: 1, // Daily attendance
+                presentDays,
+                halfDays,
+                missPunchDays,
+                absentDays,
+                totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(1)),
+                shift: workingHours,
+                creationDate: new Date(),
+                selectedMonth: date.substring(0, 7), // e.g., "2024-09"
+            };
+
+            console.log(`Summary for LabourId ${labourId}:`, summary);
+            await labourModel.insertIntoLabourAttendanceSummary(summary);
+        }
+
+        console.log('Daily attendance processed successfully');
+    } catch (err) {
+        console.error('Error processing attendance:', err);
+        throw err;
+    }
+}
+
+
+
 // New API endpoint to get cached attendance
 async function getCachedAttendance(req, res) {
     try {
@@ -2126,15 +2229,20 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('28 14 * * *', async () => {
+cron.schedule('02 12 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
-    if (currentProcessingMonth) {
-        await getAllLaboursAttendanceCron();
-    } else {
-        console.log('No further months to process. Cron execution skipped.');
-        cronLogger.info('No further months to process. Cron execution skipped.');
-    }
+    await runDailyAttendanceCron();
 });
+
+// cron.schedule('28 14 * * *', async () => {
+//     cronLogger.info('Scheduled cron triggered...');
+//     if (currentProcessingMonth) {
+//         await getAllLaboursAttendanceCron();
+//     } else {
+//         console.log('No further months to process. Cron execution skipped.');
+//         cronLogger.info('No further months to process. Cron execution skipped.');
+//     }
+// });
 
 
 // --------------------------------------------------------------------------------
@@ -2815,6 +2923,43 @@ async function getAttendanceByMonthYear(req, res) {
 };
 
 
+// async function upsertAttendance(req, res) {
+//     const {
+//         labourId,
+//         date,
+//         firstPunchManually,
+//         lastPunchManually,
+//         overtimeManually,
+//         remarkManually,
+//     } = req.body;
+
+//     // Validate input
+//     if (!labourId || !date) {
+//         return res.status(400).json({
+//             message: 'Labour ID and date are required.',
+//         });
+//     }
+
+//     try {
+//         // Call the model to perform upsert
+//         await labourModel.upsertAttendance({
+//             labourId,
+//             date,
+//             firstPunchManually,
+//             lastPunchManually,
+//             overtimeManually,
+//             remarkManually,
+//         });
+
+//         res.status(200).json({ message: 'Attendance updated successfully.' });
+//     } catch (error) {
+//         console.error('Error updating attendance+++++==:', error);
+//         res.status(500).json({ message: 'Error updating attendance.' });
+//     }
+// }
+
+// -------------------------------------------------------  EXCEL BUTTON FOR DOWNLOAD ----------------------
+
 async function upsertAttendance(req, res) {
     const {
         labourId,
@@ -2823,16 +2968,23 @@ async function upsertAttendance(req, res) {
         lastPunchManually,
         overtimeManually,
         remarkManually,
+        workingHours,
+        OnboardName,
     } = req.body;
 
     // Validate input
     if (!labourId || !date) {
         return res.status(400).json({
-            message: 'Labour ID and date are required.',
+            message: 'Labour ID and Date are required.',
         });
     }
 
     try {
+        // Extract the first valid OnboardName
+        let finalOnboardName = Array.isArray(OnboardName)
+            ? OnboardName.filter((name) => name !== 'null' && name.trim() !== '')[0]
+            : OnboardName;
+
         // Call the model to perform upsert
         await labourModel.upsertAttendance({
             labourId,
@@ -2841,16 +2993,19 @@ async function upsertAttendance(req, res) {
             lastPunchManually,
             overtimeManually,
             remarkManually,
+            workingHours,
+            onboardName: finalOnboardName,
+            editUserName: finalOnboardName, // Assuming editUserName is same as onboardName
         });
 
         res.status(200).json({ message: 'Attendance updated successfully.' });
     } catch (error) {
-        console.error('Error updating attendance+++++==:', error);
-        res.status(500).json({ message: 'Error updating attendance.' });
+        console.error('Error updating attendance:', error);
+        res.status(500).json({ message: 'Error updating attendance. Please try again later.' });
     }
 }
 
-// -------------------------------------------------------  EXCEL BUTTON FOR DOWNLOAD ----------------------
+
 
 const exportAttendance = async (req, res) => {
     try {
