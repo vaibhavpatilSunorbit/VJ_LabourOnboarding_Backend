@@ -1972,6 +1972,7 @@ async function getAllLaboursAttendance(req, res) {
 
                 monthlyAttendance.push({
                     labourId,
+                    projectName: parseInt(labour.projectName, 10),
                     date,
                     firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
                     firstPunchAttendanceId: firstPunchAttendanceId,
@@ -1989,6 +1990,7 @@ async function getAllLaboursAttendance(req, res) {
             // Log the calculated summary before inserting
             const summary = {
                 labourId,
+                projectName: parseInt(labour.projectName, 10),
                 totalDays: daysInMonth,
                 presentDays,
                 halfDays,
@@ -2094,6 +2096,7 @@ async function processLaboursAttendance(date) {
 
             dailyAttendance.push({
                 labourId,
+                projectName: parseInt(labour.projectName, 10),
                 date,
                 firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
                 firstPunchAttendanceId: firstPunchAttendanceId,
@@ -2116,6 +2119,7 @@ async function processLaboursAttendance(date) {
             // Create and insert summary data
             const summary = {
                 labourId,
+                projectName: parseInt(labour.projectName, 10),
                 totalDays: 1, // Daily attendance
                 presentDays,
                 halfDays,
@@ -2229,7 +2233,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('02 12 * * *', async () => {
+cron.schedule('28 17 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
@@ -2969,9 +2973,10 @@ async function upsertAttendance(req, res) {
         overtimeManually,
         remarkManually,
         workingHours,
-        OnboardName,
+        onboardName,
     } = req.body;
 
+    console.log('req.body))__))__))__', req.body)
     // Validate input
     if (!labourId || !date) {
         return res.status(400).json({
@@ -2979,11 +2984,21 @@ async function upsertAttendance(req, res) {
         });
     }
 
+    if (
+        !firstPunchManually &&
+        !lastPunchManually &&
+        (!overtimeManually || String(overtimeManually).trim() === '')
+    ) {
+        return res.status(400).json({
+            message: 'At least one of Overtime, First Punch, or Last Punch must be provided.',
+        });
+    }
+
     try {
         // Extract the first valid OnboardName
-        let finalOnboardName = Array.isArray(OnboardName)
-            ? OnboardName.filter((name) => name !== 'null' && name.trim() !== '')[0]
-            : OnboardName;
+        let finalOnboardName = Array.isArray(onboardName)
+            ? onboardName.filter((name) => name !== 'null' && name.trim() !== '')[0]
+            : onboardName;
 
         // Call the model to perform upsert
         await labourModel.upsertAttendance({
@@ -3001,82 +3016,153 @@ async function upsertAttendance(req, res) {
         res.status(200).json({ message: 'Attendance updated successfully.' });
     } catch (error) {
         console.error('Error updating attendance:', error);
-        res.status(500).json({ message: 'Error updating attendance. Please try again later.' });
+        res.status(error.statusCode || 500).json({ message: error.message });
     }
 }
 
 
-
+// -------------------------------------------------------------  Excel import and Export controller function ----------------
 const exportAttendance = async (req, res) => {
     try {
-      const { startDate, endDate } = req.query;
-      const attendanceData = await labourModel.getAttendanceByDateRange(startDate, endDate);
-  
-      const workbook = xlsx.utils.book_new();
-      const worksheet = xlsx.utils.json_to_sheet(attendanceData);
-      xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Attendance');
-  
-      const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-      res.setHeader('Content-Disposition', 'attachment; filename=attendance.xlsx');
-      res.send(buffer);
+        const { startDate, endDate, projectName } = req.query;
+
+        if (!startDate || !endDate || !projectName) {
+            return res.status(400).json({ message: 'Missing required parameters: startDate, endDate, or projectId.' });
+        }
+
+        // Fetch attendance data filtered by date range and projectId
+        const attendanceData = await labourModel.getAttendanceByDateRange(projectName, startDate, endDate);
+
+        if (attendanceData.length === 0) {
+            return res.status(404).json({ message: 'No attendance data found for the selected criteria.' });
+        }
+
+        // Create Excel workbook and worksheet
+        const workbook = xlsx.utils.book_new();
+        const worksheet = xlsx.utils.json_to_sheet(attendanceData);
+        xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Attendance');
+
+        // Generate Excel file as buffer
+        const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+        // Set headers and send response
+        res.setHeader('Content-Disposition', 'attachment; filename=attendance.xlsx');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(buffer);
     } catch (error) {
-      res.status(500).send({ message: error.message });
+        console.error('Error exporting attendance:', error);
+        res.status(500).json({ message: 'Error exporting attendance data.' });
     }
-  };
-  
+};
+
   const importAttendance = async (req, res) => {
     try {
-      const workbook = xlsx.readFile(req.file.path);
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const data = xlsx.utils.sheet_to_json(sheet);
-  
-      console.log('Excel data loaded:', data);
-  
-      // Convert Excel date serial to valid date string
-      const convertExcelDate = (serial) => {
-        const utcDays = Math.floor(serial - 25569);
-        const utcValue = utcDays * 86400;
-        const dateInfo = new Date(utcValue * 1000);
-        return dateInfo.toISOString().split('T')[0]; // Format YYYY-MM-DD
-      };
-  
-      // Normalize data
-      const validData = data.map((row) => ({
-        ...row,
-        Date: typeof row.Date === 'number' ? convertExcelDate(row.Date) : row.Date,
-      }));
-  
-      console.log('Normalized data:', validData);
-  
-      // Match rows
-      const { matchedRows, unmatchedRows } = await labourModel.getMatchedRows(validData);
-  
-      console.log('Matched rows:', matchedRows);
-      console.log('Unmatched rows:', unmatchedRows);
-  
-      // Update matched rows
-      if (matchedRows.length > 0) {
-        await labourModel.updateMatchedRows(matchedRows);
-        console.log(`${matchedRows.length} rows updated successfully.`);
-      }
-  
-      // Insert unmatched rows
-      if (unmatchedRows.length > 0) {
-        await labourModel.insertUnmatchedRows(unmatchedRows);
-        console.log(`${unmatchedRows.length} rows inserted successfully.`);
-      }
-  
-      res.send({
-        message: 'Data imported successfully',
-        matchedRows: matchedRows.length,
-        unmatchedRows: unmatchedRows.length,
-      });
+        const workbook = xlsx.readFile(req.file.path);
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const data = xlsx.utils.sheet_to_json(sheet);
+
+        console.log('Excel data loaded:', data);
+
+        // Convert Excel date serial to valid date string
+        const convertExcelDate = (serial) => {
+            const utcDays = Math.floor(serial - 25569);
+            const utcValue = utcDays * 86400;
+            const dateInfo = new Date(utcValue * 1000);
+            return dateInfo.toISOString().split('T')[0]; // Format YYYY-MM-DD
+        };
+
+        // Normalize data
+        const validData = data.map((row) => ({
+            ...row,
+            Date: typeof row.Date === 'number' ? convertExcelDate(row.Date) : row.Date,
+        }));
+
+        console.log('Normalized data:', validData);
+
+        // Match rows and separate matched and unmatched
+        const { matchedRows, unmatchedRows } = await labourModel.getMatchedRows(validData);
+
+        console.log('Matched rows:', matchedRows);
+        console.log('Unmatched rows:', unmatchedRows);
+
+        // Update matched rows in bulk
+        if (matchedRows.length > 0) {
+            await labourModel.updateMatchedRows(matchedRows);
+            console.log(`${matchedRows.length} rows updated successfully.`);
+        }
+
+        // Insert unmatched rows in bulk
+        if (unmatchedRows.length > 0) {
+            await labourModel.insertUnmatchedRows(unmatchedRows);
+            console.log(`${unmatchedRows.length} rows inserted successfully.`);
+        }
+
+        res.send({
+            message: 'Data imported successfully',
+            matchedRows: matchedRows.length,
+            unmatchedRows: unmatchedRows.length,
+        });
     } catch (error) {
-      console.error('Error importing data:', error);
-      res.status(500).send({ message: error.message });
+        console.error('Error importing data:', error);
+        res.status(500).send({ message: error.message });
     }
-  };
+};
+
+//   -----------------------------------------------  imp change 06-12-2024  ----------------------
+//   const importAttendance = async (req, res) => {
+//     try {
+//       const workbook = xlsx.readFile(req.file.path);
+//       const sheet = workbook.Sheets[workbook.SheetNames[0]];
+//       const data = xlsx.utils.sheet_to_json(sheet);
   
+//       console.log('Excel data loaded:', data);
+  
+//       // Convert Excel date serial to valid date string
+//       const convertExcelDate = (serial) => {
+//         const utcDays = Math.floor(serial - 25569);
+//         const utcValue = utcDays * 86400;
+//         const dateInfo = new Date(utcValue * 1000);
+//         return dateInfo.toISOString().split('T')[0]; // Format YYYY-MM-DD
+//       };
+  
+//       // Normalize data
+//       const validData = data.map((row) => ({
+//         ...row,
+//         Date: typeof row.Date === 'number' ? convertExcelDate(row.Date) : row.Date,
+//       }));
+  
+//       console.log('Normalized data:', validData);
+  
+//       // Match rows
+//       const { matchedRows, unmatchedRows } = await labourModel.getMatchedRows(validData);
+  
+//       console.log('Matched rows:', matchedRows);
+//       console.log('Unmatched rows:', unmatchedRows);
+  
+//       // Update matched rows
+//       if (matchedRows.length > 0) {
+//         await labourModel.updateMatchedRows(matchedRows);
+//         console.log(`${matchedRows.length} rows updated successfully.`);
+//       }
+  
+//       // Insert unmatched rows
+//       if (unmatchedRows.length > 0) {
+//         await labourModel.insertUnmatchedRows(unmatchedRows);
+//         console.log(`${unmatchedRows.length} rows inserted successfully.`);
+//       }
+  
+//       res.send({
+//         message: 'Data imported successfully',
+//         matchedRows: matchedRows.length,
+//         unmatchedRows: unmatchedRows.length,
+//       });
+//     } catch (error) {
+//       console.error('Error importing data:', error);
+//       res.status(500).send({ message: error.message });
+//     }
+//   };
+  
+// ---------------------------------       end imp changes 06-12-2024-----------------------
 
 // async function submitWages(req, res) {
 //     try {
