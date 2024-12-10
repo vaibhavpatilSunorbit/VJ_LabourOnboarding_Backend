@@ -1722,7 +1722,7 @@ const cronLogger = createLogger({
 
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 2); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
 
     console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
@@ -2233,7 +2233,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('28 17 * * *', async () => {
+cron.schedule('20 11 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
@@ -2976,7 +2976,6 @@ async function upsertAttendance(req, res) {
         onboardName,
     } = req.body;
 
-    console.log('req.body))__))__))__', req.body)
     // Validate input
     if (!labourId || !date) {
         return res.status(400).json({

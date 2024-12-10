@@ -1037,7 +1037,28 @@ const sendDeleteUserRequest = async (labour) => {
     // Save the SOAP request/response in the database
     await saveLogToDatabase(userId, labourID, serialNumber, soapEnvelope, JSON.stringify(soapResponseBody), status, null, attendanceStatus, CommandId);
 
-    return status === 'Success';
+    if (status === 'success') {
+      console.log(`Updating labourOnboarding for LabourID: ${labourID} after successful SOAP response.`);
+      try {
+        const poolLabour = await poolPromise;
+        await poolLabour.request()
+          .input('id', sql.Int, labour.id)
+          .input('status', sql.NVarChar, 'Disable')
+          .input('isApproved', sql.Int, 4)
+          .input('Reject_Reason', sql.VarChar, labour.Reject_Reason || 'SOAP deletion successful')
+          .query(`
+            UPDATE labourOnboarding 
+            SET status = @status, isApproved = @isApproved, Reject_Reason = @Reject_Reason
+            WHERE id = @id
+          `);
+        console.log(`Successfully updated labourOnboarding for LabourID: ${labourID}.`);
+      } catch (updateError) {
+        console.error(`Error updating labourOnboarding for LabourID: ${labourID}`, updateError);
+        throw updateError;
+      }
+    }
+
+    return status === 'success';
   } catch (error) {
     console.error(`Error sending SOAP request for LabourID: ${labourID}`, error);
 
@@ -1134,7 +1155,7 @@ const getLaboursWithOldAttendance = async () => {
           console.log(`Successfully processed LabourID: ${labour.LabourID}`);
           await poolLabour.request()
             .input('id', sql.Int, labour.id)
-            .input('status', sql.VarChar, 'Disable')
+            .input('status', sql.NVarChar, 'Disable')
             .input('isApproved', sql.Int, 4)
             .input('Reject_Reason', sql.VarChar, labour.Reject_Reason)
             .query(`
@@ -1160,7 +1181,7 @@ const getLaboursWithOldAttendance = async () => {
   }
 };
 
-cron.schedule('40 12 * * *', async () => {
+cron.schedule('39 11 * * *', async () => {
   logger.info('Running labour attendance check at 12:40 PM');
   try {
     const newLaboursProcessed = await getLaboursWithOldAttendance();  // Cache the results and get count
