@@ -1817,7 +1817,6 @@ async function insertIntoLabourAttendanceSummary(summary) {
 
 
 async function insertIntoLabourAttendanceDetails(details) {
-    console.log('details""""++++++++++++___________',details)
     try {
         const pool = await poolPromise;
 
@@ -2078,7 +2077,7 @@ async function fetchAttendanceDetailsByMonthYear(month, year) {
             .input('year', sql.Int, year)
             .query(`
                 SELECT *
-                FROM [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceSummary]
+                FROM [dbo].[LabourAttendanceSummary]
                 WHERE 
                     MONTH(CONVERT(DATE, SelectedMonth + '-01')) = @month 
                     AND YEAR(CONVERT(DATE, SelectedMonth + '-01')) = @year
@@ -2125,7 +2124,7 @@ async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month,
                     att.LastUpdatedDate,
                     att.WorkingHours,
                     att.OnboardName
-                FROM [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceDetails] att
+                FROM [dbo].[LabourAttendanceDetails] att
                 LEFT JOIN [dbo].[HolidayDate] hol
                     ON att.Date = hol.HolidayDate
                 WHERE 
