@@ -315,7 +315,15 @@ async function createRecordUpdate(req, res) {
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
         } = req.body;
 
-        let finalOnboardName = Array.isArray(OnboardName) ? OnboardName.filter(name => name !== 'null' && name.trim() !== '')[0] : OnboardName;
+        let finalOnboardName = Array.isArray(OnboardName) 
+        ? OnboardName.filter(name => name && name.trim() !== '').pop() 
+        : OnboardName;
+
+        if (!finalOnboardName || finalOnboardName.trim() === '') {
+            console.error('OnboardName is missing or empty.');
+            return res.status(400).json({ msg: 'OnboardName is required.' });
+        }
+finalOnboardName = finalOnboardName.toUpperCase();
         
         if (!finalOnboardName || finalOnboardName.trim() === '') {
             console.error('OnboardName is missing or empty.');
@@ -540,19 +548,22 @@ async function updateRecord(req, res) {
 
         // Extract fields from request body
         const {
-            LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
+           id, LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
         } = req.body;
 
         console.log('LabourID from request body:', LabourID);
-        let finalOnboardName = Array.isArray(OnboardName) ? OnboardName.filter(name => name !== 'null' && name.trim() !== '')[0] : OnboardName;
-        
+        let finalOnboardName = Array.isArray(OnboardName) 
+        ? OnboardName.filter(name => name && name.trim() !== '').pop() 
+        : OnboardName;
+
         if (!finalOnboardName || finalOnboardName.trim() === '') {
             console.error('OnboardName is missing or empty.');
             return res.status(400).json({ msg: 'OnboardName is required.' });
         }
+finalOnboardName = finalOnboardName.toUpperCase();
 
         console.log('Cleaned OnboardName:', finalOnboardName);
         // Check if LabourID exists
@@ -700,6 +711,7 @@ async function updateRecord(req, res) {
         console.log('Received OnboardName Edit button functionlity:', finalOnboardName);
         // Prepare data for update
         const data = await labourModel.updateData({
+            id,
             LabourID,
             labourOwnership,
             uploadAadhaarFront: frontImageUrl,
@@ -795,13 +807,15 @@ async function updateRecordWithDisable(req, res) {
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, isResubmit
         } = req.body;
 
-        let finalOnboardName = Array.isArray(OnboardName) ? OnboardName.filter(name => name !== 'null' && name.trim() !== '')[0] : OnboardName;
-        
+        let finalOnboardName = Array.isArray(OnboardName) 
+        ? OnboardName.filter(name => name && name.trim() !== '').pop() 
+        : OnboardName;
+
         if (!finalOnboardName || finalOnboardName.trim() === '') {
             console.error('OnboardName is missing or empty.');
             return res.status(400).json({ msg: 'OnboardName is required.' });
         }
-
+finalOnboardName = finalOnboardName.toUpperCase();
         console.log('Cleaned OnboardName Resubmitted button:', finalOnboardName);
         if (!LabourID || !isResubmit) {
             console.error('LabourID is missing from request body.');
@@ -1705,6 +1719,8 @@ async function updateHideResubmitLabour(req, res) {
 
 
 // Cache for attendance data
+
+
 let cachedAttendance = null;
 
 // Create a separate logger for this cron job
@@ -2998,6 +3014,13 @@ async function upsertAttendance(req, res) {
         let finalOnboardName = Array.isArray(onboardName)
             ? onboardName.filter((name) => name !== 'null' && name.trim() !== '')[0]
             : onboardName;
+
+            const timesUpdated = await labourModel.getTimesUpdateForMonth(labourId, date);
+
+            if (timesUpdated >= 3) {
+                await labourModel.markAttendanceForApproval(labourId, date, overtimeManually, remarkManually);
+                return res.status(200).json({ message: 'Attendance sent for admin approval.' });
+            }
 
         // Call the model to perform upsert
         await labourModel.upsertAttendance({
