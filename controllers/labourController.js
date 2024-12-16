@@ -2991,6 +2991,7 @@ async function upsertAttendance(req, res) {
         workingHours,
         onboardName,
     } = req.body;
+    console.log('req.bodyIN the upsertAttendance', req.body)
 
     // Validate input
     if (!labourId || !date) {
@@ -3018,7 +3019,7 @@ async function upsertAttendance(req, res) {
             const timesUpdated = await labourModel.getTimesUpdateForMonth(labourId, date);
 
             if (timesUpdated >= 3) {
-                await labourModel.markAttendanceForApproval(labourId, date, overtimeManually, remarkManually);
+                await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName);
                 return res.status(200).json({ message: 'Attendance sent for admin approval.' });
             }
 
@@ -3039,6 +3040,68 @@ async function upsertAttendance(req, res) {
     } catch (error) {
         console.error('Error updating attendance:', error);
         res.status(error.statusCode || 500).json({ message: error.message });
+    }
+}
+
+async function approveAttendanceController(req, res) {
+    const { id } = req.query;
+console.log('id',id)
+    if (!id) {
+        return res.status(400).json({ message: 'id is required.' });
+    }
+
+    try {
+        const result = await labourModel.approveAttendance(id);
+        res.status(200).json(result);
+    } catch (error) {
+        console.error('Error in approving attendance:', error);
+        res.status(error.statusCode || 500).json({ message: error.message });
+    }
+}
+
+async function rejectAttendanceControllerAdmin(req, res) {
+    const { id } = req.query;
+console.log('id___rejectAttendanceControllerAdmin',id)
+    if (!id) {
+        return res.status(400).json({ message: 'id is required.' });
+    }
+
+    try {
+        const result = await labourModel.rejectAttendanceAdmin(id);
+        res.status(200).json(result);
+    } catch (error) {
+        console.error('Error in approving attendance:', error);
+        res.status(error.statusCode || 500).json({ message: error.message });
+    }
+}
+
+
+async function rejectAttendanceController(req, res) {
+    const id = parseInt(req.params.id, 10); // Extract ID from route parameter
+    const { rejectReason } = req.body; // Extract rejection reason from request body
+
+    console.log('req.params.id', req.params.id)
+    console.log('req.body:', req.body); // Debug log
+    console.log('rejectReason:', rejectReason); // Debug log
+
+    if (isNaN(id)) {
+        return res.status(400).json({ message: 'Invalid attendance ID.' });
+    }
+
+    if (!rejectReason || rejectReason.trim() === '') {
+        return res.status(400).json({ message: 'Reject reason is required.' });
+    }
+
+    try {
+        const success = await labourModel.rejectAttendance(id, rejectReason); // Call model function
+        if (success) {
+            res.json({ success: true, message: 'Attendance rejected successfully.' });
+        } else {
+            res.status(404).json({ message: 'Attendance not found or already rejected.' });
+        }
+    } catch (error) {
+        console.error('Error rejecting attendance:', error);
+        res.status(500).json({ message: error.message });
     }
 }
 
@@ -3130,6 +3193,16 @@ const exportAttendance = async (req, res) => {
     }
 };
 
+async function LabourAttendanceApproval(req, res) {
+    try {
+        const summary = await labourModel.LabourAttendanceApprovalModel();
+        res.status(200).json(summary);
+    } catch (error) {
+        console.error('Error fetching attendance Attendance Approval:', error);
+        res.status(500).json({ message: 'Error fetching Attendance Approval' });
+    }
+};
+
 //   -----------------------------------------------  imp change 06-12-2024  ----------------------
 //   const importAttendance = async (req, res) => {
 //     try {
@@ -3186,46 +3259,6 @@ const exportAttendance = async (req, res) => {
   
 // ---------------------------------       end imp changes 06-12-2024-----------------------
 
-// async function submitWages(req, res) {
-//     try {
-//         const wagesData = req.body; // Array of wages data
-//         await WagesModel.submitWages(wagesData);
-//         res.status(200).json({ message: "Wages data submitted successfully!" });
-//     } catch (err) {
-//         console.error("Error submitting wages:", err);
-//         res.status(500).json({ message: "Server error, unable to submit wages" });
-//     }
-// }
-
-
-// async function getLabourStatus(req, res) {
-//     try {
-//         const labourId = parseInt(req.query.id || req.params.id); // parse the id from query or route params
-        
-//         // Validate if labourId is a valid number
-//         if (isNaN(labourId)) {
-//             return res.status(400).json({ message: 'Invalid labour ID' });
-//         }
-
-//         const pool = await poolPromise;
-
-//         // Use the parsed id in the SQL query
-//         const result = await pool.request()
-//             .input('labourId', sql.Int, labourId) // Ensure labourId is passed as an integer
-//             .query(`
-//                 SELECT lo.id AS labourId, lo.name, aep.esslStatus, arp.employeeMasterStatus 
-//                 FROM [LabourOnboardingForm_TEST].[dbo].[labourOnboarding] lo
-//                 LEFT JOIN [LabourOnboardingForm_TEST].[dbo].[API_EsslPayloads] aep ON lo.id = aep.userId
-//                 LEFT JOIN [LabourOnboardingForm_TEST].[dbo].[API_ResponsePayloads] arp ON lo.id = arp.userId
-//                 WHERE lo.id = @labourId
-//             `);
-
-//         return res.status(200).json(result.recordset);
-//     } catch (err) {
-//         console.error('Error fetching labour statuses:', err);
-//         return res.status(500).json({ message: 'Error fetching data' });
-//     }
-// }
 
 
 module.exports = {
@@ -3267,7 +3300,11 @@ module.exports = {
     getAttendanceDetailsForSingleLabour,
     upsertAttendance,
     exportAttendance,
-    importAttendance
+    importAttendance,
+    approveAttendanceController,
+    LabourAttendanceApproval,
+    rejectAttendanceController,
+    rejectAttendanceControllerAdmin
     // getLabourStatus
     // getEsslStatuses,
     // getEmployeeMasterStatuses
