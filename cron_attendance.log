@@ -89,3 +89,8 @@
 {"level":"error","message":"Error running cron job for Date: 2024-12-09: Error fetching attendance data","stack":"Error: Error fetching attendance data\n    at Object.getAttendanceByLabourIdForDate (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\models\\labourModel.js:1699:15)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async processLaboursAttendance (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\labourController.js:2053:38)\n    at async runDailyAttendanceCron (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\labourController.js:1736:9)\n    at async Task._execution (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\labourController.js:2238:5)","timestamp":"2024-12-11T05:50:16.305Z"}
 {"level":"info","message":"Scheduled cron triggered...","timestamp":"2024-12-12T05:50:00.610Z"}
 {"level":"info","message":"Running cron job for Attendance Date: 2024-12-10","timestamp":"2024-12-12T05:50:00.613Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2024-12-13T05:50:00.885Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2024-12-11","timestamp":"2024-12-13T05:50:00.888Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2024-12-16T05:50:00.244Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2024-12-14","timestamp":"2024-12-16T05:50:00.247Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2024-12-14","timestamp":"2024-12-16T06:06:18.916Z"}
