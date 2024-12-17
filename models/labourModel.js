@@ -2171,6 +2171,41 @@ async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month,
     }
 }
 
+async function showAttendanceCalenderSingleLabour(labourId, month, year) {
+    try {
+      const pool = await poolPromise;
+      const result = await pool.request()
+        .input('labourId', sql.NVarChar, labourId)
+        .input('month', sql.Int, month)
+        .input('year', sql.Int, year)
+        .query(`
+          SELECT 
+              att.Date,
+              CASE 
+                  WHEN hol.HolidayDate IS NOT NULL THEN 'H'
+                  ELSE att.Status
+              END AS Status
+          FROM [dbo].[LabourAttendanceDetails] att
+          LEFT JOIN [dbo].[HolidayDate] hol
+            ON att.Date = hol.HolidayDate
+          WHERE 
+            att.LabourId = @labourId
+            AND MONTH(att.Date) = @month 
+            AND YEAR(att.Date) = @year
+        `);
+  
+      return result.recordset.map(row => ({
+        Date: row.Date,
+        Status: row.Status || 'NA',
+      }));
+    } catch (error) {
+      console.error('Error fetching attendance details for a single labour:', error);
+      throw error;
+    }
+  }
+  
+
+
 async function getTimesUpdateForMonth(labourId, date) {
     try {
         const pool = await poolPromise;
@@ -2193,8 +2228,8 @@ async function getTimesUpdateForMonth(labourId, date) {
     }
 }
 
-
 async function markAttendanceForApproval(
+    AttendanceId,
     labourId, 
     date, 
     overtimeManually, 
@@ -2204,10 +2239,14 @@ async function markAttendanceForApproval(
     finalOnboardName
 ) {
     try {
+        if (AttendanceId === undefined || AttendanceId === null || isNaN(AttendanceId)) {
+            throw new Error('AttendanceId must be a valid number and cannot be empty.');
+        }
         const pool = await poolPromise;
         const request = pool.request();
 
         // Bind inputs for both queries
+        request.input('AttendanceId', sql.Int, AttendanceId);
         request.input('labourId', sql.NVarChar, labourId);
         request.input('date', sql.Date, date);
         request.input('overtimeManually', sql.Float, overtimeManually || null);
@@ -2231,10 +2270,10 @@ async function markAttendanceForApproval(
         // Perform the INSERT query
         await request.query(`
             INSERT INTO LabourAttendanceApproval (
-                LabourId, Date, OvertimeManually, RemarkManually, OnboardName, FirstPunchManually, LastPunchManually
+              AttendanceId, LabourId, Date, OvertimeManually, RemarkManually, OnboardName, FirstPunchManually, LastPunchManually
             )
             VALUES (
-                @labourId, @date, @overtimeManually, @remarkManually, @finalOnboardName, @firstPunchManually, @lastPunchManually
+              @AttendanceId, @labourId, @date, @overtimeManually, @remarkManually, @finalOnboardName, @firstPunchManually, @lastPunchManually
             )
         `);
 
@@ -2682,60 +2721,44 @@ async function upsertAttendance({
             `);
 
         if (holidayCheckResult.recordset.length > 0) {
-            const holidayError = new Error('The date is a holiday. You cannot modify punch times or overtime.');
-            holidayError.statusCode = 400;
-            throw holidayError;
+            throw new Error('The date is a holiday. You cannot modify punch times or overtime.');
         }
 
-
+        // Fetch existing attendance details
         const attendanceResult = await pool.request()
-        .input('labourId', sql.NVarChar, labourId)
-        .input('date', sql.Date, date)
-        .query(`
-            SELECT TimesUpdate, SentForApproval, ApprovalStatus
-            FROM [dbo].[LabourAttendanceDetails]
-            WHERE LabourId = @labourId AND Date = @date
-        `);
+            .input('labourId', sql.NVarChar, labourId)
+            .input('date', sql.Date, date)
+            .query(`
+                SELECT TimesUpdate, SentForApproval, ApprovalStatus, FirstPunch, LastPunch
+                FROM [dbo].[LabourAttendanceDetails]
+                WHERE LabourId = @labourId AND Date = @date
+            `);
 
-    let timesUpdate = 0;
-    let sentForApproval = false;
-    let approvalStatus = null;
+        let timesUpdate = 0;
+        let sentForApproval = false;
+        let approvalStatus = null;
+        let existingFirstPunch = null;
+        let existingLastPunch = null;
 
-    if (attendanceResult.recordset.length > 0) {
-        const record = attendanceResult.recordset[0];
-        timesUpdate = record.TimesUpdate || 0;
-        sentForApproval = record.SentForApproval;
-        approvalStatus = record.ApprovalStatus;
+        if (attendanceResult.recordset.length > 0) {
+            const record = attendanceResult.recordset[0];
+            timesUpdate = record.TimesUpdate || 0;
+            sentForApproval = record.SentForApproval;
+            approvalStatus = record.ApprovalStatus;
+            existingFirstPunch = record.FirstPunch;
+            existingLastPunch = record.LastPunch;
 
-        if (approvalStatus === 'Pending' && !sentForApproval) {
-            throw new Error('Attendance is pending admin approval and cannot be modified.');
+            // Prevent modification if approval is pending
+            if (approvalStatus === 'Pending' && !sentForApproval) {
+                throw new Error('Attendance is pending admin approval and cannot be modified.');
+            }
         }
-    }
 
-    // If updates exceed 3 times, send for admin approval
-    // if (timesUpdate >= 3) {
-    //     await pool.request()
-    //         .input('labourId', sql.NVarChar, labourId)
-    //         .input('date', sql.Date, date)
-    //         .input('overtimeManually', sql.Float, overtimeManually || null)
-    //         .input('remarkManually', sql.VarChar, remarkManually || null)
-    //         .query(`
-    //             UPDATE [dbo].[LabourAttendanceDetails]
-    //             SET SentForApproval = 1,
-    //                 ApprovalStatus = 'Pending',
-    //                 OvertimeManually = @overtimeManually,
-    //                 RemarkManually = @remarkManually,
-    //                 LastUpdatedDate = GETDATE()
-    //             WHERE LabourId = @labourId AND Date = @date
-    //         `);
-
-    //     return { success: true, message: "Attendance update sent for admin approval." };
-    // }
+        // Determine final values for FirstPunch and LastPunch
+        const firstPunch = firstPunchManually || existingFirstPunch;
+        const lastPunch = lastPunchManually || existingLastPunch;
 
         // Calculate TotalHours and Status
-        const firstPunch = firstPunchManually 
-        const lastPunch = lastPunchManually 
-
         if (firstPunch && lastPunch) {
             const firstPunchTime = new Date(`${date}T${firstPunch}`);
             const lastPunchTime = new Date(`${date}T${lastPunch}`);
@@ -2759,26 +2782,6 @@ async function upsertAttendance({
         totalHours = parseFloat(totalHours.toFixed(2));
         calculatedOvertime = parseFloat(calculatedOvertime.toFixed(2));
 
-        // // Check if the edit requires admin approval
-        // if (existingTimesUpdate >= 3) {
-        //     await pool.request()
-        //         .input('labourId', sql.NVarChar, labourId)
-        //         .input('date', sql.Date, date)
-        //         .input('overtimeManually', sql.Float, overtimeManually)
-        //         .input('remarkManually', sql.VarChar, remarkManually)
-        //         .query(`
-        //             UPDATE [LabourAttendanceDetails]
-        //             SET SentForApproval = 1,
-        //                 ApprovalStatus = 'Pending',
-        //                 OvertimeManually = @overtimeManually,
-        //                 RemarkManually = @remarkManually,
-        //                 LastUpdatedDate = GETDATE()
-        //             WHERE LabourId = @labourId AND Date = @date
-        //         `);
-        //     console.log('Attendance sent for admin approval.');
-        //     return;
-        // }
-
         // Update or Insert record
         const query = `
             MERGE INTO [LabourAttendanceDetails] AS Target
@@ -2799,15 +2802,17 @@ async function upsertAttendance({
             ON Target.LabourId = Source.LabourId AND Target.Date = Source.Date
             WHEN MATCHED THEN 
                 UPDATE SET 
-                    FirstPunch = COALESCE(Source.FirstPunch, Target.FirstPunch),
-                    LastPunch = COALESCE(Source.LastPunch, Target.LastPunch),
-                    TotalHours = COALESCE(Source.TotalHours, Target.TotalHours),
-                    Overtime = COALESCE(Source.Overtime, Target.Overtime),
-                    Status = COALESCE(Source.Status, Target.Status),
-                    OvertimeManually = COALESCE(Source.OvertimeManually, Target.OvertimeManually),
-                    RemarkManually = COALESCE(Source.RemarkManually, Target.RemarkManually),
-                    OnboardName = COALESCE(Source.OnboardName, Target.OnboardName),
-                    LastUpdatedDate = Source.LastUpdatedDate,
+                    FirstPunch = COALESCE(@firstPunch, Target.FirstPunch),
+                    LastPunch = COALESCE(@lastPunch, Target.LastPunch),
+                    FirstPunchManually = COALESCE(@firstPunch, Target.FirstPunchManually),
+                    LastPunchManually = COALESCE(@lastPunch, Target.LastPunchManually),
+                    TotalHours = @totalHours,
+                    Overtime = @calculatedOvertime,
+                    Status = @status,
+                    OvertimeManually = COALESCE(@overtimeManually, Target.OvertimeManually),
+                    RemarkManually = COALESCE(@remarkManually, Target.RemarkManually),
+                    OnboardName = COALESCE(@onboardName, Target.OnboardName),
+                    LastUpdatedDate = GETDATE(),
                     TimesUpdate = ISNULL(Target.TimesUpdate, 0) + 1
             WHEN NOT MATCHED THEN 
                 INSERT (
@@ -2815,6 +2820,8 @@ async function upsertAttendance({
                     Date, 
                     FirstPunch, 
                     LastPunch, 
+                    FirstPunchManually, 
+                    LastPunchManually, 
                     TotalHours, 
                     Overtime, 
                     Status, 
@@ -2825,17 +2832,19 @@ async function upsertAttendance({
                     TimesUpdate
                 )
                 VALUES (
-                    Source.LabourId, 
-                    Source.Date, 
-                    Source.FirstPunch, 
-                    Source.LastPunch, 
-                    Source.TotalHours, 
-                    Source.Overtime, 
-                    Source.Status, 
-                    Source.OvertimeManually,
-                    Source.RemarkManually, 
-                    Source.OnboardName, 
-                    Source.LastUpdatedDate, 
+                    @labourId, 
+                    @date, 
+                    @firstPunch, 
+                    @lastPunch, 
+                    @firstPunch, 
+                    @lastPunch, 
+                    @totalHours, 
+                    @calculatedOvertime, 
+                    @status, 
+                    @overtimeManually,
+                    @remarkManually, 
+                    @onboardName, 
+                    GETDATE(), 
                     1
                 );
         `;
@@ -3202,7 +3211,8 @@ module.exports = {
     approveAttendance,
     LabourAttendanceApprovalModel,
     rejectAttendance,
-    rejectAttendanceAdmin
+    rejectAttendanceAdmin,
+    showAttendanceCalenderSingleLabour
     
     // approveAttendance
 

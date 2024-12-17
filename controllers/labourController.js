@@ -2909,6 +2909,24 @@ async function getAttendanceDetailsForSingleLabour(req, res) {
 }
 
 
+async function getAttendanceCalenderSingleLabour(req, res) {
+    const { id: labourId } = req.params;
+    const { month, year } = req.query;
+  
+    if (!labourId || !month || !year) {
+      return res.status(400).json({ message: 'Labour ID, Month, and Year are required' });
+    }
+  
+    try {
+      const details = await labourModel.showAttendanceCalenderSingleLabour(labourId, month, year);
+      res.status(200).json(details);
+    } catch (error) {
+      console.error('Error fetching attendance details for a single labour:', error);
+      res.status(500).json({ message: 'Error fetching attendance details' });
+    }
+  }
+  
+
 async function saveAttendance(req, res) {
     const { labourId, month, year, attendance } = req.body;
 
@@ -2984,6 +3002,7 @@ async function upsertAttendance(req, res) {
     const {
         labourId,
         date,
+        AttendanceId,
         firstPunchManually,
         lastPunchManually,
         overtimeManually,
@@ -2991,7 +3010,7 @@ async function upsertAttendance(req, res) {
         workingHours,
         onboardName,
     } = req.body;
-    console.log('req.bodyIN the upsertAttendance', req.body)
+    console.log('req.body the upsertAttendance', req.body)
 
     // Validate input
     if (!labourId || !date) {
@@ -3009,7 +3028,12 @@ async function upsertAttendance(req, res) {
             message: 'At least one of Overtime, First Punch, or Last Punch must be provided.',
         });
     }
-
+    if (AttendanceId === undefined || AttendanceId === null || isNaN(AttendanceId)) {
+        console.error('Invalid AttendanceId:', AttendanceId);
+        return res.status(400).json({
+            message: 'AttendanceId must be a valid number and cannot be empty.',
+        });
+    }
     try {
         // Extract the first valid OnboardName
         let finalOnboardName = Array.isArray(onboardName)
@@ -3033,7 +3057,7 @@ async function upsertAttendance(req, res) {
             remarkManually,
             workingHours,
             onboardName: finalOnboardName,
-            editUserName: finalOnboardName, // Assuming editUserName is same as onboardName
+            editUserName: finalOnboardName, 
         });
 
         res.status(200).json({ message: 'Attendance updated successfully.' });
@@ -3304,7 +3328,8 @@ module.exports = {
     approveAttendanceController,
     LabourAttendanceApproval,
     rejectAttendanceController,
-    rejectAttendanceControllerAdmin
+    rejectAttendanceControllerAdmin,
+    getAttendanceCalenderSingleLabour
     // getLabourStatus
     // getEsslStatuses,
     // getEmployeeMasterStatuses
