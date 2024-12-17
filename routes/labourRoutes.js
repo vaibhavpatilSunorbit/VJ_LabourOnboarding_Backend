@@ -52,6 +52,8 @@ router.put('/attendance/approve', labourController.approveAttendanceController);
 router.put('/attendance/reject', labourController.rejectAttendanceControllerAdmin);
 router.get('/LabourAttendanceApproval', labourController.LabourAttendanceApproval);
 router.put('/attendance/reject/:id', labourController.rejectAttendanceController);
+router.get('/showAttendanceCalenderSingleLabour/:id', labourController.getAttendanceCalenderSingleLabour);
+
 
 router.get('/export', labourController.exportAttendance);
 router.post('/import', upload.single('file'), labourController.importAttendance);

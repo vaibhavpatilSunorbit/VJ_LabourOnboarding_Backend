@@ -94,3 +94,5 @@
 {"level":"info","message":"Scheduled cron triggered...","timestamp":"2024-12-16T05:50:00.244Z"}
 {"level":"info","message":"Running cron job for Attendance Date: 2024-12-14","timestamp":"2024-12-16T05:50:00.247Z"}
 {"level":"info","message":"Cron job completed successfully for Date: 2024-12-14","timestamp":"2024-12-16T06:06:18.916Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2024-12-17T05:50:00.145Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2024-12-15","timestamp":"2024-12-17T05:50:00.150Z"}
