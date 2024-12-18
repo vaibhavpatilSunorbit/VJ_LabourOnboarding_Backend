@@ -2173,37 +2173,36 @@ async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month,
 
 async function showAttendanceCalenderSingleLabour(labourId, month, year) {
     try {
-      const pool = await poolPromise;
-      const result = await pool.request()
-        .input('labourId', sql.NVarChar, labourId)
-        .input('month', sql.Int, month)
-        .input('year', sql.Int, year)
-        .query(`
-          SELECT 
-              att.Date,
-              CASE 
-                  WHEN hol.HolidayDate IS NOT NULL THEN 'H'
-                  ELSE att.Status
-              END AS Status
-          FROM [dbo].[LabourAttendanceDetails] att
-          LEFT JOIN [dbo].[HolidayDate] hol
-            ON att.Date = hol.HolidayDate
-          WHERE 
-            att.LabourId = @labourId
-            AND MONTH(att.Date) = @month 
-            AND YEAR(att.Date) = @year
-        `);
-  
-      return result.recordset.map(row => ({
-        Date: row.Date,
-        Status: row.Status || 'NA',
-      }));
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('labourId', sql.NVarChar, labourId)
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .query(`
+                SELECT 
+                    att.Date,
+                    CASE 
+                        WHEN hol.HolidayDate IS NOT NULL THEN 'H'
+                        ELSE ISNULL(att.Status, 'NA')
+                    END AS Status
+                FROM [dbo].[LabourAttendanceDetails] att
+                LEFT JOIN [dbo].[HolidayDate] hol
+                ON att.Date = hol.HolidayDate
+                WHERE 
+                    att.LabourId = @labourId
+                    AND MONTH(att.Date) = @month
+                    AND YEAR(att.Date) = @year
+            `);
+
+        return result.recordset.map(row => ({
+            Date: row.Date,
+            Status: row.Status || 'NA',
+        }));
     } catch (error) {
-      console.error('Error fetching attendance details for a single labour:', error);
-      throw error;
+        console.error('Error fetching attendance details for a single labour:', error);
+        throw error;
     }
-  }
-  
+}
 
 
 async function getTimesUpdateForMonth(labourId, date) {
