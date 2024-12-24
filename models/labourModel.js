@@ -1552,6 +1552,7 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 // }
 
 // ------------------------------------------------------------------------  LABOUR PHASE 2 -------------------------------------------
+// ------------------------------------------------------------------------  ATTENDANCE MODUL -------------------------------------------
 
 async function getAttendanceByLabourId(labourId, month, year) {
     try {
@@ -3142,7 +3143,110 @@ async function getAttendanceByDateRange(projectName, startDate, endDate) {
 //     }
 // }
 
+// --------------------------------------------------    LABOUR WAGES MODULE 20-12-2024  ----------------------------------------------------
 
+
+// Fetch all wages
+const getLabourMonthlyWages = async () => {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+        SELECT 
+            lmw.WageID, lmw.LabourID, lmw.WagesEditedBy, lmw.PayStructure,
+            lmw.DailyWages, lmw.PerHourWages, lmw.MonthlyWages, lmw.YearlyWages,
+            lmw.FromDate, lmw.CreatedAt, lo.Name, lo.Location, lo.Department
+        FROM LabourMonthlyWages lmw
+        JOIN labourOnboarding lo ON lmw.LabourID = lo.id
+    `);
+    return result.recordset;
+};
+
+// Add or update wages
+const upsertLabourMonthlyWages = async (wage) => {
+    const pool = await poolPromise;
+
+    // // Step 1: Check if labourOnboarding(id) exists for the given LabourID
+    // const result = await pool.request()
+    //     .input('LabourID', sql.NVarChar, wage.labourId)
+    //     .query(`
+    //         SELECT id FROM labourOnboarding
+    //         WHERE 'JC' + RIGHT('0000' + CAST(id AS NVARCHAR), 4) = @LabourID
+    //     `);
+
+    // if (result.recordset.length === 0) {
+    //     throw new Error(`LabourID ${wage.labourId} does not exist in labourOnboarding`);
+    // }
+
+    // Step 2: Perform the upsert operation
+    const query = `
+        MERGE INTO LabourMonthlyWages AS target
+        USING (SELECT @LabourID AS LabourID) AS source
+        ON target.LabourID = source.LabourID
+        WHEN MATCHED THEN
+            UPDATE SET 
+                PayStructure = @PayStructure,
+                DailyWages = @DailyWages,
+                PerHourWages = @PerHourWages,
+                MonthlyWages = @MonthlyWages,
+                YearlyWages = @YearlyWages,
+                WagesEditedBy = @WagesEditedBy,
+                WeeklyOff = CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @WeeklyOff ELSE NULL END,
+                FromDate = GETDATE()
+        WHEN NOT MATCHED THEN
+            INSERT (LabourID, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, WagesEditedBy, WeeklyOff, FromDate)
+            VALUES (@LabourID, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @WagesEditedBy, 
+                CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @WeeklyOff ELSE NULL END, GETDATE());
+    `;
+
+    await pool.request()
+        .input('LabourID', sql.NVarChar, wage.labourId)
+        .input('PayStructure', sql.NVarChar, wage.payStructure)
+        .input('DailyWages', sql.Float, wage.dailyWages || 0)
+        .input('PerHourWages', sql.Float, wage.dailyWages ? wage.dailyWages / 8 : wage.perHourWages || 0)
+        .input('MonthlyWages', sql.Float, wage.monthlyWages || 0)
+        .input('YearlyWages', sql.Float, wage.yearlyWages || 0)
+        .input('WagesEditedBy', sql.NVarChar, wage.wagesEditedBy || 'System')
+        .input('WeeklyOff', sql.Int, wage.weeklyOff || null)
+        .query(query);
+};
+
+
+// Fetch all approvals
+const getWagesAdminApprovals = async () => {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+        SELECT * FROM WagesAdminApprovals
+    `);
+    return result.recordset;
+};
+
+// Add an approval
+const addWageApproval = async (approval) => {
+    const pool = await poolPromise;
+    await pool.request()
+        .input('WageID', sql.Int, approval.wageId)
+        .input('AdminID', sql.Int, approval.adminId)
+        .input('ApprovalStatus', sql.NVarChar, approval.approvalStatus)
+        .input('WagesEditedBy', sql.NVarChar, approval.wagesEditedBy)
+        .input('Remarks', sql.NVarChar, approval.remarks)
+        .query(`
+            INSERT INTO WagesAdminApprovals (WageID, AdminID, ApprovalStatus, WagesEditedBy, ApprovalDate, Remarks)
+            VALUES (@WageID, @AdminID, @ApprovalStatus, @WagesEditedBy, GETDATE(), @Remarks)
+        `);
+};
+
+async function getWagesByDateRange( startDate, endDate) {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input('startDate', sql.Date, startDate)
+      .input('endDate', sql.Date, endDate)
+      .query(
+        `SELECT WageID, LabourID, WagesEditedBy, PayStructure, DailyWages, WeeklyOff 
+         FROM LabourMonthlyWages 
+         WHERE CreatedAt BETWEEN @startDate AND @endDate`
+      );
+    return result.recordset;
+  }
 
 
 module.exports = {
@@ -3211,8 +3315,13 @@ module.exports = {
     LabourAttendanceApprovalModel,
     rejectAttendance,
     rejectAttendanceAdmin,
-    showAttendanceCalenderSingleLabour
+    showAttendanceCalenderSingleLabour,
     
     // approveAttendance
+    getLabourMonthlyWages,
+    upsertLabourMonthlyWages,
+    getWagesAdminApprovals,
+    addWageApproval,
+    getWagesByDateRange
 
 };
