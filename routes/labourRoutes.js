@@ -58,6 +58,15 @@ router.get('/showAttendanceCalenderSingleLabour/:id', labourController.getAttend
 router.get('/export', labourController.exportAttendance);
 router.post('/import', upload.single('file'), labourController.importAttendance);
 
+
+// ----------------------------------------------------------------  Labour Wages Routes ----------------------------
+router.get('/wages', labourController.getLabourMonthlyWages);
+router.post('/upsertLabourMonthlyWages', labourController.upsertLabourMonthlyWages);
+router.get('/approvals', labourController.getWagesAdminApprovals);
+router.post('/approvals', labourController.addWageApproval);
+router.get('/exportWagesExcel', labourController.exportWagesexcelSheet);
+
+
 // ------------------------------------------------------- IMP ROUTE AND GET USING VIEW DETAILS FOR LABOUR --------------------------------------------------
 router.get('/:id', labourController.getRecordById);
 

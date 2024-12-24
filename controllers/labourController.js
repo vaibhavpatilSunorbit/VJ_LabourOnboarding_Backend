@@ -783,18 +783,6 @@ finalOnboardName = finalOnboardName.toUpperCase();
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 async function updateRecordWithDisable(req, res) {
     try {
         console.log('Request Body: check----------', req.body);
@@ -1738,7 +1726,7 @@ const cronLogger = createLogger({
 
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 7); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 3); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
 
     console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
@@ -2040,6 +2028,124 @@ async function getAllLaboursAttendance(req, res) {
 }
 
 
+// async function processLaboursAttendance(date) {
+//     try {
+//         const attendanceDate = new Date(date);
+//         if (isNaN(attendanceDate.getTime())) {
+//             throw new Error('Invalid date format');
+//         }
+
+//         const approvedLabours = await labourModel.getAllApprovedLabours();
+
+//         if (!approvedLabours || approvedLabours.length === 0) {
+//             console.log('No approved labours found');
+//             return;
+//         }
+
+//         for (let labour of approvedLabours) {
+//             const { labourId, workingHours } = labour;
+//             const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+//             const halfDayHours = shiftHours === 9 ? 4.5 : 4;
+
+//             let presentDays = 0;
+//             let halfDays = 0;
+//             let missPunchDays = 0;
+//             let absentDays = 0;
+//             let totalOvertimeHours = 0;
+//             let dailyAttendance = [];
+
+//             const labourAttendance = await labourModel.getAttendanceByLabourIdForDate(labourId, attendanceDate);
+
+//             let status = 'A'; // Default to Absent
+//             let totalHours = 0;
+//             let overtime = 0;
+//             let firstPunch = null;
+//             let lastPunch = null;
+//             let firstPunchAttendanceId = null;
+//             let firstPunchDeviceId = null;
+//             let lastPunchAttendanceId = null;
+//             let lastPunchDeviceId = null;
+
+//             if (labourAttendance.length > 0) {
+//                 labourAttendance.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+//                 firstPunch = labourAttendance[0];
+//                 lastPunch = labourAttendance[labourAttendance.length - 1];
+
+//                 totalHours = calculateHoursWorked(attendanceDate, firstPunch.punch_time, lastPunch.punch_time);
+
+//                 // Extract details for first and last punches
+//                 firstPunchAttendanceId = firstPunch.attendance_id;
+//                 firstPunchDeviceId = firstPunch.Device_id;
+//                 lastPunchAttendanceId = lastPunch.attendance_id;
+//                 lastPunchDeviceId = lastPunch.Device_id;
+
+//                 if (firstPunch && lastPunch && totalHours >= shiftHours) {
+//                     status = 'P'; // Present
+//                     presentDays++;
+//                     overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
+//                 } else if (firstPunch && totalHours < halfDayHours) {
+//                     status = 'MP'; // Miss Punch
+//                     missPunchDays++;
+//                 } else if (totalHours >= halfDayHours) {
+//                     status = 'HD'; // Half Day
+//                     halfDays++;
+//                 } else {
+//                     absentDays++;
+//                 }
+
+//                 totalOvertimeHours += overtime;
+//             } else {
+//                 absentDays++;
+//             }
+
+//             dailyAttendance.push({
+//                 labourId,
+//                 projectName: parseInt(labour.projectName, 10),
+//                 date,
+//                 firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
+//                 firstPunchAttendanceId: firstPunchAttendanceId,
+//                 firstPunchDeviceId: firstPunchDeviceId,
+//                 lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
+//                 lastPunchAttendanceId: lastPunchAttendanceId,
+//                 lastPunchDeviceId: lastPunchDeviceId,
+//                 totalHours,
+//                 overtime: parseFloat(overtime.toFixed(1)),
+//                 status,
+//                 creationDate: new Date(),
+//             });
+
+//             // Insert into LabourAttendanceDetails
+//             for (let dayAttendance of dailyAttendance) {
+//                 console.log(`Inserting Attendance for ${labourId} on ${dayAttendance.date}:`, dayAttendance);
+//                 await labourModel.insertIntoLabourAttendanceDetails(dayAttendance);
+//             }
+
+//             // Create and insert summary data
+//             const summary = {
+//                 labourId,
+//                 projectName: parseInt(labour.projectName, 10),
+//                 totalDays: 1, // Daily attendance
+//                 presentDays,
+//                 halfDays,
+//                 missPunchDays,
+//                 absentDays,
+//                 totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(1)),
+//                 shift: workingHours,
+//                 creationDate: new Date(),
+//                 selectedMonth: date.substring(0, 7), // e.g., "2024-09"
+//             };
+
+//             console.log(`Summary for LabourId ${labourId}:`, summary);
+//             await labourModel.insertIntoLabourAttendanceSummary(summary);
+//         }
+
+//         console.log('Daily attendance processed successfully');
+//     } catch (err) {
+//         console.error('Error processing attendance:', err);
+//         throw err;
+//     }
+// }
+
 async function processLaboursAttendance(date) {
     try {
         const attendanceDate = new Date(date);
@@ -2063,14 +2169,14 @@ async function processLaboursAttendance(date) {
             let halfDays = 0;
             let missPunchDays = 0;
             let absentDays = 0;
-            let totalOvertimeHours = 0;
+            let totalOvertimeMinutes = 0;
             let dailyAttendance = [];
 
             const labourAttendance = await labourModel.getAttendanceByLabourIdForDate(labourId, attendanceDate);
 
             let status = 'A'; // Default to Absent
-            let totalHours = 0;
-            let overtime = 0;
+            let totalMinutesWorked = 0;
+            let overtimeMinutes = 0; // Initialize to ensure it's not NULL
             let firstPunch = null;
             let lastPunch = null;
             let firstPunchAttendanceId = null;
@@ -2083,7 +2189,13 @@ async function processLaboursAttendance(date) {
                 firstPunch = labourAttendance[0];
                 lastPunch = labourAttendance[labourAttendance.length - 1];
 
-                totalHours = calculateHoursWorked(attendanceDate, firstPunch.punch_time, lastPunch.punch_time);
+                const timeDifferenceMinutes = (new Date(lastPunch.punch_time) - new Date(firstPunch.punch_time)) / (1000 * 60);
+                totalMinutesWorked = Math.max(timeDifferenceMinutes, 0); // Ensure non-negative minutes
+
+                console.log(`Labour ID: ${labourId}`);
+                console.log(`First Punch Time: ${firstPunch.punch_time}`);
+                console.log(`Last Punch Time: ${lastPunch.punch_time}`);
+                console.log(`Time Difference in Minutes: ${timeDifferenceMinutes}`);
 
                 // Extract details for first and last punches
                 firstPunchAttendanceId = firstPunch.attendance_id;
@@ -2091,23 +2203,47 @@ async function processLaboursAttendance(date) {
                 lastPunchAttendanceId = lastPunch.attendance_id;
                 lastPunchDeviceId = lastPunch.Device_id;
 
-                if (firstPunch && lastPunch && totalHours >= shiftHours) {
-                    status = 'P'; // Present
-                    presentDays++;
-                    overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
-                } else if (firstPunch && totalHours < halfDayHours) {
+                // Miss Punch Logic
+                if (timeDifferenceMinutes > 0 && timeDifferenceMinutes <= 3) {
                     status = 'MP'; // Miss Punch
                     missPunchDays++;
-                } else if (totalHours >= halfDayHours) {
+                    console.log(`Status: Miss Punch (Time Difference <= 3 minutes)`);
+                } 
+                // Absent Logic
+                else if (timeDifferenceMinutes > 0 && timeDifferenceMinutes < 120) {
+                    status = 'A'; // Absent
+                    absentDays++;
+                    console.log(`Status: Absent (Time Difference < 120 minutes)`);
+                } 
+                // Present and Overtime Logic
+                else if (firstPunch && lastPunch && totalMinutesWorked >= shiftHours * 60) {
+                    status = 'P'; // Present
+                    presentDays++;
+                    overtimeMinutes = totalMinutesWorked > shiftHours * 60 ? totalMinutesWorked - shiftHours * 60 : 0;
+                    console.log(`Status: Present`);
+                } 
+                // Half Day Logic
+                else if (totalMinutesWorked >= halfDayHours * 60) {
                     status = 'HD'; // Half Day
                     halfDays++;
-                } else {
+                    console.log(`Status: Half Day`);
+                } 
+                // Default Absent
+                else {
                     absentDays++;
+                    console.log(`Status: Absent`);
                 }
 
-                totalOvertimeHours += overtime;
+                // Calculate half-hour and full-hour overtime in minutes
+                if (overtimeMinutes > 0) {
+                    overtimeMinutes = Math.floor(overtimeMinutes / 30) * 30; // Round down to nearest 30 minutes
+                    console.log(`Overtime (rounded to nearest 30 minutes): ${overtimeMinutes} minutes`);
+                }
+
+                totalOvertimeMinutes += overtimeMinutes;
             } else {
                 absentDays++;
+                console.log(`No punches found. Status: Absent`);
             }
 
             dailyAttendance.push({
@@ -2120,8 +2256,8 @@ async function processLaboursAttendance(date) {
                 lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
                 lastPunchAttendanceId: lastPunchAttendanceId,
                 lastPunchDeviceId: lastPunchDeviceId,
-                totalHours,
-                overtime: parseFloat(overtime.toFixed(1)),
+                totalHours: (totalMinutesWorked / 60).toFixed(2), // Convert minutes to hours for display
+                overtime: parseFloat((overtimeMinutes / 60).toFixed(2)), // Overtime in hours, ensure it's not NULL
                 status,
                 creationDate: new Date(),
             });
@@ -2141,7 +2277,7 @@ async function processLaboursAttendance(date) {
                 halfDays,
                 missPunchDays,
                 absentDays,
-                totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(1)),
+                totalOvertimeMinutes,
                 shift: workingHours,
                 creationDate: new Date(),
                 selectedMonth: date.substring(0, 7), // e.g., "2024-09"
@@ -2249,7 +2385,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('30 10 * * *', async () => {
+cron.schedule('57 18 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
@@ -3283,6 +3419,88 @@ async function LabourAttendanceApproval(req, res) {
   
 // ---------------------------------       end imp changes 06-12-2024-----------------------
 
+// --------------------------------------------------    LABOUR WAGES MODULE 20-12-2024  ----------------------------------------------------
+
+const getLabourMonthlyWages = async (req, res) => {
+    try {
+        const wages = await labourModel.getLabourMonthlyWages();
+        res.status(200).json(wages);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching wages', error });
+    }
+};
+
+// Add or update labour monthly wages
+const upsertLabourMonthlyWages = async (req, res) => {
+    try {
+        const payload = req.body;
+        console.log('payload for wages', payload)
+
+        // Validate required fields
+        if (!payload.labourId || !payload.payStructure) {
+            return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
+        }
+
+        await labourModel.upsertLabourMonthlyWages(payload);
+        res.status(200).json({ message: 'Wages updated successfully' });
+    } catch (error) {
+        console.error('Error updating wages:', error);
+        res.status(500).json({ message: 'Error updating wages', error });
+    }
+};
+
+// Get wage approvals
+const getWagesAdminApprovals = async (req, res) => {
+    try {
+        const approvals = await labourModel.getWagesAdminApprovals();
+        res.status(200).json(approvals);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching approvals', error });
+    }
+};
+
+// Add a wage approval
+const addWageApproval = async (req, res) => {
+    try {
+        await labourModel.addWageApproval(req.body);
+        res.status(201).json({ message: 'Approval added successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error adding approval', error });
+    }
+};
+
+const exportWagesexcelSheet = async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ message: 'Missing required parameters: startDate, endDate' });
+        }
+
+        // Fetch attendance data filtered by date range and projectId
+        const wagesData = await labourModel.getWagesByDateRange( startDate, endDate);
+
+        if (wagesData.length === 0) {
+            return res.status(404).json({ message: 'No Wages data found for the selected criteria.' });
+        }
+
+        // Create Excel workbook and worksheet
+        const workbook = xlsx.utils.book_new();
+        const worksheet = xlsx.utils.json_to_sheet(wagesData);
+        xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
+
+        // Generate Excel file as buffer
+        const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+        // Set headers and send response
+        res.setHeader('Content-Disposition', 'attachment; filename=attendance.xlsx');
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(buffer);
+    } catch (error) {
+        console.error('Error exporting Wages:', error);
+        res.status(500).json({ message: 'Error exporting Wages data.' });
+    }
+};
 
 
 module.exports = {
@@ -3329,9 +3547,14 @@ module.exports = {
     LabourAttendanceApproval,
     rejectAttendanceController,
     rejectAttendanceControllerAdmin,
-    getAttendanceCalenderSingleLabour
+    getAttendanceCalenderSingleLabour,
     // getLabourStatus
     // getEsslStatuses,
     // getEmployeeMasterStatuses
     // updateLabour
+    getLabourMonthlyWages,
+    upsertLabourMonthlyWages,
+    getWagesAdminApprovals,
+    addWageApproval,
+    exportWagesexcelSheet
 };
