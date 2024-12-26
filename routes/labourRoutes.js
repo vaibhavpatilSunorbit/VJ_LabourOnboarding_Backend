@@ -65,6 +65,8 @@ router.post('/upsertLabourMonthlyWages', labourController.upsertLabourMonthlyWag
 router.get('/approvals', labourController.getWagesAdminApprovals);
 router.post('/approvals', labourController.addWageApproval);
 router.get('/exportWagesExcel', labourController.exportWagesexcelSheet);
+router.post('/importWagesExcel', upload.single('file'), labourController.importWages);
+
 
 
 // ------------------------------------------------------- IMP ROUTE AND GET USING VIEW DETAILS FOR LABOUR --------------------------------------------------
