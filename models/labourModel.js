@@ -3163,19 +3163,6 @@ const getLabourMonthlyWages = async () => {
 // Add or update wages
 const upsertLabourMonthlyWages = async (wage) => {
     const pool = await poolPromise;
-
-    // // Step 1: Check if labourOnboarding(id) exists for the given LabourID
-    // const result = await pool.request()
-    //     .input('LabourID', sql.NVarChar, wage.labourId)
-    //     .query(`
-    //         SELECT id FROM labourOnboarding
-    //         WHERE 'JC' + RIGHT('0000' + CAST(id AS NVARCHAR), 4) = @LabourID
-    //     `);
-
-    // if (result.recordset.length === 0) {
-    //     throw new Error(`LabourID ${wage.labourId} does not exist in labourOnboarding`);
-    // }
-
     // Step 2: Perform the upsert operation
     const onboardingData = await pool.request()
     .input('LabourID', sql.NVarChar, wage.labourId || '')
@@ -3200,28 +3187,8 @@ const labourDetails = onboardingData.recordset[0];
 
 // Step 2: Perform the upsert operation
 const query = `
-    MERGE INTO LabourMonthlyWages AS target
-    USING (SELECT @LabourID AS LabourID) AS source
-    ON target.LabourID = source.LabourID
-    WHEN MATCHED THEN
-        UPDATE SET 
-            PayStructure = @PayStructure,
-            DailyWages = @DailyWages,
-            PerHourWages = @PerHourWages,
-            MonthlyWages = @MonthlyWages,
-            YearlyWages = @YearlyWages,
-            FixedMonthlyWages = CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @FixedMonthlyWages ELSE NULL END,
-            WeeklyOff = CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @WeeklyOff ELSE NULL END,
-            WagesEditedBy = @WagesEditedBy,
-            name = @name,
-            projectName = @projectName,
-            companyName = @companyName,
-            From_Date = @From_Date,
-            businessUnit = @businessUnit,
-            departmentName = @departmentName,
-            FromDate = GETDATE()
-    WHEN NOT MATCHED THEN
-        INSERT (LabourID, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, 
+    INSERT INTO LabourMonthlyWages 
+     (LabourID, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, 
             WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, FromDate)
         VALUES (@LabourID, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, 
             CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @FixedMonthlyWages ELSE NULL END,
@@ -3278,6 +3245,7 @@ async function getWagesByDateRange(projectName, startDate, endDate) {
     const pool = await poolPromise;
 
     const query = `
+    WITH LatestWages AS (
         SELECT 
             onboarding.LabourID,
             onboarding.name,
@@ -3288,8 +3256,10 @@ async function getWagesByDateRange(projectName, startDate, endDate) {
             onboarding.departmentName,
             wages.PayStructure,
             wages.DailyWages,
-            wages.WeeklyOff
-            wages.FixedMonthlyWages
+            wages.WeeklyOff,
+            wages.FixedMonthlyWages,
+            wages.CreatedAt,
+            ROW_NUMBER() OVER (PARTITION BY onboarding.LabourID ORDER BY wages.CreatedAt DESC) AS RowNum
         FROM 
             [dbo].[labourOnboarding] AS onboarding
         LEFT JOIN 
@@ -3297,18 +3267,34 @@ async function getWagesByDateRange(projectName, startDate, endDate) {
         ON 
             onboarding.LabourID = wages.LabourID
             ${projectName !== "all" ? "AND wages.ProjectName = @projectName" : ""}
-            ${startDate && endDate ? "AND wages.CreatedAt BETWEEN @startDate AND @endDate" : ""}
         WHERE 
             onboarding.status = 'Approved'
             ${projectName !== "all" ? "AND onboarding.projectName = @projectName" : ""}
-    `;
+            ${startDate && endDate ? "AND wages.CreatedAt BETWEEN @startDate AND @endDate" : ""}
+    )
+    SELECT 
+        LabourID,
+        name,
+        projectName,
+        companyName,
+        From_Date,
+        businessUnit,
+        departmentName,
+        PayStructure,
+        DailyWages,
+        WeeklyOff,
+        FixedMonthlyWages,
+        CreatedAt
+    FROM LatestWages
+    WHERE RowNum = 1
+`;
 
-    const request = pool.request();
-    if (projectName !== "all") request.input('projectName', sql.VarChar, projectName);
-    if (startDate && endDate) {
-        request.input('startDate', sql.Date, startDate);
-        request.input('endDate', sql.Date, endDate);
-    }
+const request = pool.request();
+if (projectName !== "all") request.input('projectName', sql.VarChar, projectName);
+if (startDate && endDate) {
+    request.input('startDate', sql.Date, startDate);
+    request.input('endDate', sql.Date, endDate);
+}
 
     const result = await request.query(query);
     return result.recordset;
@@ -3317,7 +3303,7 @@ async function getWagesByDateRange(projectName, startDate, endDate) {
 
 
 async function insertWagesData(row) {
-    const pool = await poolPromise();
+    const pool = await poolPromise;
 
     // Convert Excel date to JavaScript date or handle as null
     let fromDate = null;
@@ -3395,14 +3381,14 @@ async function insertWagesData(row) {
         monthlyWages = dailyWages * 26; // Assuming 26 working days/month
         yearlyWages = monthlyWages * 12; // 12 months/year
     } else if (row.PayStructure === 'FIXED MONTHLY WAGES') {
-        fixedMonthlyWages = 13000; // Default value
+        fixedMonthlyWages = parseFloat(row.FixedMonthlyWages) || 13000;
     }
 
     // Insert data into the database
     await pool
         .request()
         .input('LabourID', sql.VarChar, row.LabourID)
-        .input('WagesEditedBy', sql.VarChar, row.WagesEditedBy || null) // Optional
+        .input('WagesEditedBy', sql.VarChar, row.WagesEditedBy || 'System') // Optional
         .input('name', sql.VarChar, row.name)
         .input('projectName', sql.Int, row.projectName)
         .input('companyName', sql.VarChar, row.companyName)
@@ -3423,6 +3409,39 @@ async function insertWagesData(row) {
             VALUES (@LabourID, @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @FixedMonthlyWages, @WeeklyOff, @CreatedAt)
         `);
 }
+
+
+const getWagesAndLabourOnboardingJoin = async () => {
+    const pool = await poolPromise;
+
+    const result = await pool.request().query(`
+        SELECT 
+            onboarding.LabourID,
+            onboarding.name,
+            onboarding.businessUnit,
+            onboarding.departmentName,
+            onboarding.From_Date,
+            wages.WagesEditedBy,
+            wages.PayStructure,
+            wages.DailyWages,
+            wages.PerHourWages,
+            wages.MonthlyWages,
+            wages.YearlyWages,
+            wages.WeeklyOff,
+            wages.CreatedAt,
+            wages.FixedMonthlyWages
+        FROM 
+            [dbo].[labourOnboarding] AS onboarding
+        LEFT JOIN 
+            [dbo].[LabourMonthlyWages] AS wages
+        ON 
+            onboarding.LabourID = wages.LabourID
+        WHERE 
+            onboarding.status = 'Approved'
+    `);
+
+    return result.recordset;
+};
 
 
 module.exports = {
@@ -3499,6 +3518,7 @@ module.exports = {
     getWagesAdminApprovals,
     addWageApproval,
     getWagesByDateRange,
-    insertWagesData
+    insertWagesData,
+    getWagesAndLabourOnboardingJoin
 
 };

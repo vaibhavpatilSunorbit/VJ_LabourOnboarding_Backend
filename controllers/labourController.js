@@ -3530,6 +3530,7 @@ const importWages = async (req, res) => {
             return res.status(400).json({ message: 'No file uploaded' });
         }
 
+        const wagesEditedBy = req.body.wagesEditedBy || 'System';
         const filePath = req.file.path;
         const workbook = xlsx.readFile(filePath);
         const sheetName = workbook.SheetNames[0];
@@ -3544,6 +3545,7 @@ const importWages = async (req, res) => {
                 }
 
                 // Insert row into the database
+                row.WagesEditedBy = wagesEditedBy;
                 await labourModel.insertWagesData(row);
             } catch (error) {
                 // Log error details
@@ -3554,7 +3556,7 @@ const importWages = async (req, res) => {
         }
 
         fs.unlinkSync(filePath); // Clean up uploaded file
-console.log(' errors===errors',errors)
+         console.log(' errors===errors',errors)
         if (errors.length > 0) {
             // Generate error Excel file
             const errorWorkbook = xlsx.utils.book_new();
@@ -3571,6 +3573,17 @@ console.log(' errors===errors',errors)
     } catch (error) {
         console.error('Import error:', error);
         res.status(500).json({ message: 'Internal server error. Please try again.' });
+    }
+};
+
+
+const getWagesAndLabourOnboardingJoincontroller = async (req, res) => {
+    try {
+        const joinWagesLabour = await labourModel.getWagesAndLabourOnboardingJoin();
+        res.status(200).json(joinWagesLabour);
+    } catch (error) {
+        console.error('Error fetching data:', error);
+        res.status(500).json({ message: 'Error fetching data', error });
     }
 };
 
@@ -3628,5 +3641,6 @@ module.exports = {
     getWagesAdminApprovals,
     addWageApproval,
     exportWagesexcelSheet,
-    importWages
+    importWages,
+    getWagesAndLabourOnboardingJoincontroller
 };
