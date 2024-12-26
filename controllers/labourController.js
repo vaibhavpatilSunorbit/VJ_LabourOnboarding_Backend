@@ -1726,7 +1726,7 @@ const cronLogger = createLogger({
 
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 3); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 5); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
 
     console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
@@ -2385,7 +2385,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('57 18 * * *', async () => {
+cron.schedule('53 10 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
@@ -3471,17 +3471,22 @@ const addWageApproval = async (req, res) => {
 
 const exportWagesexcelSheet = async (req, res) => {
     try {
-        const { startDate, endDate } = req.query;
+        const { projectName, month } = req.query;
 
-        if (!startDate || !endDate) {
-            return res.status(400).json({ message: 'Missing required parameters: startDate, endDate' });
+        if (!month) {
+            return res.status(400).json({ message: 'Missing required parameter: month' });
         }
 
-        // Fetch attendance data filtered by date range and projectId
-        const wagesData = await labourModel.getWagesByDateRange( startDate, endDate);
+        const startDate = `${month}-01`;
+        const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
+            .toISOString()
+            .split('T')[0];
+
+        // Fetch wages data
+        const wagesData = await labourModel.getWagesByDateRange(projectName, startDate, endDate);
 
         if (wagesData.length === 0) {
-            return res.status(404).json({ message: 'No Wages data found for the selected criteria.' });
+            return res.status(404).json({ message: 'No data found for the selected criteria.' });
         }
 
         // Create Excel workbook and worksheet
@@ -3493,7 +3498,11 @@ const exportWagesexcelSheet = async (req, res) => {
         const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 
         // Set headers and send response
-        res.setHeader('Content-Disposition', 'attachment; filename=attendance.xlsx');
+        const fileName = projectName === "all"
+            ? `Approved_Labours_${month}.xlsx`
+            : `Wages_${projectName}_${month}.xlsx`;
+
+        res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(buffer);
     } catch (error) {
@@ -3502,6 +3511,68 @@ const exportWagesexcelSheet = async (req, res) => {
     }
 };
 
+/**
+ * Converts an Excel serial date to a JavaScript Date object.
+ * @param {number} serial - Excel serial date number
+ * @returns {Date | null} - JavaScript Date object or null if invalid
+ */
+const xlsxDateToJSDate = (serial) => {
+    if (isNaN(serial)) return null; // Handle invalid serials
+    const excelEpoch = new Date(Date.UTC(1900, 0, 1)); // Excel starts from 1900-01-01
+    const daysSinceEpoch = serial - 1; // Excel includes a non-existent 1900-02-29
+    const millisecondsPerDay = 24 * 60 * 60 * 1000; // Milliseconds in a day
+    return new Date(excelEpoch.getTime() + daysSinceEpoch * millisecondsPerDay);
+};
+
+const importWages = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const filePath = req.file.path;
+        const workbook = xlsx.readFile(filePath);
+        const sheetName = workbook.SheetNames[0];
+        const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+        const errors = [];
+        for (const [index, row] of rows.entries()) {
+            try {
+                // Convert Excel date to JavaScript date if From_Date is defined
+                if (row.From_Date) {
+                    row.From_Date = xlsxDateToJSDate(row.From_Date);
+                }
+
+                // Insert row into the database
+                await labourModel.insertWagesData(row);
+            } catch (error) {
+                // Log error details
+                row.Error = error.message;
+                row.RowNumber = index + 1;
+                errors.push(row);
+            }
+        }
+
+        fs.unlinkSync(filePath); // Clean up uploaded file
+console.log(' errors===errors',errors)
+        if (errors.length > 0) {
+            // Generate error Excel file
+            const errorWorkbook = xlsx.utils.book_new();
+            const errorSheet = xlsx.utils.json_to_sheet(errors);
+            xlsx.utils.book_append_sheet(errorWorkbook, errorSheet, 'Errors');
+            const buffer = xlsx.write(errorWorkbook, { type: 'buffer', bookType: 'xlsx' });
+
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', 'attachment; filename="Error_Rows.xlsx"');
+            return res.status(200).send(buffer); // Return Excel file for errors
+        }
+
+        res.status(200).json({ message: 'Data imported successfully!' });
+    } catch (error) {
+        console.error('Import error:', error);
+        res.status(500).json({ message: 'Internal server error. Please try again.' });
+    }
+};
 
 module.exports = {
     handleCheckAadhaar,
@@ -3556,5 +3627,6 @@ module.exports = {
     upsertLabourMonthlyWages,
     getWagesAdminApprovals,
     addWageApproval,
-    exportWagesexcelSheet
+    exportWagesexcelSheet,
+    importWages
 };

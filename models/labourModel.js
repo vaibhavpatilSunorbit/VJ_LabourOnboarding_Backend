@@ -3177,36 +3177,76 @@ const upsertLabourMonthlyWages = async (wage) => {
     // }
 
     // Step 2: Perform the upsert operation
-    const query = `
-        MERGE INTO LabourMonthlyWages AS target
-        USING (SELECT @LabourID AS LabourID) AS source
-        ON target.LabourID = source.LabourID
-        WHEN MATCHED THEN
-            UPDATE SET 
-                PayStructure = @PayStructure,
-                DailyWages = @DailyWages,
-                PerHourWages = @PerHourWages,
-                MonthlyWages = @MonthlyWages,
-                YearlyWages = @YearlyWages,
-                WagesEditedBy = @WagesEditedBy,
-                WeeklyOff = CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @WeeklyOff ELSE NULL END,
-                FromDate = GETDATE()
-        WHEN NOT MATCHED THEN
-            INSERT (LabourID, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, WagesEditedBy, WeeklyOff, FromDate)
-            VALUES (@LabourID, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @WagesEditedBy, 
-                CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @WeeklyOff ELSE NULL END, GETDATE());
-    `;
+    const onboardingData = await pool.request()
+    .input('LabourID', sql.NVarChar, wage.labourId || '')
+    .query(`
+        SELECT 
+            LabourID,
+            name,
+            projectName,
+            companyName,
+            From_Date,
+            businessUnit,
+            departmentName
+        FROM [dbo].[labourOnboarding]
+        WHERE LabourID = @LabourID
+    `);
 
-    await pool.request()
-        .input('LabourID', sql.NVarChar, wage.labourId)
-        .input('PayStructure', sql.NVarChar, wage.payStructure)
-        .input('DailyWages', sql.Float, wage.dailyWages || 0)
-        .input('PerHourWages', sql.Float, wage.dailyWages ? wage.dailyWages / 8 : wage.perHourWages || 0)
-        .input('MonthlyWages', sql.Float, wage.monthlyWages || 0)
-        .input('YearlyWages', sql.Float, wage.yearlyWages || 0)
-        .input('WagesEditedBy', sql.NVarChar, wage.wagesEditedBy || 'System')
-        .input('WeeklyOff', sql.Int, wage.weeklyOff || null)
-        .query(query);
+if (onboardingData.recordset.length === 0) {
+    throw new Error(`LabourID ${wage.labourId} not found in labourOnboarding table`);
+}
+
+const labourDetails = onboardingData.recordset[0];
+
+// Step 2: Perform the upsert operation
+const query = `
+    MERGE INTO LabourMonthlyWages AS target
+    USING (SELECT @LabourID AS LabourID) AS source
+    ON target.LabourID = source.LabourID
+    WHEN MATCHED THEN
+        UPDATE SET 
+            PayStructure = @PayStructure,
+            DailyWages = @DailyWages,
+            PerHourWages = @PerHourWages,
+            MonthlyWages = @MonthlyWages,
+            YearlyWages = @YearlyWages,
+            FixedMonthlyWages = CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @FixedMonthlyWages ELSE NULL END,
+            WeeklyOff = CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @WeeklyOff ELSE NULL END,
+            WagesEditedBy = @WagesEditedBy,
+            name = @name,
+            projectName = @projectName,
+            companyName = @companyName,
+            From_Date = @From_Date,
+            businessUnit = @businessUnit,
+            departmentName = @departmentName,
+            FromDate = GETDATE()
+    WHEN NOT MATCHED THEN
+        INSERT (LabourID, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, 
+            WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, FromDate)
+        VALUES (@LabourID, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, 
+            CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @FixedMonthlyWages ELSE NULL END,
+            CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @WeeklyOff ELSE NULL END,
+            @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, GETDATE());
+`;
+
+// Step 3: Execute the query
+await pool.request()
+    .input('LabourID', sql.NVarChar, wage.labourId || '')
+    .input('PayStructure', sql.NVarChar, wage.payStructure || null)
+    .input('DailyWages', sql.Float, wage.dailyWages || 0)
+    .input('PerHourWages', sql.Float, wage.dailyWages ? wage.dailyWages / 8 : 0)
+    .input('MonthlyWages', sql.Float, wage.monthlyWages || 0)
+    .input('YearlyWages', sql.Float, wage.yearlyWages || 0)
+    .input('FixedMonthlyWages', sql.Float, wage.fixedMonthlyWages || null)
+    .input('WeeklyOff', sql.Int, parseInt(wage.weeklyOff, 10) || null)
+    .input('WagesEditedBy', sql.NVarChar, wage.wagesEditedBy || 'System')
+    .input('name', sql.NVarChar, labourDetails.name || '')
+    .input('projectName', sql.Int, labourDetails.projectName || '')
+    .input('companyName', sql.NVarChar, labourDetails.companyName || '')
+    .input('From_Date', sql.Date, labourDetails.From_Date || null)
+    .input('businessUnit', sql.NVarChar, labourDetails.businessUnit || '')
+    .input('departmentName', sql.NVarChar, labourDetails.departmentName || '')
+    .query(query);
 };
 
 
@@ -3234,19 +3274,155 @@ const addWageApproval = async (approval) => {
         `);
 };
 
-async function getWagesByDateRange( startDate, endDate) {
+async function getWagesByDateRange(projectName, startDate, endDate) {
     const pool = await poolPromise;
-    const result = await pool
-      .request()
-      .input('startDate', sql.Date, startDate)
-      .input('endDate', sql.Date, endDate)
-      .query(
-        `SELECT WageID, LabourID, WagesEditedBy, PayStructure, DailyWages, WeeklyOff 
-         FROM LabourMonthlyWages 
-         WHERE CreatedAt BETWEEN @startDate AND @endDate`
-      );
+
+    const query = `
+        SELECT 
+            onboarding.LabourID,
+            onboarding.name,
+            onboarding.projectName,
+            onboarding.companyName,
+            onboarding.From_Date,
+            onboarding.businessUnit,
+            onboarding.departmentName,
+            wages.PayStructure,
+            wages.DailyWages,
+            wages.WeeklyOff
+            wages.FixedMonthlyWages
+        FROM 
+            [dbo].[labourOnboarding] AS onboarding
+        LEFT JOIN 
+            [dbo].[LabourMonthlyWages] AS wages
+        ON 
+            onboarding.LabourID = wages.LabourID
+            ${projectName !== "all" ? "AND wages.ProjectName = @projectName" : ""}
+            ${startDate && endDate ? "AND wages.CreatedAt BETWEEN @startDate AND @endDate" : ""}
+        WHERE 
+            onboarding.status = 'Approved'
+            ${projectName !== "all" ? "AND onboarding.projectName = @projectName" : ""}
+    `;
+
+    const request = pool.request();
+    if (projectName !== "all") request.input('projectName', sql.VarChar, projectName);
+    if (startDate && endDate) {
+        request.input('startDate', sql.Date, startDate);
+        request.input('endDate', sql.Date, endDate);
+    }
+
+    const result = await request.query(query);
     return result.recordset;
-  }
+}
+
+
+
+async function insertWagesData(row) {
+    const pool = await poolPromise();
+
+    // Convert Excel date to JavaScript date or handle as null
+    let fromDate = null;
+    if (row.From_Date) {
+        const dateObj = new Date(row.From_Date);
+        if (!isNaN(dateObj)) {
+            fromDate = dateObj.toISOString().split('T')[0]; // Extract date part (YYYY-MM-DD)
+        } else {
+            throw new Error(`Invalid From_Date value: ${row.From_Date}`);
+        }
+    }
+
+    // Validate PayStructure
+    const validPayStructures = ['DAILY WAGES', 'FIXED MONTHLY WAGES'];
+    if (!row.PayStructure || !validPayStructures.includes(row.PayStructure)) {
+        throw new Error(`Invalid PayStructure value: ${row.PayStructure}`);
+    }
+
+    // Check for both DAILY WAGES and FIXED MONTHLY WAGES in the same row
+    if (row.PayStructure === 'DAILY WAGES' && row.WeeklyOff) {
+        throw new Error('Cannot have WeeklyOff for DAILY WAGES PayStructure');
+    }
+
+    // Validate WeeklyOff for FIXED MONTHLY WAGES
+    if (row.PayStructure === 'FIXED MONTHLY WAGES') {
+        if (!row.WeeklyOff) {
+            throw new Error(`Invalid WeeklyOff value: ${row.WeeklyOff}`);
+        }
+        const weeklyOff = parseInt(row.WeeklyOff, 10);
+        if (isNaN(weeklyOff) || weeklyOff < 1 || weeklyOff > 4) {
+            throw new Error('WeeklyOff must be a number between 1 and 4 for FIXED MONTHLY WAGES');
+        }
+    }
+
+    // Fetch working hours for the LabourID from the labourOnboarding table
+    const result = await pool
+        .request()
+        .input('LabourID', sql.VarChar, row.LabourID)
+        .query(`
+            SELECT LabourID AS labourId, workingHours 
+            FROM [dbo].[labourOnboarding] 
+            WHERE LabourID = @LabourID
+        `);
+
+    if (result.recordset.length === 0) {
+        throw new Error(`LabourID ${row.LabourID} not found in labourOnboarding table`);
+    }
+
+    const workingHours = result.recordset[0].workingHours;
+
+    // Determine the hours per day based on workingHours value
+    let hoursPerDay;
+    if (workingHours === 'FLEXI SHIFT - 9 HRS') {
+        hoursPerDay = 9;
+    } else if (workingHours === 'FLEXI SHIFT - 8 HRS') {
+        hoursPerDay = 8;
+    } else {
+        throw new Error(`Invalid workingHours value: ${workingHours}`);
+    }
+
+    // Calculate wage-related fields
+    let dailyWages = null;
+    let perHourWages = null;
+    let monthlyWages = null;
+    let yearlyWages = null;
+    let fixedMonthlyWages = null;
+
+    if (row.PayStructure === 'DAILY WAGES') {
+        dailyWages = parseFloat(row.DailyWages);
+        if (isNaN(dailyWages)) {
+            throw new Error(`Invalid DailyWages value: ${row.DailyWages}`);
+        }
+
+        perHourWages = dailyWages / hoursPerDay; // Calculate per hour wages based on workingHours
+        monthlyWages = dailyWages * 26; // Assuming 26 working days/month
+        yearlyWages = monthlyWages * 12; // 12 months/year
+    } else if (row.PayStructure === 'FIXED MONTHLY WAGES') {
+        fixedMonthlyWages = 13000; // Default value
+    }
+
+    // Insert data into the database
+    await pool
+        .request()
+        .input('LabourID', sql.VarChar, row.LabourID)
+        .input('WagesEditedBy', sql.VarChar, row.WagesEditedBy || null) // Optional
+        .input('name', sql.VarChar, row.name)
+        .input('projectName', sql.Int, row.projectName)
+        .input('companyName', sql.VarChar, row.companyName)
+        .input('From_Date', sql.Date, fromDate) // Use From_Date as per table column
+        .input('businessUnit', sql.VarChar, row.businessUnit)
+        .input('departmentName', sql.VarChar, row.departmentName)
+        .input('PayStructure', sql.VarChar, row.PayStructure)
+        .input('DailyWages', sql.Decimal, dailyWages)
+        .input('PerHourWages', sql.Decimal, perHourWages)
+        .input('MonthlyWages', sql.Decimal, monthlyWages)
+        .input('YearlyWages', sql.Decimal, yearlyWages)
+        .input('FixedMonthlyWages', sql.Decimal, fixedMonthlyWages) // New column for Fixed Monthly Wages
+        .input('WeeklyOff', sql.Int, parseInt(row.WeeklyOff, 10) || null)
+        .input('CreatedAt', sql.DateTime, new Date())
+        .query(`
+            INSERT INTO [dbo].[LabourMonthlyWages] 
+            (LabourID, WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, CreatedAt)
+            VALUES (@LabourID, @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @FixedMonthlyWages, @WeeklyOff, @CreatedAt)
+        `);
+}
 
 
 module.exports = {
@@ -3322,6 +3498,7 @@ module.exports = {
     upsertLabourMonthlyWages,
     getWagesAdminApprovals,
     addWageApproval,
-    getWagesByDateRange
+    getWagesByDateRange,
+    insertWagesData
 
 };
