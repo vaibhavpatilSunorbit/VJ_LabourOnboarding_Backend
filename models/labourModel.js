@@ -3444,6 +3444,20 @@ const getWagesAndLabourOnboardingJoin = async () => {
 };
 
 
+// Function to search FromWages records
+async function searchFromWages(query) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('query', sql.NVarChar, `%${query}%`)
+            .query('SELECT * FROM LabourMonthlyWages WHERE name LIKE @query OR companyName LIKE @query OR LabourID LIKE @query OR DailyWages LIKE @query OR departmentName LIKE @query OR WagesEditedBy LIKE @query OR PayStructure LIKE @query');
+        return result.recordset;
+    } catch (error) {
+        throw error;
+    }
+}
+
+
 module.exports = {
     checkAadhaarExists,
     getNextUniqueID,
@@ -3519,6 +3533,7 @@ module.exports = {
     addWageApproval,
     getWagesByDateRange,
     insertWagesData,
-    getWagesAndLabourOnboardingJoin
+    getWagesAndLabourOnboardingJoin,
+    searchFromWages
 
 };

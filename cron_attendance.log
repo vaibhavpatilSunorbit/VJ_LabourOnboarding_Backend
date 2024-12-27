@@ -168,3 +168,15 @@
 {"level":"info","message":"Scheduled cron triggered...","timestamp":"2024-12-26T05:23:00.963Z"}
 {"level":"info","message":"Running cron job for Attendance Date: 2024-12-21","timestamp":"2024-12-26T05:23:00.967Z"}
 {"level":"info","message":"Cron job completed successfully for Date: 2024-12-21","timestamp":"2024-12-26T05:39:21.256Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2024-12-27T05:23:00.514Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2024-12-22","timestamp":"2024-12-27T05:23:00.519Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2024-12-22","timestamp":"2024-12-27T05:38:41.380Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2024-12-27T07:33:00.140Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2024-12-24","timestamp":"2024-12-27T07:33:00.142Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2024-12-24","timestamp":"2024-12-27T07:48:55.511Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2024-12-27T07:53:00.475Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2024-12-25","timestamp":"2024-12-27T07:53:00.480Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2024-12-25","timestamp":"2024-12-27T08:09:29.655Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2024-12-27T08:10:00.635Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2024-12-26","timestamp":"2024-12-27T08:10:00.639Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2024-12-26","timestamp":"2024-12-27T08:26:32.673Z"}
