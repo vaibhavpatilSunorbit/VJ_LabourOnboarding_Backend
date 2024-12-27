@@ -15,8 +15,8 @@ const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');        
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
-const baseUrl = 'http://localhost:4000/uploads/';
-// const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+// const baseUrl = 'http://localhost:4000/uploads/';
+const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
 // const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
@@ -1726,7 +1726,7 @@ const cronLogger = createLogger({
 
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 5); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
 
     console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
@@ -2385,7 +2385,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('53 10 * * *', async () => {
+cron.schedule('40 13 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
@@ -3587,6 +3587,22 @@ const getWagesAndLabourOnboardingJoincontroller = async (req, res) => {
     }
 };
 
+
+
+async function searchLaboursFromWages(req, res) {
+    const { q } = req.query;
+
+    try {
+        const results = await labourModel.searchFromWages(q);
+        return res.json(results);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
+
+
 module.exports = {
     handleCheckAadhaar,
     getNextUniqueID,
@@ -3642,5 +3658,6 @@ module.exports = {
     addWageApproval,
     exportWagesexcelSheet,
     importWages,
-    getWagesAndLabourOnboardingJoincontroller
+    getWagesAndLabourOnboardingJoincontroller,
+    searchLaboursFromWages
 };
