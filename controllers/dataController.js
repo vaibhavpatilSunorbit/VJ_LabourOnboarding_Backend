@@ -366,12 +366,14 @@ const fetchDynamicData = async (req, res) => {
     const pool = await poolPromise2;
 
     // Construct SQL queries dynamically based on provided parameters
-    let businessUnitQuery = `SELECT * FROM Framework.BusinessUnit where Description LIKE '%${businessUnitDesc.replace(/'/g, "''")}%'`;
-  
+    let businessUnitQuery = `SELECT * FROM Framework.BusinessUnit where Description LIKE '%${businessUnitDesc.replace(/'/g, "''")}%' and Type = 'C'`;
+  console.log('query for description. ',businessUnitQuery)
     const businessUnitQueryResult = await pool.request().query(businessUnitQuery);
     let result = businessUnitQueryResult.recordset[0];
+    // console.log('getting result in 02-01-2025',result)
     let parentResult;
     let ledgerResult;
+    let bankIdResult;
     if(businessUnitQueryResult.recordset.length > 0){
       const frameworkQuery = `SELECT * FROM Framework.BusinessUnit Where Id = ${result.ParentId}`;
       const frameworkUnit = await pool.request().query(frameworkQuery);
@@ -382,6 +384,12 @@ const fetchDynamicData = async (req, res) => {
       const frameworkUnitLedger = await pool.request().query(frameworkQueryLedger);
       ledgerResult = frameworkUnitLedger.recordset[0];
       console.log('ledgerResult : ' + ledgerResult);
+
+      const paymentBankId = `select Id from [Payroll].[Bank] where CompanyId = ${result.Id}`;
+      const paymentBankIdRecord = await pool.request().query(paymentBankId);
+      bankIdResult = paymentBankIdRecord.recordset[0];
+      console.log('BankIdResultForPayment: ',bankIdResult)
+
     }
 
      // Fetch shift details dynamically based on workingHours
@@ -403,6 +411,7 @@ const fetchDynamicData = async (req, res) => {
       parentDesc: parentResult ? parentResult.Description : null,
       shiftId: shift ? shift.Id : null, // Add shiftId dynamically
       shiftName: shift ? shift.Description : null,
+      bankId: bankIdResult ? bankIdResult.Id : null
     };
 
     res.json(dynamicData);
