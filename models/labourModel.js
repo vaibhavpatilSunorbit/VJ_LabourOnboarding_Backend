@@ -1,5 +1,5 @@
-const {sql, poolPromise } = require('../config/dbConfig');
 const { poolPromise2 } = require('../config/dbConfig2');
+const {sql, poolPromise } = require('../config/dbConfig');  
 const { poolPromise3 } = require('../config/dbConfig3');
 // const sql = require('mssql');
 
@@ -9,8 +9,8 @@ async function checkAadhaarExists(aadhaarNumber) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('aadhaarNumber', aadhaarNumber)
-            .query('SELECT LabourID, status, isApproved FROM labourOnboarding WHERE aadhaarNumber = @aadhaarNumber');
-            return result.recordset.length > 0 ? result.recordset[0] : null;
+            .query('SELECT LabourID, status, isApproved FROM [dbo].[labourOnboarding] WHERE aadhaarNumber = @aadhaarNumber');
+            return result.recordset.length > 0 ? result.recordset : null;
     } catch (error) {
         console.error('Error checking Aadhaar number:', error);
         throw new Error('Error checking Aadhaar number');
