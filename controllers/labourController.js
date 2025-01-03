@@ -21,31 +21,64 @@ const baseUrl = 'http://localhost:4000/uploads/';
 
 
 
+// async function handleCheckAadhaar(req, res) {
+//     const { aadhaarNumber } = req.body;
+//     console.log('Request Body: AadhaarNumber:', aadhaarNumber);
+
+//     try {
+//         const labourRecord = await labourModel.checkAadhaarExists(aadhaarNumber);
+
+//         if (labourRecord) {
+//             // Condition 1: Check for 'Resubmitted' and 'isApproved' === 3
+//             if (labourRecord.status === 'Resubmitted' && labourRecord.isApproved === 3) {
+//                 console.log("Returning skipCheck for Resubmitted and isApproved 3");
+//                 return res.status(200).json({ exists: false, skipCheck: true, LabourID: labourRecord.LabourID });
+//             }
+
+//             // Condition 2: If LabourID exists, return LabourID
+//             if (labourRecord.LabourID) {
+//                 console.log(`LabourID found: ${labourRecord.LabourID}`);
+//                 return res.status(200).json({
+//                     exists: true,
+//                     LabourID: labourRecord.LabourID
+//                 });
+//             }
+
+//             console.log("Returning exists true for regular record");
+//             return res.status(200).json({ exists: true });
+//         } else {
+//             console.log("Returning exists false");
+//             return res.status(200).json({ exists: false });
+//         }
+//     } catch (error) {
+//         console.error('Error in handleCheckAadhaar:', error);
+//         return res.status(500).json({ error: 'Error checking Aadhaar number' });
+//     }
+// }
 async function handleCheckAadhaar(req, res) {
     const { aadhaarNumber } = req.body;
     console.log('Request Body: AadhaarNumber:', aadhaarNumber);
 
     try {
-        const labourRecord = await labourModel.checkAadhaarExists(aadhaarNumber);
+        const labourRecords = await labourModel.checkAadhaarExists(aadhaarNumber);
 
-        if (labourRecord) {
-            // Condition 1: Check for 'Resubmitted' and 'isApproved' === 3
-            if (labourRecord.status === 'Resubmitted' && labourRecord.isApproved === 3) {
+        if (labourRecords && labourRecords.length > 0) {
+            // Check if any record matches specific conditions
+            const resubmittedRecord = labourRecords.find(record => record.status === 'Resubmitted' && record.isApproved === 3);
+
+            if (resubmittedRecord) {
                 console.log("Returning skipCheck for Resubmitted and isApproved 3");
-                return res.status(200).json({ exists: false, skipCheck: true, LabourID: labourRecord.LabourID });
+                return res.status(200).json({ exists: false, skipCheck: true, LabourID: resubmittedRecord.LabourID });
             }
 
-            // Condition 2: If LabourID exists, return LabourID
-            if (labourRecord.LabourID) {
-                console.log(`LabourID found: ${labourRecord.LabourID}`);
-                return res.status(200).json({
-                    exists: true,
-                    LabourID: labourRecord.LabourID
-                });
-            }
+            // Extract all LabourIDs
+            const labourIDs = labourRecords.map(record => record.LabourID);
 
-            console.log("Returning exists true for regular record");
-            return res.status(200).json({ exists: true });
+            console.log(`LabourIDs found: ${labourIDs}`);
+            return res.status(200).json({
+                exists: true,
+                LabourIDs: labourIDs // Return all LabourIDs as an array
+            });
         } else {
             console.log("Returning exists false");
             return res.status(200).json({ exists: false });

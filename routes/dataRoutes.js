@@ -1,6 +1,6 @@
 
 const express = require('express');
-const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, getDesignations, getCompanyNamesByProjectId, getDevices, getAttendanceLogs, approveLabour, getProjectDeviceStatus,updateProjectDeviceStatus, deleteProjectDeviceStatus, getProjectDeviceStatusSS, fetchDynamicData, fetchOrgDynamicData, addFvEmpId, updateEmployeeMaster, saveApiResponsePayload, getLaboursWithOldAttendance, fetchCachedLabours, saveTransferData, getAllLaboursWithTransferDetails  } = require('../controllers/dataController');
+const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, getDesignations, getCompanyNamesByProjectId, getDevices, getAttendanceLogs, approveLabour, getProjectDeviceStatus,updateProjectDeviceStatus, deleteProjectDeviceStatus, getProjectDeviceStatusSS, fetchDynamicData, fetchOrgDynamicData, addFvEmpId, updateEmployeeMaster, saveApiResponsePayload, getLaboursWithOldAttendance, fetchCachedLabours, saveTransferData, getAllLaboursWithTransferDetails, employeeMasterPayloadUpdatepost, organizationMasterPayloadUpdatepost } = require('../controllers/dataController');
 const {addEmployee} =require("../controllers/sendLabourData")
 const router = express.Router();
 
@@ -27,6 +27,10 @@ router.get('/laboursoldattendance', fetchCachedLabours );
 router.post('/transfer', saveTransferData );
 router.post('/allTransferSite', getAllLaboursWithTransferDetails);
 // router.post('/resubmitattendancelabour', resubmitLabor);
+
+router.post('/employeeMasterPayloadUpdatepost', employeeMasterPayloadUpdatepost);
+router.post('/organizationMasterPayloadUpdatepost', organizationMasterPayloadUpdatepost);
+
 
 module.exports = router;
 
