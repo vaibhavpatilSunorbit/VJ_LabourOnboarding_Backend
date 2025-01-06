@@ -649,6 +649,147 @@ const saveApiResponsePayload = async (req, res) => {
   }
 };
 
+
+const employeeMasterPayloadUpdatepost = async (req, res) => {
+  console.log('Received Request Body:', req.body);
+
+  const employeeMasterPayload = req.body;
+
+  if (!employeeMasterPayload || Object.keys(employeeMasterPayload).length === 0) {
+    console.error('Employee Master Payload is missing or empty');
+    return res.status(400).json({ message: 'Employee Master Payload is required' });
+  }
+
+  try {
+    // Validate critical fields
+    if (!employeeMasterPayload.companyName || !employeeMasterPayload.code) {
+      return res.status(400).json({ message: 'companyName and code are required' });
+    }
+
+    console.log('Sending Payload:', employeeMasterPayload);
+
+    const employeeMasterResponse = await axios.post(
+      'https://vjerp.farvisioncloud.com/Payroll/odata/Employees',
+      employeeMasterPayload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: 'apikey 8d1588e79eb31ed7cb57ff57325510572baa1008d575537615e295d3bbd7d558',
+        },
+      }
+    );
+
+    console.log('Response from API:', employeeMasterResponse.data);
+
+    const { status, outputList } = employeeMasterResponse.data;
+
+    // Validate `details` structure before accessing `outputList`
+    if (status === true) {
+      return res.status(200).json({
+        status: true,
+        message: 'Employee master details updated successfully.',
+        outputList: outputList || {},
+      });
+    } else if (details?.status === true) {
+      // Handle case where `details.status` is true but top-level status is false
+      return res.status(200).json({
+        status: true,
+        message: 'Employee master details updated successfully (with partial success).',
+        outputList: outputList || {},
+      });
+    } else {
+      // Fallback for invalid or incomplete responses
+      return res.status(400).json({
+        status: false,
+        message: message || 'Failed to update employee master details.',
+      });
+    }
+  } catch (error) {
+    console.error('Error updating Employee Master:', error.response?.data || error.message);
+
+    if (error.response?.status === 409) {
+      return res.status(409).json({
+        message: 'Conflict occurred while updating Employee Master. Check for duplicate or conflicting data.',
+        details: error.response?.data,
+      });
+    }
+
+    return res.status(500).json({
+      message: 'Internal Server Error',
+      details: error.response?.data || error.message,
+    });
+  }
+};
+
+const organizationMasterPayloadUpdatepost = async (req, res) => {
+  console.log('Received Request Body:', req.body);
+
+  const organizationMasterPayload = req.body;
+
+  // Validate that the payload exists and is not emptys
+  if (!organizationMasterPayload || Object.keys(organizationMasterPayload).length === 0) {
+    console.error('Organization Master Payload is missing or empty');
+    return res.status(400).json({ message: 'Organization Master Payload is required' });
+  }
+
+  try {
+    // if (!organizationMasterPayload.companyName || !organizationMasterPayload.code) {
+    //   return res.status(400).json({ message: 'companyName and code are required' });
+    // }
+
+    const organizationMasterResponse = await axios.post(
+      'https://vjerp.farvisioncloud.com/Payroll/odata/Organisations',
+      organizationMasterPayload,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: 'apikey 8d1588e79eb31ed7cb57ff57325510572baa1008d575537615e295d3bbd7d558',
+        },
+      }
+    );
+console.log('organizationMasterResponse 2025 ', organizationMasterResponse)
+    // Check if the response status is successful
+    if (organizationMasterResponse.data.status) {
+      res.status(200).json({
+        status: true,
+        outputList: organizationMasterResponse.data.outputList,
+        message: 'Organization master details updated successfully.',
+      });
+    } else {
+      console.error(
+        'Failed to update organization master details:',
+        organizationMasterResponse.data.message || 'No error message provided by the API.'
+      );
+      res.status(400).json({
+        status: false,
+        message: organizationMasterResponse.data.message || 'Failed to update organization master details.',
+      });
+    }
+  } catch (error) {
+    console.error(
+      'Error updating Organization Master:',
+      error.response?.data || error.message
+    );
+
+    if (error.response?.status === 409) {
+      return res.status(409).json({
+        message: 'Conflict occurred while updating Organization Master. Check for duplicate or conflicting data.',
+        details: error.response?.data,
+      });
+    }
+
+    return res.status(500).json({
+      message: 'Internal Server Error',
+      details: error.message,
+    });
+  }
+};
+
+
+
+
 // Function to update Employee Master data and save responses
 const updateEmployeeMaster = async (req, res) => {
   const { userId, LabourID, name, aadharNumber, employeeMasterPayload, organizationMasterPayload } = req.body; 
@@ -678,101 +819,6 @@ const updateEmployeeMaster = async (req, res) => {
 };
 
 
-const employeeMasterPayloadUpdatepost = async (req, res) => {
-  console.log('Received Request Body:', req.body);
-
-  // Directly use req.body instead of destructuring employeeMasterPayload
-  const employeeMasterPayload = req.body;
-
-  if (!employeeMasterPayload || Object.keys(employeeMasterPayload).length === 0) {
-    console.error('Employee Master Payload is missing or empty');
-    return res.status(400).json({ message: 'Employee Master Payload is required' });
-  }
-
-  console.log('employeeMasterPayload 2025:', employeeMasterPayload);
-
-  try {
-    // API call to the external service
-    const employeeMasterResponse = await axios.post(
-      'https://vjerp.farvisioncloud.com/Payroll/odata/Employees',
-      employeeMasterPayload,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: 'apikey 8d1588e79eb31ed7cb57ff57325510572baa1008d575537615e295d3bbd7d558',
-        },
-      }
-    );
-
-    // Check if the response status is successful
-    if (employeeMasterResponse.data.status) {
-      res.status(200).json({
-        status: true,
-        outputList: employeeMasterResponse.data.outputList,
-        message: 'Employee master details updated successfully.',
-      });
-    } else {
-      res.status(400).json({
-        status: false,
-        message: 'Failed to update employee master details.',
-      });
-    }
-  } catch (error) {
-    console.error('Error updating Employee Master:', error.message);
-    res.status(500).json({ message: 'Error updating Employee Master data' });
-  }
-};
-
-
-const organizationMasterPayloadUpdatepost = async (req, res) => {
-  // Log the complete request body for debugging
-  console.log('Received Request Body:', req.body);
-
-  // Extract the payload from the request body
-  const organizationMasterPayload = req.body;
-
-  // Validate that the payload exists and is not empty
-  if (!organizationMasterPayload || Object.keys(organizationMasterPayload).length === 0) {
-    console.error('Organization Master Payload is missing or empty');
-    return res.status(400).json({ message: 'Organization Master Payload is required' });
-  }
-
-  console.log('organizationMasterPayload 2025:', organizationMasterPayload);
-
-  try {
-    // API call to the external service
-    const organizationMasterResponse = await axios.post(
-      'https://vjerp.farvisioncloud.com/Payroll/odata/Organisations',
-      organizationMasterPayload,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: 'apikey 8d1588e79eb31ed7cb57ff57325510572baa1008d575537615e295d3bbd7d558',
-        },
-      }
-    );
-
-    // Check if the response status is successful
-    if (organizationMasterResponse.data.status) {
-      res.status(200).json({
-        status: true,
-        outputList: organizationMasterResponse.data.outputList,
-        message: 'Organization master details updated successfully.',
-      });
-    } else {
-      console.error('Failed to update organization master details:', organizationMasterResponse.data.message);
-      res.status(400).json({
-        status: false,
-        message: 'Failed to update organization master details.',
-      });
-    }
-  } catch (error) {
-    console.error('Error updating Organization Master:', error.message);
-    res.status(500).json({ message: 'Error updating Organization Master data' });
-  }
-};
 
 
 
@@ -874,7 +920,7 @@ const getAllLaboursWithTransferDetails = async (req, res) => {
     // SQL query to fetch transfer site names for the provided labour IDs
     const query = `
       SELECT LabourID, transferSiteName 
-      FROM [LabourOnboardingForm_TEST].[dbo].[API_TransferSite] 
+      FROM [dbo].[API_TransferSite] 
       WHERE LabourID IN (${labourIds.map((id) => `'${id}'`).join(', ')})
     `;
 
