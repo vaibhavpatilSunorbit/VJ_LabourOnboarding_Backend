@@ -2418,7 +2418,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('04 01 * * *', async () => {
+cron.schedule('04 14 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
