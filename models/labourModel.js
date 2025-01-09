@@ -2337,10 +2337,12 @@ async function approveAttendance(id) {
         await pool.request()
             .input('labourId', sql.NVarChar, approvalData.LabourId)
             .input('date', sql.Date, formattedDate)
+            .input('isApprovedAttendance', sql.Bit, 1)
             .query(`
                 UPDATE LabourAttendanceDetails
                 SET ApprovalStatus = 'Approved',
-                    ApprovalDate = GETDATE()
+                    ApprovalDate = GETDATE(),
+                    isApprovedAttendance = @isApprovedAttendance
                 WHERE LabourId = @labourId AND Date = @date
             `);
 
@@ -2353,7 +2355,7 @@ async function approveAttendance(id) {
 }
 
 
-async function rejectAttendanceAdmin(id) {
+async function rejectAttendanceAdmin(id, rejectReason) {
     try {
         const pool = await poolPromise;
 
@@ -2395,10 +2397,12 @@ async function rejectAttendanceAdmin(id) {
         // Update the LabourAttendanceApproval table with 'Approved' status
         await pool.request()
             .input('id', sql.Int, id)
+            .input('rejectReason', sql.NVarChar, rejectReason)
             .query(`
                 UPDATE LabourAttendanceApproval
                 SET ApprovalStatus = 'Rejected',
-                    ApprovalDate = GETDATE()
+                    RejectedDate = GETDATE(),
+                    RejectAttendanceReason = @rejectReason
                 WHERE id = @id
             `);
 
@@ -2406,10 +2410,12 @@ async function rejectAttendanceAdmin(id) {
         await pool.request()
             .input('labourId', sql.NVarChar, approvalData.LabourId)
             .input('date', sql.Date, formattedDate)
+            .input('isRejectedAttendance', sql.Bit, 1)
             .query(`
                 UPDATE LabourAttendanceDetails
                 SET ApprovalStatus = 'Rejected',
-                    ApprovalDate = GETDATE()
+                    RejectedDate = GETDATE(),
+                    isRejectedAttendance = @isRejectedAttendance
                 WHERE LabourId = @labourId AND Date = @date
             `);
 
@@ -3147,13 +3153,17 @@ async function getAttendanceByDateRange(projectName, startDate, endDate) {
 
 
 // Fetch all wages
+
+
+
+
 const getLabourMonthlyWages = async () => {
     const pool = await poolPromise;
     const result = await pool.request().query(`
         SELECT 
             lmw.WageID, lmw.LabourID, lmw.WagesEditedBy, lmw.PayStructure,
             lmw.DailyWages, lmw.PerHourWages, lmw.MonthlyWages, lmw.YearlyWages,
-            lmw.FromDate, lmw.CreatedAt, lo.Name, lo.Location, lo.Department
+            lmw.FromDate, lmw.EffectiveDate, lmw.CreatedAt, lo.Name, lo.Location, lo.Department
         FROM LabourMonthlyWages lmw
         JOIN labourOnboarding lo ON lmw.LabourID = lo.id
     `);
@@ -3163,6 +3173,7 @@ const getLabourMonthlyWages = async () => {
 // Add or update wages
 const upsertLabourMonthlyWages = async (wage) => {
     const pool = await poolPromise;
+    console.log('Payload received for wages:', wage);
     // Step 2: Perform the upsert operation
     const onboardingData = await pool.request()
     .input('LabourID', sql.NVarChar, wage.labourId || '')
@@ -3187,15 +3198,16 @@ const labourDetails = onboardingData.recordset[0];
 
 // Step 2: Perform the upsert operation
 const query = `
-    INSERT INTO LabourMonthlyWages 
-     (LabourID, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, 
-            WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, FromDate)
-        VALUES (@LabourID, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, 
-            CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @FixedMonthlyWages ELSE NULL END,
-            CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @WeeklyOff ELSE NULL END,
-            @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, GETDATE());
+INSERT INTO LabourMonthlyWages 
+(LabourID, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, 
+ WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, FromDate, EffectiveDate, CreatedAt)
+VALUES 
+(@LabourID, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, 
+ CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @FixedMonthlyWages ELSE NULL END,
+ CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @WeeklyOff ELSE NULL END,
+ @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, 
+ GETDATE(), @EffectiveDate, GETDATE());
 `;
-
 // Step 3: Execute the query
 await pool.request()
     .input('LabourID', sql.NVarChar, wage.labourId || '')
@@ -3213,7 +3225,9 @@ await pool.request()
     .input('From_Date', sql.Date, labourDetails.From_Date || null)
     .input('businessUnit', sql.NVarChar, labourDetails.businessUnit || '')
     .input('departmentName', sql.NVarChar, labourDetails.departmentName || '')
+    .input('EffectiveDate', sql.Date, wage.effectiveDate || null)
     .query(query);
+    console.log('Wages successfully saved with EffectiveDate:', wage.effectiveDate);
 };
 
 
@@ -3225,6 +3239,205 @@ const getWagesAdminApprovals = async () => {
     `);
     return result.recordset;
 };
+
+const checkExistingWages = async (labourId) => {
+    const pool = await poolPromise;
+
+    const result = await pool.request()
+        .input('LabourID', sql.NVarChar, labourId)
+        .query(`
+            SELECT TOP 1 *
+            FROM LabourMonthlyWages
+            WHERE LabourID = @LabourID
+            ORDER BY EffectiveDate DESC
+        `);
+
+    return result.recordset[0] || null;
+};
+
+// Send wages for admin approval
+async function markWagesForApproval(
+    wageId,
+            labourId,
+            dailyWages,
+            perHourWages,
+            monthlyWages,
+            yearlyWages,
+            effectiveDate,
+            fixedMonthlyWages,
+            weeklyOff,
+            payStructure,
+            wagesEditedBy,
+            remarks
+) {
+    try {
+        const pool = await poolPromise;
+        const request = pool.request();
+
+        const perHourWages = dailyWages ? dailyWages / 8 : 0;
+        const effectiveDateOnly = effectiveDate ? new Date(effectiveDate).toISOString().split('T')[0] : null;
+        
+        request.input('WageID', sql.Int, wageId);
+        request.input('LabourID', sql.NVarChar, labourId);
+        request.input('DailyWages', sql.Float, dailyWages || null);
+        request.input('MonthlyWages', sql.Float, monthlyWages || null);
+        request.input('PerHourWages', sql.Float, perHourWages);
+        request.input('YearlyWages', sql.Float, yearlyWages || null);
+        request.input('EffectiveDate', sql.Date, effectiveDateOnly);
+        request.input('FixedMonthlyWages', sql.Float, fixedMonthlyWages || null);
+        request.input('WeeklyOff', sql.Int, weeklyOff || null);
+        request.input('PayStructure', sql.NVarChar, payStructure || null);
+        request.input('WagesEditedBy', sql.VarChar, wagesEditedBy || null);
+        request.input('Remarks', sql.NVarChar, remarks || null);
+
+        // Update the LabourMonthlyWages table
+        const updateResult = await request.query(`
+            UPDATE [LabourMonthlyWages]
+            SET ApprovalStatusWages = 'Pending',
+                WagesEditedBy = @WagesEditedBy,
+                EditDate = GETDATE()
+            WHERE WageID = @WageID
+        `);
+
+        if (updateResult.rowsAffected[0] === 0) {
+            throw new Error('Failed to update LabourMonthlyWages. WageID may not exist.');
+        }
+
+        // Insert into the WagesAdminApprovals table
+        await request.query(`
+            INSERT INTO [WagesAdminApprovals] (
+                WageID, LabourID, DailyWages, MonthlyWages, FixedMonthlyWages, PerHourWages, YearlyWages, EffectiveDate,
+                WeeklyOff, PayStructure, WagesEditedBy, ApprovalStatus, Remarks, CreatedAt
+            )
+            VALUES (
+                @WageID, @LabourID, @DailyWages, @MonthlyWages, @FixedMonthlyWages, @PerHourWages, @YearlyWages, @EffectiveDate,
+                @WeeklyOff, @PayStructure, @WagesEditedBy, 'Pending', @Remarks, GETDATE()
+            )
+        `);
+
+        console.log('Wages marked for admin approval.');
+        return { success: true, message: 'Wages marked for admin approval.' };
+    } catch (error) {
+        console.error('Error marking wages for approval:', error.message || error);
+        throw new Error(error.message || 'Error marking wages for approval.');
+    }
+}
+
+
+
+async function approveWages(ApprovalID) {
+    try {
+        const pool = await poolPromise;
+        console.log('approvalWages ID in model.js:', ApprovalID);
+
+        // Fetch the approval record
+        const approvalResult = await pool.request()
+            .input('ApprovalID', sql.Int, ApprovalID)
+            .query(`
+                SELECT * FROM [WagesAdminApprovals]
+                WHERE ApprovalID = @ApprovalID
+            `);
+
+        if (approvalResult.recordset.length === 0) {
+            throw new Error('Approval record not found.');
+        }
+
+        const approvalData = approvalResult.recordset[0];
+        console.log('approvalData:', approvalData);
+
+        // Approve in LabourMonthlyWages
+        await pool.request()
+        .input('WageID', sql.Int, approvalData.WageID)
+        .input('isApprovalDoneAdmin', sql.Bit, 1)
+        .input('DailyWages', sql.Float, approvalData.DailyWages || null)
+        .input('MonthlyWages', sql.Float, approvalData.MonthlyWages || null)
+        .input('PerHourWages', sql.Float, approvalData.PerHourWages || null)
+        .input('EffectiveDate', sql.Date, approvalData.EffectiveDate || null)
+        .input('Remarks', sql.NVarChar, approvalData.Remarks || null)
+        .query(`
+            UPDATE [LabourMonthlyWages]
+            SET ApprovalStatusWages = 'Approved',
+                isApprovalDoneAdmin = @isApprovalDoneAdmin,
+                DailyWages = @DailyWages,
+                MonthlyWages = @MonthlyWages,
+                PerHourWages = @PerHourWages,
+                EffectiveDate = @EffectiveDate,
+                Remarks = @Remarks
+            WHERE WageID = @WageID
+        `);
+
+        // Update WagesAdminApprovals
+        await pool.request()
+            .input('ApprovalID', sql.Int, ApprovalID)
+            .query(`
+                UPDATE [WagesAdminApprovals]
+                SET ApprovalStatus = 'Approved',
+                    ApprovalDate = GETDATE()
+                WHERE ApprovalID = @ApprovalID
+            `);
+
+        console.log('Wages approved successfully.');
+        return { success: true, message: 'Wages approved successfully.' };
+    } catch (error) {
+        console.error('Error approving wages:', error);
+        throw new Error('Error approving wages.');
+    }
+}
+
+
+async function rejectWages(ApprovalID, Remarks) {
+    try {
+        const pool = await poolPromise;
+        console.log('Rejecting wages with ApprovalID:', ApprovalID, 'and Remarks:', Remarks);
+
+        // Fetch the approval record
+        const approvalResult = await pool.request()
+            .input('ApprovalID', sql.Int, ApprovalID)
+            .query(`
+                SELECT * FROM [WagesAdminApprovals]
+                WHERE ApprovalID = @ApprovalID
+            `);
+
+        if (approvalResult.recordset.length === 0) {
+            throw new Error('Approval record not found.');
+        }
+
+        const approvalData = approvalResult.recordset[0];
+
+        // Reject in LabourMonthlyWages
+        await pool.request()
+            .input('WageID', sql.Int, approvalData.WageID)
+            .input('Remarks', sql.NVarChar, Remarks || null) // Allow null if no Remarks provided
+            .input('isApprovalReject', sql.Bit, 1)
+            .query(`
+                UPDATE [LabourMonthlyWages]
+                SET ApprovalStatusWages = 'Rejected',
+                    Remarks = @Remarks,
+                    isApprovalReject = @isApprovalReject
+                WHERE WageID = @WageID
+            `);
+
+        // Update WagesAdminApprovals
+        await pool.request()
+            .input('ApprovalID', sql.Int, ApprovalID)
+            .input('Remarks', sql.NVarChar, Remarks || null)
+            .query(`
+                UPDATE [WagesAdminApprovals]
+                SET ApprovalStatus = 'Rejected',
+                    RejectionDate = GETDATE(),
+                    Remarks = @Remarks
+                WHERE ApprovalID = @ApprovalID
+            `);
+
+        console.log('Wages rejected successfully.');
+        return { success: true, message: 'Wages rejected successfully.' };
+    } catch (error) {
+        console.error('Error rejecting wages:', error);
+        throw new Error('Error rejecting wages.');
+    }
+}
+
+
 
 // Add an approval
 const addWageApproval = async (approval) => {
@@ -3258,6 +3471,7 @@ async function getWagesByDateRange(projectName, startDate, endDate) {
             wages.DailyWages,
             wages.WeeklyOff,
             wages.FixedMonthlyWages,
+            wages.EffectiveDate,
             wages.CreatedAt,
             ROW_NUMBER() OVER (PARTITION BY onboarding.LabourID ORDER BY wages.CreatedAt DESC) AS RowNum
         FROM 
@@ -3284,6 +3498,7 @@ async function getWagesByDateRange(projectName, startDate, endDate) {
         DailyWages,
         WeeklyOff,
         FixedMonthlyWages,
+        EffectiveDate,
         CreatedAt
     FROM LatestWages
     WHERE RowNum = 1
@@ -3402,11 +3617,12 @@ async function insertWagesData(row) {
         .input('YearlyWages', sql.Decimal, yearlyWages)
         .input('FixedMonthlyWages', sql.Decimal, fixedMonthlyWages) // New column for Fixed Monthly Wages
         .input('WeeklyOff', sql.Int, parseInt(row.WeeklyOff, 10) || null)
+        .input('EffectiveDate', sql.Date, row.EffectiveDate || null)
         .input('CreatedAt', sql.DateTime, new Date())
         .query(`
             INSERT INTO [dbo].[LabourMonthlyWages] 
-            (LabourID, WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, CreatedAt)
-            VALUES (@LabourID, @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @FixedMonthlyWages, @WeeklyOff, @CreatedAt)
+            (LabourID, WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, EffectiveDate, CreatedAt)
+            VALUES (@LabourID, @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @FixedMonthlyWages, @WeeklyOff, @EffectiveDate, @CreatedAt)
         `);
 }
 
@@ -3429,7 +3645,8 @@ const getWagesAndLabourOnboardingJoin = async () => {
             wages.YearlyWages,
             wages.WeeklyOff,
             wages.CreatedAt,
-            wages.FixedMonthlyWages
+            wages.FixedMonthlyWages,
+            wages.EffectiveDate
         FROM 
             [dbo].[labourOnboarding] AS onboarding
         LEFT JOIN 
@@ -3534,6 +3751,10 @@ module.exports = {
     getWagesByDateRange,
     insertWagesData,
     getWagesAndLabourOnboardingJoin,
-    searchFromWages
+    searchFromWages,
+    checkExistingWages,
+    markWagesForApproval,
+    approveWages,
+    rejectWages
 
 };
