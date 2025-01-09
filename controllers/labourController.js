@@ -2418,7 +2418,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('04 14 * * *', async () => {
+cron.schedule('35 12 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
@@ -3253,14 +3253,14 @@ console.log('id',id)
 }
 
 async function rejectAttendanceControllerAdmin(req, res) {
-    const { id } = req.query;
-console.log('id___rejectAttendanceControllerAdmin',id)
+    const { id, rejectReason } = req.query;
+console.log('id___rejectAttendanceControllerAdmin',req.query)
     if (!id) {
         return res.status(400).json({ message: 'id is required.' });
     }
 
     try {
-        const result = await labourModel.rejectAttendanceAdmin(id);
+        const result = await labourModel.rejectAttendanceAdmin(id, rejectReason);
         res.status(200).json(result);
     } catch (error) {
         console.error('Error in approving attendance:', error);
@@ -3454,6 +3454,8 @@ async function LabourAttendanceApproval(req, res) {
 
 // --------------------------------------------------    LABOUR WAGES MODULE 20-12-2024  ----------------------------------------------------
 
+
+
 const getLabourMonthlyWages = async (req, res) => {
     try {
         const wages = await labourModel.getLabourMonthlyWages();
@@ -3464,23 +3466,111 @@ const getLabourMonthlyWages = async (req, res) => {
 };
 
 // Add or update labour monthly wages
+// const upsertLabourMonthlyWages = async (req, res) => {
+//     try {
+//         const payload = req.body;
+//         console.log('payload for wages', payload)
+
+//         // Validate required fields
+//         if (!payload.labourId || !payload.payStructure) {
+//             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
+//         }
+
+//         await labourModel.upsertLabourMonthlyWages(payload);
+//         res.status(200).json({ message: 'Wages updated successfully' });
+//     } catch (error) {
+//         console.error('Error updating wages:', error);
+//         res.status(500).json({ message: 'Error updating wages', error });
+//     }
+// };
+
+
 const upsertLabourMonthlyWages = async (req, res) => {
     try {
         const payload = req.body;
-        console.log('payload for wages', payload)
-
-        // Validate required fields
         if (!payload.labourId || !payload.payStructure) {
             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
         }
 
-        await labourModel.upsertLabourMonthlyWages(payload);
-        res.status(200).json({ message: 'Wages updated successfully' });
+        // Check if wages for the labour in the current month already exist
+        const existingWages = await labourModel.checkExistingWages(payload.labourId);
+        console.log('payload of wages 55',existingWages)
+
+        if (existingWages) {
+            if (existingWages.ApprovalStatus === 'Pending') {
+                return res.status(400).json({ message: 'Wages for this month are pending admin approval.' });
+            } else if (existingWages.ApprovalStatus === 'Approved') {
+                // Send wages to admin for re-approval
+                await labourModel.markWagesForApproval(payload);
+                return res.status(200).json({ message: 'Wages changes sent for admin approval.' });
+            }
+        } else {
+            // Add wages directly for the first time
+            await labourModel.upsertLabourMonthlyWages(payload);
+            return res.status(200).json({ message: 'Wages added successfully.' });
+        }
     } catch (error) {
         console.error('Error updating wages:', error);
         res.status(500).json({ message: 'Error updating wages', error });
     }
 };
+
+const checkExistingWagesController = async (req, res) => {
+    try {
+        const { labourId } = req.query;
+        if (!labourId) {
+            return res.status(400).json({ message: 'Labour ID is required' });
+        }
+
+        const existingWages = await labourModel.checkExistingWages(labourId);
+
+        if (existingWages) {
+            res.status(200).json({
+                exists: true,
+                approved: existingWages.ApprovalStatus === 'Approved',
+                data: existingWages,
+            });
+        } else {
+            res.status(200).json({ exists: false });
+        }
+    } catch (error) {
+        console.error('Error checking existing wages:', error);
+        res.status(500).json({ message: 'Error checking existing wages', error });
+    }
+};
+
+const markWagesForApprovalController = async (req, res) => {
+    try {
+        const payload = req.body;
+        const { wageId, labourId, dailyWages, perHourWages, monthlyWages, yearlyWages, effectiveDate, fixedMonthlyWages, weeklyOff, payStructure, wagesEditedBy, remarks } = payload;
+console.log('payload for wages new 55',payload)
+        if (!wageId || !labourId || !payStructure) {
+            return res.status(400).json({ message: 'Wage ID, Labour ID, and Pay Structure are required' });
+        }
+
+        const result = await labourModel.markWagesForApproval(
+            wageId,
+            labourId,
+            dailyWages,
+            perHourWages,
+            monthlyWages,
+            yearlyWages,
+            effectiveDate,
+            fixedMonthlyWages,
+            weeklyOff,
+            payStructure,
+            wagesEditedBy,
+            remarks
+        );
+
+        return res.status(200).json(result);
+    } catch (error) {
+        console.error('Error marking wages for approval:', error.message || error);
+        return res.status(500).json({ message: 'Error marking wages for approval', error: error.message || error });
+    }
+};
+
+
 
 // Get wage approvals
 const getWagesAdminApprovals = async (req, res) => {
@@ -3491,6 +3581,63 @@ const getWagesAdminApprovals = async (req, res) => {
         res.status(500).json({ message: 'Error fetching approvals', error });
     }
 };
+
+// Approve or reject wages
+const handleApproval = async (req, res) => {
+    try {
+        const { WageID, approvalStatus, remarks } = req.body;
+
+        if (!WageID || !['Approved', 'Rejected'].includes(approvalStatus)) {
+            return res.status(400).json({ message: 'Invalid approval data provided.' });
+        }
+
+        if (approvalStatus === 'Approved') {
+            await labourModel.approveWages(WageID);
+        } else if (approvalStatus === 'Rejected') {
+            await labourModel.rejectWages(WageID, remarks);
+        }
+
+        res.status(200).json({ message: `Wages ${approvalStatus.toLowerCase()} successfully.` });
+    } catch (error) {
+        console.error('Error handling approval:', error);
+        res.status(500).json({ message: 'Error handling approval.', error });
+    }
+};
+
+async function approveWagesControllerAdmin(req, res) {
+    const { ApprovalID } = req.query;
+    console.log('id___approveWagesControllerAdmin',ApprovalID)
+    if (!ApprovalID) {
+        return res.status(400).json({ message: 'WageID is required.' });
+    }
+
+    try {
+        const result = await labourModel.approveWages(ApprovalID);
+        res.status(200).json(result);
+    } catch (error) {
+        console.error('Error in approving Wages:', error);
+        res.status(error.statusCode || 500).json({ message: error.message });
+    }
+}
+
+async function rejectWagesControllerAdmin(req, res) {
+    const { ApprovalID, Remarks } = req.query; // Ensure Remarks is fetched from query
+    console.log('id___rejectWagesControllerAdmin', req.query);
+
+    if (!ApprovalID) {
+        return res.status(400).json({ message: 'ApprovalID is required.' });
+    }
+
+    try {
+        const result = await labourModel.rejectWages(ApprovalID, Remarks);
+        res.status(200).json(result);
+    } catch (error) {
+        console.error('Error in rejecting Wages:', error);
+        res.status(error.statusCode || 500).json({ message: error.message });
+    }
+}
+
+
 
 // Add a wage approval
 const addWageApproval = async (req, res) => {
@@ -3692,5 +3839,10 @@ module.exports = {
     exportWagesexcelSheet,
     importWages,
     getWagesAndLabourOnboardingJoincontroller,
-    searchLaboursFromWages
+    searchLaboursFromWages,
+    handleApproval,
+    approveWagesControllerAdmin,
+    rejectWagesControllerAdmin,
+    checkExistingWagesController,
+    markWagesForApprovalController
 };
