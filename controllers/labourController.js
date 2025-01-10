@@ -150,6 +150,27 @@ async function getNextUniqueID(req, res) {
 };
 
 
+async function getCommandStatus(req, res) {
+    const commandId = req.params.commandId;
+
+    try {
+        const pool = await poolPromise3;
+        const result = await pool.request()
+            .input('CommandId', sql.Int, commandId)
+            .query('SELECT status FROM DeviceCommands WHERE DeviceCommandId = @CommandId');
+
+        if (result.recordset.length > 0) {
+            const status = result.recordset[0].status;
+            return res.json({ status });
+        } else {
+            return res.status(404).json({ message: 'Command ID not found.' });
+        }
+    } catch (error) {
+        console.error('Error fetching command status:', error.message);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
 // This is running code comment in 29-07-2024
 
 async function createRecord(req, res) {
@@ -885,14 +906,17 @@ finalOnboardName = finalOnboardName.toUpperCase();
             uploadInductionDoc = null
         } = req.files || {};  // Use {} as fallback if req.files is undefined
 
-        const processFileField = (fileField, reqFile) => {
-            if (typeof fileField === 'string' && fileField.startsWith('http')) {
-                return fileField; // URL
-            } else if (reqFile) {
-                return baseUrl + path.basename(reqFile[0].path); // Binary data uploaded, get URL path
+        const processFileField = (bodyField, fileField) => {
+            if (fileField) {
+                // Binary data uploaded, get URL path
+                return baseUrl + path.basename(fileField[0].path);
+            } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
+                // If no new file, use the existing URL
+                return bodyField;
             }
             return null; // No data available
         };
+        
 
         const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
         const backImageUrl = processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
@@ -1451,27 +1475,6 @@ async function saveEsslResponse(data) {
     }
 };
 
-
-async function getCommandStatus(req, res) {
-    const commandId = req.params.commandId;
-
-    try {
-        const pool = await poolPromise3;
-        const result = await pool.request()
-            .input('CommandId', sql.Int, commandId)
-            .query('SELECT status FROM DeviceCommands WHERE DeviceCommandId = @CommandId');
-
-        if (result.recordset.length > 0) {
-            const status = result.recordset[0].status;
-            return res.json({ status });
-        } else {
-            return res.status(404).json({ message: 'Command ID not found.' });
-        }
-    } catch (error) {
-        console.error('Error fetching command status:', error.message);
-        res.status(500).json({ message: 'Internal server error' });
-    }
-};
 
 
 async function getUserStatusController(req, res) {

@@ -822,104 +822,142 @@ const updateEmployeeMaster = async (req, res) => {
 
 
 
-
 const saveTransferData = async (req, res) => {
   try {
-  const {
-    userId, LabourID, name, currentSite, transferSite,currentSiteName,transferSiteName,
-    esslStatus, esslCommandId, esslPayload, esslApiResponse
-  } = req.body;
+    const {
+      userId,
+      LabourID,
+      name,
+      currentSite,
+      transferSite,
+      currentSiteName,
+      transferSiteName,
+      esslStatus,
+      esslCommandId,
+      esslPayload,
+      esslApiResponse,
+      deleteEsslPayload,
+      deleteEsslResponse,
+    } = req.body;
 
-  // Validate required fields
-  if (
-    !userId ||
-    !LabourID ||
-    !name ||
-    currentSite === undefined ||
-    transferSite === undefined
-  ) {
-    return res.status(400).json({
-      message:
-        'Missing required fields. Ensure userId, LabourID, name, currentSite, and transferSite are provided.',
-    });
-  }
+    // Validate required fields
+    if (
+      !userId ||
+      !LabourID ||
+      !name ||
+      currentSite === undefined ||
+      transferSite === undefined
+    ) {
+      return res.status(400).json({
+        message:
+          'Missing required fields. Ensure userId, LabourID, name, currentSite, and transferSite are provided.',
+      });
+    }
 
-  // Ensure `currentSite` and `transferSite` are valid integers
-  const sanitizedCurrentSite = parseInt(currentSite);
-  const sanitizedTransferSite = parseInt(transferSite);
+    // Ensure `currentSite` and `transferSite` are valid integers
+    const sanitizedCurrentSite = parseInt(currentSite);
+    const sanitizedTransferSite = parseInt(transferSite);
 
-  const parsedResponse = JSON.parse(esslApiResponse);
-  const esslResponseStatus = parsedResponse.Status || 'Unknown'; // Handle missing status gracefully
+    const parsedResponse = JSON.parse(esslApiResponse || '{}');
+    const esslResponseStatus = parsedResponse.Status || 'Unknown'; // Handle missing status gracefully
 
-  if (isNaN(sanitizedCurrentSite) || isNaN(sanitizedTransferSite)) {
-    return res.status(400).json({
-      message: 'Invalid site values. Both currentSite and transferSite must be integers.',
-    });
-  }
+    if (isNaN(sanitizedCurrentSite) || isNaN(sanitizedTransferSite)) {
+      return res.status(400).json({
+        message:
+          'Invalid site values. Both currentSite and transferSite must be integers.',
+      });
+    }
 
-  const query = `
-  INSERT INTO [dbo].[API_TransferSite] 
-  ([userId], [LabourID], [name], [currentSite], [currentSiteName], 
-   [transferSite], [transferSiteName], [esslStatus], [esslCommandId], 
-   [esslPayload], [esslApiResponse], [esslResponseStatus], 
-   [createdAt], [updatedAt])
-  VALUES (@userId, @LabourID, @name, @currentSite, @currentSiteName, 
-          @transferSite, @transferSiteName, @esslStatus, @esslCommandId, 
-          @esslPayload, @esslApiResponse, @esslResponseStatus, 
-          GETDATE(), GETDATE())
-`;
+    const pool = await poolPromise;
 
-const pool = await poolPromise;
+    // Insert transfer data into [API_TransferSite]
+    const insertQuery = `
+      INSERT INTO [dbo].[API_TransferSite] 
+      ([userId], [LabourID], [name], [currentSite], [currentSiteName], 
+       [transferSite], [transferSiteName], [esslStatus], [esslCommandId], 
+       [esslPayload], [esslApiResponse], [esslResponseStatus],
+       [deleteEsslPayload], [deleteEsslResponse], 
+       [createdAt], [updatedAt])
+      VALUES (@userId, @LabourID, @name, @currentSite, @currentSiteName, 
+              @transferSite, @transferSiteName, @esslStatus, @esslCommandId, 
+              @esslPayload, @esslApiResponse, @esslResponseStatus,
+              @deleteEsslPayload, @deleteEsslResponse, 
+              GETDATE(), GETDATE())
+    `;
 
-  // Execute SQL query with validated inputs
-  const result = await pool
-    .request()
-    .input('userId', sql.Int, userId)
-    .input('LabourID', sql.NVarChar(50), LabourID)
-    .input('name', sql.NVarChar(255), name)
-    .input('currentSite', sql.Int, sanitizedCurrentSite)
-    .input('currentSiteName', sql.NVarChar(255), currentSiteName)
-    .input('transferSite', sql.Int, sanitizedTransferSite)
-    .input('transferSiteName', sql.NVarChar(255), transferSiteName)
-    .input('esslStatus', sql.NVarChar(50), esslStatus || 'Pending')
-    .input('esslCommandId', sql.Int, parseInt(esslCommandId) || 0)
-    .input('esslPayload', sql.VarChar(sql.MAX), esslPayload || '')
-    .input('esslApiResponse', sql.NVarChar(sql.MAX), esslApiResponse || '')
-    .input('esslResponseStatus', sql.NVarChar(50), esslResponseStatus) // Store parsed status
-    .query(query);
+    await pool
+      .request()
+      .input('userId', sql.Int, userId)
+      .input('LabourID', sql.NVarChar(50), LabourID)
+      .input('name', sql.NVarChar(255), name)
+      .input('currentSite', sql.Int, sanitizedCurrentSite)
+      .input('currentSiteName', sql.NVarChar(255), currentSiteName)
+      .input('transferSite', sql.Int, sanitizedTransferSite)
+      .input('transferSiteName', sql.NVarChar(255), transferSiteName)
+      .input('esslStatus', sql.NVarChar(50), esslStatus || 'Pending')
+      .input('esslCommandId', sql.Int, parseInt(esslCommandId) || 0)
+      .input('esslPayload', sql.VarChar(sql.MAX), esslPayload || '')
+      .input('esslApiResponse', sql.NVarChar(sql.MAX), esslApiResponse || '')
+      .input('esslResponseStatus', sql.NVarChar(50), esslResponseStatus)
+      .input('deleteEsslPayload', sql.VarChar(sql.MAX), deleteEsslPayload || '')
+      .input('deleteEsslResponse', sql.NVarChar(sql.MAX), deleteEsslResponse || '')
+      .query(insertQuery);
 
-  if (result.rowsAffected && result.rowsAffected[0] > 0) {
-    console.log('Transfer data inserted successfully:', result);
+    // Update [labourOnboarding] with transfer site details and additional fields
+    const updateQuery = `
+      UPDATE [dbo].[labourOnboarding]
+      SET
+        projectName = @transferSite,
+        location = @transferSiteName,
+        WorkingBu = @transferSiteName,
+        businessUnit = @transferSiteName,
+        OnboardingProjectName = @currentSite,
+        OnboardingBusinessUnit = @currentSiteName,
+        isSiteTransfer = @isSiteTransfer
+      WHERE id = @userId
+    `;
+
+    const updateResult = await pool
+      .request()
+      .input('userId', sql.Int, userId)
+      .input('transferSite', sql.Int, sanitizedTransferSite)
+      .input('transferSiteName', sql.NVarChar(255), transferSiteName)
+      .input('currentSite', sql.Int, sanitizedCurrentSite)
+      .input('currentSiteName', sql.NVarChar(255), currentSiteName)
+      .input('isSiteTransfer', sql.Bit, 1) // Set isSiteTransfer to true
+      .query(updateQuery);
+
+    // Check if the update query affected any rows
+    if (updateResult.rowsAffected[0] === 0) {
+      return res.status(400).json({
+        message: 'No rows updated in labourOnboarding table.',
+      });
+    }
+
     res.status(201).json({
-      message: 'Transfer data saved successfully.',
-      data: result,
+      message: 'Transfer data saved and labourOnboarding updated successfully.',
     });
-  } else {
-    res.status(400).json({
-      message: 'Transfer data not saved. No rows affected.',
+  } catch (error) {
+    console.error('Error saving transfer data and updating labourOnboarding:', error);
+    res.status(500).json({
+      message: 'Failed to save transfer data and update labourOnboarding.',
+      error: error.message,
     });
   }
-} catch (error) {
-  console.error('Error saving transfer data:', error);
-  res.status(500).json({
-    message: 'Failed to save transfer data.',
-    error: error.message,
-  });
-}
 };
+
 
 
 const getAllLaboursWithTransferDetails = async (req, res) => {
   try {
-    const { labourIds } = req.body; // Receive labourIds from the request body
-
+    const { labourIds } = req.body;
     if (!labourIds || labourIds.length === 0) {
       return res.status(400).json({ message: 'No labour IDs provided.' });
     }
 
-    // SQL query to fetch transfer site names for the provided labour IDs
+    // SQL query to fetch transfer site names and createdAt for the provided labour IDs
     const query = `
-      SELECT LabourID, transferSiteName 
+      SELECT LabourID, transferSiteName, currentSiteName, createdAt 
       FROM [dbo].[API_TransferSite] 
       WHERE LabourID IN (${labourIds.map((id) => `'${id}'`).join(', ')})
     `;
@@ -940,6 +978,7 @@ const getAllLaboursWithTransferDetails = async (req, res) => {
     });
   }
 };
+
 
 
 
