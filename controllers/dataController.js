@@ -5,6 +5,7 @@ const { sql, poolPromise2 } = require('../config/dbConfig2');
 const { poolPromise3 } = require('../config/dbConfig3');
 const { poolPromise } = require('../config/dbConfig');
 const xml2js = require("xml2js")
+// const SOAP_URL = "https://essl.vjerp.com:8530/iclock/WebAPIService.asmx";
 
 const getProjectNames = async (req, res) => {
   try {
@@ -832,12 +833,6 @@ const saveTransferData = async (req, res) => {
       transferSite,
       currentSiteName,
       transferSiteName,
-      esslStatus,
-      esslCommandId,
-      esslPayload,
-      esslApiResponse,
-      deleteEsslPayload,
-      deleteEsslResponse,
     } = req.body;
 
     // Validate required fields
@@ -849,28 +844,83 @@ const saveTransferData = async (req, res) => {
       transferSite === undefined
     ) {
       return res.status(400).json({
-        message:
-          'Missing required fields. Ensure userId, LabourID, name, currentSite, and transferSite are provided.',
+        message: "Missing required fields. Ensure all necessary details are provided.",
       });
     }
 
-    // Ensure `currentSite` and `transferSite` are valid integers
     const sanitizedCurrentSite = parseInt(currentSite);
     const sanitizedTransferSite = parseInt(transferSite);
 
-    const parsedResponse = JSON.parse(esslApiResponse || '{}');
-    const esslResponseStatus = parsedResponse.Status || 'Unknown'; // Handle missing status gracefully
-
     if (isNaN(sanitizedCurrentSite) || isNaN(sanitizedTransferSite)) {
       return res.status(400).json({
-        message:
-          'Invalid site values. Both currentSite and transferSite must be integers.',
+        message: "Invalid site values. Both currentSite and transferSite must be integers.",
       });
     }
 
-    const pool = await poolPromise;
+    // Step 1: Delete User from Current Site
+    const deleteUserEnvelope = `
+      <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+        <soap:Body>
+          <DeleteUser xmlns="http://tempuri.org/">
+            <APIKey>11</APIKey>
+            <EmployeeCode>${LabourID}</EmployeeCode>
+            <SerialNumber>${sanitizedCurrentSite}</SerialNumber>
+            <UserName>test</UserName>
+            <UserPassword>Test@123</UserPassword>
+            <CommandId>25</CommandId>
+          </DeleteUser>
+        </soap:Body>
+      </soap:Envelope>`;
 
-    // Insert transfer data into [API_TransferSite]
+    let deleteResponse, deleteResponseParsed;
+    try {
+      const response = await axios.post('https://essl.vjerp.com:8530/iclock/WebAPIService.asmx?op=DeleteUser', deleteUserEnvelope, {
+        headers: {
+          "Content-Type": "text/xml; charset=utf-8",
+          SOAPAction: "http://tempuri.org/DeleteUser",
+        },
+      });
+      deleteResponse = response.data;
+      deleteResponseParsed = JSON.stringify(deleteResponse); // Convert response to JSON for storage
+    } catch (error) {
+      console.error("Error during DeleteUser:", error);
+      deleteResponseParsed = { error: error.message };
+    }
+
+    // Step 2: Add User to New Site
+    const addUserEnvelope = `
+      <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+        <soap:Body>
+          <AddEmployee xmlns="http://tempuri.org/">
+            <APIKey>11</APIKey>
+            <EmployeeCode>${LabourID}</EmployeeCode>
+            <EmployeeName>${name}</EmployeeName>
+            <CardNumber>${userId}</CardNumber>
+            <SerialNumber>${sanitizedTransferSite}</SerialNumber>
+            <UserName>test</UserName>
+            <UserPassword>Test@123</UserPassword>
+            <CommandId>25</CommandId>
+          </AddEmployee>
+        </soap:Body>
+      </soap:Envelope>`;
+
+    let addResponse, addResponseParsed;
+    try {
+      const response = await axios.post('https://essl.vjerp.com:8530/iclock/WebAPIService.asmx?op=AddEmployee', addUserEnvelope, {
+        headers: {
+          "Content-Type": "text/xml; charset=utf-8",
+          SOAPAction: "http://tempuri.org/AddEmployee",
+        },
+      });
+      addResponse = response.data;
+      addResponseParsed = JSON.stringify(addResponse); // Convert response to JSON for storage
+    } catch (error) {
+      console.error("Error during AddEmployee:", error);
+      addResponseParsed = { error: error.message };
+    }
+
+    // Step 3: Insert transfer data into [API_TransferSite]
+    const pool = await poolPromise;
     const insertQuery = `
       INSERT INTO [dbo].[API_TransferSite] 
       ([userId], [LabourID], [name], [currentSite], [currentSiteName], 
@@ -885,25 +935,24 @@ const saveTransferData = async (req, res) => {
               GETDATE(), GETDATE())
     `;
 
-    await pool
-      .request()
-      .input('userId', sql.Int, userId)
-      .input('LabourID', sql.NVarChar(50), LabourID)
-      .input('name', sql.NVarChar(255), name)
-      .input('currentSite', sql.Int, sanitizedCurrentSite)
-      .input('currentSiteName', sql.NVarChar(255), currentSiteName)
-      .input('transferSite', sql.Int, sanitizedTransferSite)
-      .input('transferSiteName', sql.NVarChar(255), transferSiteName)
-      .input('esslStatus', sql.NVarChar(50), esslStatus || 'Pending')
-      .input('esslCommandId', sql.Int, parseInt(esslCommandId) || 0)
-      .input('esslPayload', sql.VarChar(sql.MAX), esslPayload || '')
-      .input('esslApiResponse', sql.NVarChar(sql.MAX), esslApiResponse || '')
-      .input('esslResponseStatus', sql.NVarChar(50), esslResponseStatus)
-      .input('deleteEsslPayload', sql.VarChar(sql.MAX), deleteEsslPayload || '')
-      .input('deleteEsslResponse', sql.NVarChar(sql.MAX), deleteEsslResponse || '')
+    await pool.request()
+      .input("userId", sql.Int, userId)
+      .input("LabourID", sql.NVarChar(50), LabourID)
+      .input("name", sql.NVarChar(255), name)
+      .input("currentSite", sql.Int, sanitizedCurrentSite)
+      .input("currentSiteName", sql.NVarChar(255), currentSiteName)
+      .input("transferSite", sql.Int, sanitizedTransferSite)
+      .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+      .input("esslStatus", sql.NVarChar(50), "Transferred")
+      .input("esslCommandId", sql.Int, 25)
+      .input("esslPayload", sql.NVarChar(sql.MAX), addUserEnvelope)
+      .input("esslApiResponse", sql.NVarChar(sql.MAX), addResponseParsed)
+      .input("esslResponseStatus", sql.NVarChar(50), "Success")
+      .input("deleteEsslPayload", sql.NVarChar(sql.MAX), deleteUserEnvelope)
+      .input("deleteEsslResponse", sql.NVarChar(sql.MAX), deleteResponseParsed)
       .query(insertQuery);
 
-    // Update [labourOnboarding] with transfer site details and additional fields
+    // Step 4: Update [labourOnboarding] with transfer site details
     const updateQuery = `
       UPDATE [dbo].[labourOnboarding]
       SET
@@ -917,30 +966,28 @@ const saveTransferData = async (req, res) => {
       WHERE id = @userId
     `;
 
-    const updateResult = await pool
-      .request()
-      .input('userId', sql.Int, userId)
-      .input('transferSite', sql.Int, sanitizedTransferSite)
-      .input('transferSiteName', sql.NVarChar(255), transferSiteName)
-      .input('currentSite', sql.Int, sanitizedCurrentSite)
-      .input('currentSiteName', sql.NVarChar(255), currentSiteName)
-      .input('isSiteTransfer', sql.Bit, 1) // Set isSiteTransfer to true
+    const updateResult = await pool.request()
+      .input("userId", sql.Int, userId)
+      .input("transferSite", sql.Int, sanitizedTransferSite)
+      .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+      .input("currentSite", sql.Int, sanitizedCurrentSite)
+      .input("currentSiteName", sql.NVarChar(255), currentSiteName)
+      .input("isSiteTransfer", sql.Bit, 1) // Set isSiteTransfer to true
       .query(updateQuery);
 
-    // Check if the update query affected any rows
     if (updateResult.rowsAffected[0] === 0) {
       return res.status(400).json({
-        message: 'No rows updated in labourOnboarding table.',
+        message: "No rows updated in labourOnboarding table.",
       });
     }
 
     res.status(201).json({
-      message: 'Transfer data saved and labourOnboarding updated successfully.',
+      message: "Transfer data saved and labourOnboarding updated successfully.",
     });
   } catch (error) {
-    console.error('Error saving transfer data and updating labourOnboarding:', error);
+    console.error("Error saving transfer data and updating labourOnboarding:", error);
     res.status(500).json({
-      message: 'Failed to save transfer data and update labourOnboarding.',
+      message: "Failed to save transfer data and update labourOnboarding.",
       error: error.message,
     });
   }
