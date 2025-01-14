@@ -820,181 +820,6 @@ const updateEmployeeMaster = async (req, res) => {
 };
 
 
-
-
-
-const saveTransferData = async (req, res) => {
-  try {
-    const {
-      userId,
-      LabourID,
-      name,
-      currentSite,
-      transferSite,
-      currentSiteName,
-      transferSiteName,
-    } = req.body;
-
-    // Validate required fields
-    if (
-      !userId ||
-      !LabourID ||
-      !name ||
-      currentSite === undefined ||
-      transferSite === undefined
-    ) {
-      return res.status(400).json({
-        message: "Missing required fields. Ensure all necessary details are provided.",
-      });
-    }
-
-    const sanitizedCurrentSite = parseInt(currentSite);
-    const sanitizedTransferSite = parseInt(transferSite);
-
-    if (isNaN(sanitizedCurrentSite) || isNaN(sanitizedTransferSite)) {
-      return res.status(400).json({
-        message: "Invalid site values. Both currentSite and transferSite must be integers.",
-      });
-    }
-
-    // Step 1: Delete User from Current Site
-    const deleteUserEnvelope = `
-      <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-        <soap:Body>
-          <DeleteUser xmlns="http://tempuri.org/">
-            <APIKey>11</APIKey>
-            <EmployeeCode>${LabourID}</EmployeeCode>
-            <SerialNumber>${sanitizedCurrentSite}</SerialNumber>
-            <UserName>test</UserName>
-            <UserPassword>Test@123</UserPassword>
-            <CommandId>25</CommandId>
-          </DeleteUser>
-        </soap:Body>
-      </soap:Envelope>`;
-
-    let deleteResponse, deleteResponseParsed;
-    try {
-      const response = await axios.post('https://essl.vjerp.com:8530/iclock/WebAPIService.asmx?op=DeleteUser', deleteUserEnvelope, {
-        headers: {
-          "Content-Type": "text/xml; charset=utf-8",
-          SOAPAction: "http://tempuri.org/DeleteUser",
-        },
-      });
-      deleteResponse = response.data;
-      deleteResponseParsed = JSON.stringify(deleteResponse); // Convert response to JSON for storage
-    } catch (error) {
-      console.error("Error during DeleteUser:", error);
-      deleteResponseParsed = { error: error.message };
-    }
-
-    // Step 2: Add User to New Site
-    const addUserEnvelope = `
-      <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-        <soap:Body>
-          <AddEmployee xmlns="http://tempuri.org/">
-            <APIKey>11</APIKey>
-            <EmployeeCode>${LabourID}</EmployeeCode>
-            <EmployeeName>${name}</EmployeeName>
-            <CardNumber>${userId}</CardNumber>
-            <SerialNumber>${sanitizedTransferSite}</SerialNumber>
-            <UserName>test</UserName>
-            <UserPassword>Test@123</UserPassword>
-            <CommandId>25</CommandId>
-          </AddEmployee>
-        </soap:Body>
-      </soap:Envelope>`;
-
-    let addResponse, addResponseParsed;
-    try {
-      const response = await axios.post('https://essl.vjerp.com:8530/iclock/WebAPIService.asmx?op=AddEmployee', addUserEnvelope, {
-        headers: {
-          "Content-Type": "text/xml; charset=utf-8",
-          SOAPAction: "http://tempuri.org/AddEmployee",
-        },
-      });
-      addResponse = response.data;
-      addResponseParsed = JSON.stringify(addResponse); // Convert response to JSON for storage
-    } catch (error) {
-      console.error("Error during AddEmployee:", error);
-      addResponseParsed = { error: error.message };
-    }
-
-    // Step 3: Insert transfer data into [API_TransferSite]
-    const pool = await poolPromise;
-    const insertQuery = `
-      INSERT INTO [dbo].[API_TransferSite] 
-      ([userId], [LabourID], [name], [currentSite], [currentSiteName], 
-       [transferSite], [transferSiteName], [esslStatus], [esslCommandId], 
-       [esslPayload], [esslApiResponse], [esslResponseStatus],
-       [deleteEsslPayload], [deleteEsslResponse], 
-       [createdAt], [updatedAt])
-      VALUES (@userId, @LabourID, @name, @currentSite, @currentSiteName, 
-              @transferSite, @transferSiteName, @esslStatus, @esslCommandId, 
-              @esslPayload, @esslApiResponse, @esslResponseStatus,
-              @deleteEsslPayload, @deleteEsslResponse, 
-              GETDATE(), GETDATE())
-    `;
-
-    await pool.request()
-      .input("userId", sql.Int, userId)
-      .input("LabourID", sql.NVarChar(50), LabourID)
-      .input("name", sql.NVarChar(255), name)
-      .input("currentSite", sql.Int, sanitizedCurrentSite)
-      .input("currentSiteName", sql.NVarChar(255), currentSiteName)
-      .input("transferSite", sql.Int, sanitizedTransferSite)
-      .input("transferSiteName", sql.NVarChar(255), transferSiteName)
-      .input("esslStatus", sql.NVarChar(50), "Transferred")
-      .input("esslCommandId", sql.Int, 25)
-      .input("esslPayload", sql.NVarChar(sql.MAX), addUserEnvelope)
-      .input("esslApiResponse", sql.NVarChar(sql.MAX), addResponseParsed)
-      .input("esslResponseStatus", sql.NVarChar(50), "Success")
-      .input("deleteEsslPayload", sql.NVarChar(sql.MAX), deleteUserEnvelope)
-      .input("deleteEsslResponse", sql.NVarChar(sql.MAX), deleteResponseParsed)
-      .query(insertQuery);
-
-    // Step 4: Update [labourOnboarding] with transfer site details
-    const updateQuery = `
-      UPDATE [dbo].[labourOnboarding]
-      SET
-        projectName = @transferSite,
-        location = @transferSiteName,
-        WorkingBu = @transferSiteName,
-        businessUnit = @transferSiteName,
-        OnboardingProjectName = @currentSite,
-        OnboardingBusinessUnit = @currentSiteName,
-        isSiteTransfer = @isSiteTransfer
-      WHERE id = @userId
-    `;
-
-    const updateResult = await pool.request()
-      .input("userId", sql.Int, userId)
-      .input("transferSite", sql.Int, sanitizedTransferSite)
-      .input("transferSiteName", sql.NVarChar(255), transferSiteName)
-      .input("currentSite", sql.Int, sanitizedCurrentSite)
-      .input("currentSiteName", sql.NVarChar(255), currentSiteName)
-      .input("isSiteTransfer", sql.Bit, 1) // Set isSiteTransfer to true
-      .query(updateQuery);
-
-    if (updateResult.rowsAffected[0] === 0) {
-      return res.status(400).json({
-        message: "No rows updated in labourOnboarding table.",
-      });
-    }
-
-    res.status(201).json({
-      message: "Transfer data saved and labourOnboarding updated successfully.",
-    });
-  } catch (error) {
-    console.error("Error saving transfer data and updating labourOnboarding:", error);
-    res.status(500).json({
-      message: "Failed to save transfer data and update labourOnboarding.",
-      error: error.message,
-    });
-  }
-};
-
-
-
 const getAllLaboursWithTransferDetails = async (req, res) => {
   try {
     const { labourIds } = req.body;
@@ -1427,6 +1252,526 @@ cron.schedule('08 01 * * *', async () => {
   }
 });
 
+
+//-----------------------------   Function for addEmployee and deleteUser from ESSL Device -----------------------------
+
+const getAdminSiteTransferApproval = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT * FROM AdminSiteTransferApproval`);
+    // if (result.recordset.length === 0) {
+    //   return res.status(404).json({ message: 'No records found' });
+    // }
+    res.json(result.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+};
+
+const siteTransferRequestforAdmin = async (req, res) => {
+  try {
+      const { userId, LabourID, name, currentSite, transferSite, currentSiteName, transferSiteName, transferDate, siteTransferBy } = req.body;
+
+      if (!LabourID || !currentSite || !transferSite) {
+          return res.status(400).json({ message: "All fields are required." });
+      }
+
+      const pool = await poolPromise;
+      await pool.request()
+          .input("userId", sql.Int, userId || null)
+          .input("LabourID", sql.NVarChar(50), LabourID)
+          .input("name", sql.NVarChar(255), name || null)
+          .input("currentSite", sql.Int, currentSite)
+          .input("transferSite", sql.Int, transferSite)
+          .input("currentSiteName", sql.NVarChar(255), currentSiteName)
+          .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+          .input("transferDate", sql.Date, transferDate || null)
+          .input("siteTransferBy", sql.NVarChar(50), siteTransferBy || null)
+          .query(`
+              INSERT INTO AdminSiteTransferApproval 
+              (userId, LabourID, name, currentSite, transferSite, currentSiteName, transferSiteName, siteTransferBy, transferDate, adminStatus, isAdminApproval, isAdminReject)
+              VALUES (@userId, @LabourID, @name, @currentSite, @transferSite, @currentSiteName, @transferSiteName, @siteTransferBy, @transferDate, 'Pending', 0, 0)
+          `);
+
+      res.status(201).json({ message: "Transfer request submitted successfully." });
+  } catch (error) {
+      console.error("Error adding transfer request:", error);
+      res.status(500).json({ message: "Failed to add transfer request.", error: error.message });
+  }
+};
+
+
+
+const approveSiteTransfer = async (req, res) => {
+  try {
+    const { id } = req.query; // Extract `id` from query parameters.
+
+    if (!id) {
+      return res.status(400).json({ message: "ID is required." });
+    }
+
+    const pool = await poolPromise;
+
+    // Fetch the approval details using `id`
+    const approval = await pool.request()
+      .input("id", sql.NVarChar(50), id)
+      .query(`
+        SELECT * FROM AdminSiteTransferApproval
+        WHERE id = @id AND adminStatus = 'Pending'
+      `);
+
+    if (approval.recordset.length === 0) {
+      return res.status(404).json({ message: "No pending approval found for the given ID." });
+    }
+
+    const transferDetails = approval.recordset[0];
+
+    // Update admin approval status
+    await pool.request()
+      .input("id", sql.NVarChar(50), id)
+      .query(`
+        UPDATE AdminSiteTransferApproval
+        SET adminStatus = 'Approved', isAdminApproval = 1, updatedAt = GETDATE(), siteTransferApproveDate = GETDATE()
+        WHERE id = @id AND adminStatus = 'Pending'
+      `);
+
+    // Call saveTransferData with the fetched details
+    await saveTransferData({
+      body: {
+        userId: transferDetails.userId,
+        LabourID: transferDetails.LabourID, // Keep `LabourID` here if required downstream
+        name: transferDetails.name,
+        currentSite: transferDetails.currentSite,
+        transferSite: transferDetails.transferSite,
+        currentSiteName: transferDetails.currentSiteName,
+        transferSiteName: transferDetails.transferSiteName,
+        siteTransferBy: transferDetails.siteTransferBy,
+      },
+    }, {
+      status: (statusCode) => ({
+        json: (response) => {
+          console.log("saveTransferData Response:", response);
+        },
+      }),
+    });
+
+    // Log admin approval
+    await saveLogToDatabaseSiteTransfer(
+      transferDetails.userId,
+      transferDetails.LabourID, // Use LabourID for logging purposes
+      "Admin Approved",
+      `Site transfer approved for ${transferDetails.name} from ${transferDetails.currentSiteName} to ${transferDetails.transferSiteName}.`,
+      "Success"
+    );
+
+    res.status(200).json({ message: "Site transfer approved and processed successfully." });
+  } catch (error) {
+    console.error("Error approving site transfer:", error);
+    res.status(500).json({ message: "Failed to approve site transfer.", error: error.message });
+  }
+};
+
+
+const rejectSiteTransfer = async (req, res) => {
+  try {
+    const { id, rejectReason } = req.body; // Extract `id` and `rejectReason` from the request body.
+
+    if (!id) {
+      return res.status(400).json({ message: "ID is required." });
+    }
+
+    const pool = await poolPromise;
+
+    // Fetch the approval details using `id`
+    const approval = await pool.request()
+      .input("id", sql.Int, id)
+      .query(`
+        SELECT * FROM AdminSiteTransferApproval
+        WHERE id = @id AND adminStatus = 'Pending'
+      `);
+
+    if (approval.recordset.length === 0) {
+      return res.status(404).json({ message: "No pending approval found for the given ID." });
+    }
+
+    const transferDetails = approval.recordset[0];
+
+    // Update admin rejection status in AdminSiteTransferApproval
+    await pool.request()
+      .input("id", sql.Int, id)
+      .input("rejectReason", sql.NVarChar(sql.MAX), rejectReason || "No reason provided")
+      .query(`
+        UPDATE AdminSiteTransferApproval
+        SET 
+          adminStatus = 'Rejected', 
+          isAdminReject = 1, 
+          updatedAt = GETDATE(), 
+          rejectionReason = @rejectReason, 
+          siteTransferRejectDate = GETDATE()
+        WHERE id = @id AND adminStatus = 'Pending'
+      `);
+
+    // Update rejectionReason in API_TransferSite
+    await pool.request()
+      .input("LabourID", sql.NVarChar(50), transferDetails.LabourID)
+      .input("rejectReason", sql.NVarChar(sql.MAX), rejectReason || "No reason provided")
+      .query(`
+        UPDATE API_TransferSite
+        SET rejectionReason = @rejectReason, updatedAt = GETDATE()
+        WHERE LabourID = @LabourID
+      `);
+
+    // Log admin rejection
+    await saveLogToDatabaseSiteTransfer(
+      transferDetails.userId,
+      transferDetails.LabourID,
+      "Admin Rejected",
+      `Site transfer request for LabourID ${transferDetails.LabourID} was rejected. Reason: ${rejectReason || "No reason provided"}`,
+      "Rejected"
+    );
+
+    res.status(200).json({ message: "Site transfer request rejected successfully." });
+  } catch (error) {
+    console.error("Error rejecting site transfer:", error);
+    res.status(500).json({ message: "Failed to reject site transfer.", error: error.message });
+  }
+};
+
+
+
+
+const editSiteTransfer = async (req, res) => {
+  try {
+    const { LabourID, transferSite, transferDate } = req.body;
+
+    if (!LabourID || !transferSite) {
+      return res.status(400).json({ message: "LabourID and transferSite are required." });
+    }
+
+    const pool = await poolPromise;
+
+    // Fetch the approval details using LabourID
+    const approval = await pool.request()
+      .input("LabourID", sql.NVarChar(50), LabourID)
+      .query(`
+        SELECT * FROM AdminSiteTransferApproval
+        WHERE LabourID = @LabourID AND adminStatus = 'Pending'
+      `);
+
+    if (approval.recordset.length === 0) {
+      return res.status(404).json({ message: "No pending approval found for the given LabourID." });
+    }
+
+    // Update the transfer details
+    await pool.request()
+      .input("LabourID", sql.NVarChar(50), LabourID)
+      .input("transferSite", sql.Int, transferSite)
+      .input("transferDate", sql.Date, transferDate)
+      .query(`
+        UPDATE AdminSiteTransferApproval
+        SET transferSite = @transferSite, transferDate = @transferDate, updatedAt = GETDATE()
+        WHERE LabourID = @LabourID AND adminStatus = 'Pending'
+      `);
+
+    // Log admin edit
+    await saveLogToDatabaseSiteTransfer(
+      approval.recordset[0].userId,
+      LabourID,
+      "Admin Edited",
+      `Site transfer request for LabourID ${LabourID} was updated. New Site: ${transferSite}, Transfer Date: ${transferDate}`,
+      "Edited"
+    );
+
+    res.status(200).json({ message: "Site transfer request updated successfully." });
+  } catch (error) {
+    console.error("Error editing site transfer:", error);
+    res.status(500).json({ message: "Failed to edit site transfer.", error: error.message });
+  }
+};
+
+
+
+const saveLogToDatabaseSiteTransfer = async (userId, LabourID, action, message, status) => {
+  try {
+    const pool = await poolPromise;
+    await pool.request()
+      .input("userId", sql.Int, userId)
+      .input("LabourID", sql.NVarChar(50), LabourID)
+      .input("action", sql.NVarChar(255), action)
+      .input("message", sql.NVarChar(sql.MAX), message)
+      .input("status", sql.NVarChar(50), status)
+      .query(`
+        INSERT INTO SiteTransferLogs (userId, LabourID, action, message, status, createdAt)
+        VALUES (@userId, @LabourID, @action, @message, @status, GETDATE())
+      `);
+  } catch (error) {
+    console.error("Error saving log to database:", error);
+  }
+};
+
+
+// Function to get SerialNumber by ProjectID
+const getSerialNumberByProjectID = async (projectId) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool
+      .request()
+      .input("projectId", sql.Int, projectId)
+      .query(`SELECT SerialNumber FROM ProjectDeviceStatus WHERE ProjectID = @projectId`);
+
+    return result.recordset.length > 0 ? result.recordset[0].SerialNumber : null;
+  } catch (error) {
+    console.error("Error fetching SerialNumber:", error);
+    return null;
+  }
+};
+
+// Function to handle transfer data
+const saveTransferData = async (req, res) => {
+  try {
+    const {
+      userId,
+      LabourID,
+      name,
+      currentSite,
+      transferSite,
+      currentSiteName,
+      transferSiteName,
+      siteTransferBy,
+    } = req.body;
+
+    // Validate required fields
+    if (!userId || !LabourID || !name || !currentSite || !transferSite) {
+      return res.status(400).json({
+        message: "Missing required fields. Ensure all mandatory fields are provided.",
+      });
+    }
+
+    const sanitizedCurrentSite = parseInt(currentSite);
+    const sanitizedTransferSite = parseInt(transferSite);
+
+    if (isNaN(sanitizedCurrentSite) || isNaN(sanitizedTransferSite)) {
+      return res.status(400).json({
+        message: "Invalid site values. Both currentSite and transferSite must be integers.",
+      });
+    }
+
+    // Fetch SerialNumbers
+    const currentSerialNumber = await getSerialNumberByProjectID(sanitizedCurrentSite);
+    const transferSerialNumber = await getSerialNumberByProjectID(sanitizedTransferSite);
+
+    if (!currentSerialNumber) {
+      return res.status(400).json({
+        message: `No SerialNumber found for currentSite: ${sanitizedCurrentSite}`,
+      });
+    }
+
+    if (!transferSerialNumber) {
+      return res.status(400).json({
+        message: `No SerialNumber found for transferSite: ${sanitizedTransferSite}`,
+      });
+    }
+
+    // Step 1: Add User to Transfer Site
+    const addUserEnvelope = `
+      <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+        <soap:Body>
+          <AddEmployee xmlns="http://tempuri.org/">
+            <APIKey>11</APIKey>
+            <EmployeeCode>${LabourID}</EmployeeCode>
+            <EmployeeName>${name}</EmployeeName>
+            <CardNumber>${userId}</CardNumber>
+            <SerialNumber>${transferSerialNumber}</SerialNumber>
+            <UserName>test</UserName>
+            <UserPassword>Test@123</UserPassword>
+            <CommandId>25</CommandId>
+          </AddEmployee>
+        </soap:Body>
+      </soap:Envelope>`;
+
+    let addResponseParsed, extractedCommandId;
+    try {
+      const addResponse = await axios.post(
+        "https://essl.vjerp.com:8530/iclock/WebAPIService.asmx?op=AddEmployee",
+        addUserEnvelope,
+        {
+          headers: {
+            "Content-Type": "text/xml; charset=utf-8",
+            SOAPAction: "http://tempuri.org/AddEmployee",
+          },
+        }
+      );
+
+      const parser = new xml2js.Parser({ explicitArray: false });
+      const parsedResponse = await parser.parseStringPromise(addResponse.data);
+      extractedCommandId = parsedResponse?.["soap:Envelope"]?.["soap:Body"]?.["AddEmployeeResponse"]?.["CommandId"] || 25;
+      addResponseParsed = JSON.stringify(parsedResponse);
+    } catch (error) {
+      console.error("Error during AddEmployee:", error);
+      return res.status(500).json({ message: "Failed to add user to new site.", error: error.message });
+    }
+
+    // Step 2: Delete User from Current Site
+    const deleteUserEnvelope = `
+      <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+        <soap:Body>
+          <DeleteUser xmlns="http://tempuri.org/">
+            <APIKey>11</APIKey>
+            <EmployeeCode>${LabourID}</EmployeeCode>
+            <SerialNumber>${currentSerialNumber}</SerialNumber>
+            <UserName>test</UserName>
+            <UserPassword>Test@123</UserPassword>
+            <CommandId>${extractedCommandId}</CommandId>
+          </DeleteUser>
+        </soap:Body>
+      </soap:Envelope>`;
+
+    let deleteResponseParsed;
+    try {
+      const deleteResponse = await axios.post(
+        "https://essl.vjerp.com:8530/iclock/WebAPIService.asmx?op=DeleteUser",
+        deleteUserEnvelope,
+        {
+          headers: {
+            "Content-Type": "text/xml; charset=utf-8",
+            SOAPAction: "http://tempuri.org/DeleteUser",
+          },
+        }
+      );
+
+      const parser = new xml2js.Parser({ explicitArray: false });
+      deleteResponseParsed = JSON.stringify(await parser.parseStringPromise(deleteResponse.data));
+    } catch (error) {
+      console.error("Error during DeleteUser:", error);
+      deleteResponseParsed = JSON.stringify({ error: error.message });
+    }
+
+    // Step 3: Database Insertion and Update Logic (unchanged from previous examples)
+    const pool = await poolPromise;
+    const insertQuery = `
+      INSERT INTO [dbo].[API_TransferSite] 
+      ([userId], [LabourID], [name], [currentSite], [currentSiteName], 
+       [transferSite], [transferSiteName], [esslStatus], [esslCommandId], 
+       [esslPayload], [esslApiResponse], [esslResponseStatus], [siteTransferBy],
+       [deleteEsslPayload], [deleteEsslResponse], 
+       [createdAt], [updatedAt])
+      VALUES (@userId, @LabourID, @name, @currentSite, @currentSiteName, 
+              @transferSite, @transferSiteName, @esslStatus, @esslCommandId, 
+              @esslPayload, @esslApiResponse, @esslResponseStatus, @siteTransferBy,
+              @deleteEsslPayload, @deleteEsslResponse, 
+              GETDATE(), GETDATE())
+    `;
+    await pool.request()
+      .input("userId", sql.Int, userId || null)
+      .input("LabourID", sql.NVarChar(50), LabourID)
+      .input("name", sql.NVarChar(255), name || null)
+      .input("currentSite", sql.Int, sanitizedCurrentSite)
+      .input("currentSiteName", sql.NVarChar(255), currentSiteName)
+      .input("transferSite", sql.Int, sanitizedTransferSite)
+      .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+      .input("esslStatus", sql.NVarChar(50), "Transferred")
+      .input("esslCommandId", sql.Int, extractedCommandId)
+      .input("esslPayload", sql.NVarChar(sql.MAX), addUserEnvelope)
+      .input("esslApiResponse", sql.NVarChar(sql.MAX), addResponseParsed)
+      .input("esslResponseStatus", sql.NVarChar(50), "Success")
+      .input("deleteEsslPayload", sql.NVarChar(sql.MAX), deleteUserEnvelope)
+      .input("deleteEsslResponse", sql.NVarChar(sql.MAX), deleteResponseParsed)
+      .input("siteTransferBy", sql.NVarChar(50), siteTransferBy || null)
+      .query(insertQuery);
+
+       // Step 4: Update [labourOnboarding] with transfer site details
+    const updateQuery = `
+      UPDATE [dbo].[labourOnboarding]
+      SET
+        projectName = @transferSite,
+        location = @transferSiteName,
+        WorkingBu = @transferSiteName,
+        businessUnit = @transferSiteName,
+        OnboardingProjectName = @currentSite,
+        OnboardingBusinessUnit = @currentSiteName,
+        isSiteTransfer = @isSiteTransfer
+      WHERE id = @userId
+    `;
+
+    const updateResult = await pool.request()
+      .input("userId", sql.Int, userId)
+      .input("transferSite", sql.Int, sanitizedTransferSite)
+      .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+      .input("currentSite", sql.Int, sanitizedCurrentSite)
+      .input("currentSiteName", sql.NVarChar(255), currentSiteName)
+      .input("isSiteTransfer", sql.Bit, 1) // Set isSiteTransfer to true
+      .query(updateQuery);
+
+    if (updateResult.rowsAffected[0] === 0) {
+      return res.status(400).json({
+        message: "No rows updated in labourOnboarding table.",
+      });
+    }
+
+    res.status(201).json({
+      message: "Transfer data saved and labourOnboarding updated successfully.",
+    });
+  } catch (error) {
+    console.error("Error saving transfer data and updating labourOnboarding:", error);
+    res.status(500).json({
+      message: "Failed to save transfer data and update labourOnboarding.",
+      error: error.message,
+    });
+  }
+};
+
+cron.schedule('28 12 * * *', async () => {
+  console.log('Running site transfer approval cron job at 01:08 AM');
+
+  try {
+    const pool = await poolPromise;
+
+    // Fetch pending approvals for the current date
+    const pendingApprovals = await pool.request()
+      .query(`
+        SELECT LabourID 
+        FROM AdminSiteTransferApproval
+        WHERE adminStatus = 'Pending' AND transferDate = CAST(GETDATE() AS DATE)
+      `);
+
+    if (pendingApprovals.recordset.length === 0) {
+      console.log("No pending approvals found for today's date For Site Transfer.");
+      return;
+    }
+
+    console.log(`Found ${pendingApprovals.recordset.length} pending approvals For Site Transfer.`);
+
+    for (const approval of pendingApprovals.recordset) {
+      try {
+        // Call approveSiteTransfer for each pending LabourID
+        await approveSiteTransfer(
+          { body: { LabourID: approval.LabourID } },
+          {
+            status: (statusCode) => ({
+              json: (response) => {
+                console.log(`Approval Response For Site Transfer LabourID ${approval.LabourID}:`, response);
+              },
+            }),
+          }
+        );
+      } catch (error) {
+        console.error(
+          `Failed to approve transfer for LabourID ${approval.LabourID}:`,
+          error.message
+        );
+      }
+    }
+
+    console.log("Cron job completed successfully For Site Transfer.");
+  } catch (error) {
+    console.error("Cron job failed for site transfer approval:", error.message);
+  }
+});
+
+
+
 // Serve cached results to the frontend
 const fetchCachedLabours = async (req, res) => {
   try {
@@ -1468,9 +1813,14 @@ module.exports = {
   saveTransferData,
   getAllLaboursWithTransferDetails, 
   // resubmitLabor
-
+  getAdminSiteTransferApproval,
   employeeMasterPayloadUpdatepost,
-  organizationMasterPayloadUpdatepost
+  organizationMasterPayloadUpdatepost,
+  siteTransferRequestforAdmin,
+  approveSiteTransfer,
+  rejectSiteTransfer,
+  editSiteTransfer,
+
 };
 
 
