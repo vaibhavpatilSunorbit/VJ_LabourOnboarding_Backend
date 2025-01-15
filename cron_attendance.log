@@ -196,3 +196,5 @@
 {"level":"info","message":"Cron job completed successfully for Date: 2025-01-12","timestamp":"2025-01-13T07:26:39.264Z"}
 {"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-01-14T07:05:00.343Z"}
 {"level":"info","message":"Running cron job for Attendance Date: 2025-01-13","timestamp":"2025-01-14T07:05:00.347Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-01-15T07:05:00.625Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-01-14","timestamp":"2025-01-15T07:05:00.628Z"}
