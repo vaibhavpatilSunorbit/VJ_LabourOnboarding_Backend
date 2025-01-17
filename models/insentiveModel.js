@@ -79,9 +79,46 @@ async function searchFromWages(query) {
     }
 }
 
+const getVariablePayAndLabourOnboardingJoin = async () => {
+    const pool = await poolPromise;
+
+    const result = await pool.request().query(`
+        SELECT 
+            onboarding.id,
+            onboarding.LabourID,
+            onboarding.name,
+            onboarding.businessUnit,
+            onboarding.projectName,
+            onboarding.departmentName,
+            onboarding.department,
+            variablepay.payAddedBy,
+            variablepay.PayStructure,
+            variablepay.AdvancePay,
+            variablepay.DebitPay,
+            variablepay.IncentivePay,
+            variablepay.VariablepayAmount,
+            variablepay.ApprovalStatusPay,
+            variablepay.CreatedAt,
+            variablepay.variablePayRemark,
+            variablepay.EffectiveDate,
+            variablepay.userId
+        FROM 
+            [labourOnboarding] AS onboarding
+        LEFT JOIN 
+            [VariablePay] AS variablepay
+        ON 
+            onboarding.LabourID = variablepay.LabourID
+        WHERE 
+            onboarding.status = 'Approved'
+    `);
+
+    return result.recordset;
+};
 
 
-const checkExistingWages = async (LabourID) => {
+
+
+const checkExistingVariablePay = async (LabourID) => {
     const pool = await poolPromise;
 
     const result = await pool.request()
@@ -92,7 +129,6 @@ const checkExistingWages = async (LabourID) => {
             WHERE LabourID = @LabourID
             ORDER BY EffectiveDate DESC
         `);
-
     return result.recordset[0] || null;
 };
 
@@ -134,15 +170,16 @@ if (isNaN(effectiveDate.getTime())) {
     const debitPay = variablePay.payStructure === 'Debit' ? 1 : 0;
     const incentivePay = variablePay.payStructure === 'Incentive' ? 1 : 0;
 
+    const ApprovalStatusPay = 'AdminPending';
     // Define the SQL query for inserting the variable pay
     const query = `
         INSERT INTO VariablePay 
         (userId, LabourID, PayStructure, AdvancePay, DebitPay, IncentivePay, VariablepayAmount,
-         payAddedBy, name, projectName, companyName, businessUnit, departmentName, EffectiveDate, CreatedAt)
+         payAddedBy, name, projectName, companyName, businessUnit, departmentName, variablePayRemark, EffectiveDate, CreatedAt, ApprovalStatusPay, isApprovalSendAdmin)
         VALUES 
         (@userId, @LabourID, @PayStructure, @AdvancePay, @DebitPay, @IncentivePay, @VariablepayAmount, 
-         @payAddedBy, @name, @projectName, @companyName, @businessUnit, @departmentName, 
-         @EffectiveDate, GETDATE());
+         @payAddedBy, @name, @projectName, @companyName, @businessUnit, @departmentName, @variablePayRemark,
+         @EffectiveDate, GETDATE(), @ApprovalStatusPay, @isApprovalSendAdmin);
     `;
 
     // Execute the query with the proper parameters
@@ -153,22 +190,307 @@ if (isNaN(effectiveDate.getTime())) {
         .input('AdvancePay', sql.Bit, advancePay)
         .input('DebitPay', sql.Bit, debitPay)
         .input('IncentivePay', sql.Bit, incentivePay)
-        .input('VariablepayAmount', sql.Decimal(18, 2), variablePay.variablePay)
+        .input('VariablepayAmount', variablePay.variablePay)
         .input('payAddedBy', sql.NVarChar, variablePay.payAddedBy)
         .input('name', sql.NVarChar, labourDetails.name)
         .input('projectName', sql.Int, labourDetails.projectName)
         .input('companyName', sql.NVarChar, labourDetails.companyName)
         .input('businessUnit', sql.NVarChar, labourDetails.businessUnit)
+        .input('variablePayRemark', sql.NVarChar, variablePay.variablePayRemark)
         .input('departmentName', sql.NVarChar, labourDetails.departmentName)
         .input('EffectiveDate', sql.Date, effectiveDate)
+        .input('ApprovalStatusPay', sql.NVarChar, ApprovalStatusPay)
+        .input('isApprovalSendAdmin', sql.Bit, 1)
         .query(query);
 };
 
 
 
+// Send VariablePay for admin approval
+async function markVariablePayForApproval(
+    payId,
+            LabourID,
+            payAddedBy,
+            variablePay,
+            variablePayRemark,
+            payStructure,
+            effectiveDate,
+            userId,
+            name
+) {
+    try {
+        const pool = await poolPromise;
+        const request = pool.request();
+
+        const effectiveDateOnly = effectiveDate ? new Date(effectiveDate).toISOString().split('T')[0] : null;
+        
+        request.input('VariablePayId', sql.Int, payId);
+        request.input('LabourID', sql.NVarChar, LabourID);
+        request.input('payAddedBy', sql.NVarChar, payAddedBy || null);
+        request.input('VariablepayAmount', variablePay || null);
+        request.input('variablePayRemark', sql.NVarChar, variablePayRemark);
+        request.input('EffectiveDate', sql.Date, effectiveDateOnly);
+        request.input('PayStructure', sql.NVarChar, payStructure || null);
+        request.input('userId', sql.Int, userId);
+        request.input('name', sql.NVarChar, name);
+
+        // Update the LabourMonthlyWages table
+        const updateResult = await request.query(`
+            UPDATE [VariablePay]
+            SET ApprovalStatusPay = 'Pending',
+                payAddedBy = @payAddedBy,
+                EditDate = GETDATE()
+            WHERE VariablePayId = @VariablePayId
+        `);
+
+        if (updateResult.rowsAffected[0] === 0) {
+            throw new Error('Failed to update VariablePay. VariablePayId may not exist.');
+        }
+
+        // Insert into the WagesAdminApprovals table
+        await request.query(`
+            INSERT INTO [VariablePayAdminApprovals] (
+                VariablePayId, LabourID, payAddedBy, VariablepayAmount, variablePayRemark, EffectiveDate,
+                 PayStructure, ApprovalStatusPay, CreatedAt, userId, name
+            )
+            VALUES (
+                @VariablePayId, @LabourID, @payAddedBy, @VariablepayAmount, @variablePayRemark, @EffectiveDate,
+                 @PayStructure, 'Pending', GETDATE(), @userId, @name
+            )
+        `);
+
+        console.log('Variable Pay marked for admin approval.');
+        return { success: true, message: 'Variable Pay marked for admin approval.' };
+    } catch (error) {
+        console.error('Error marking Variable Pay for approval:', error.message || error);
+        throw new Error(error.message || 'Error marking Variable Pay for approval.');
+    }
+}
+
+
+
+async function approvalAdminVariablePay(ApprovalID) {
+    try {
+        const pool = await poolPromise;
+        console.log('Variable Pay ID in model.js:', ApprovalID);
+
+        // Fetch the approval record
+        const approvalResult = await pool.request()
+            .input('ApprovalID', sql.Int, ApprovalID)
+            .query(`
+                SELECT * FROM [VariablePayAdminApprovals]
+                WHERE ApprovalID = @ApprovalID
+            `);
+
+        if (approvalResult.recordset.length === 0) {
+            throw new Error('Approval record not found.');
+        }
+
+        const approvalData = approvalResult.recordset[0];
+        console.log('approvalData:', approvalData);
+
+        // Approve in VariablePay
+        await pool.request()
+        .input('VariablePayId', sql.Int, approvalData.VariablePayId)
+        .input('isApprovalDoneAdmin', sql.Bit, 1)
+        .input('IsApproved', sql.Bit, 1)
+        .input('PayStructure', sql.NVarChar, approvalData.PayStructure || null)
+        .input('VariablepayAmount', approvalData.VariablepayAmount || null)
+        .input('EffectiveDate', sql.Date, approvalData.EffectiveDate || null)
+        .input('variablePayRemark', sql.NVarChar, approvalData.variablePayRemark || null)
+        .query(`
+            UPDATE [VariablePay]
+            SET ApprovalStatusPay = 'Approved',
+                isApprovalDoneAdmin = @isApprovalDoneAdmin,
+                IsApproved = @IsApproved,
+                PayStructure = @PayStructure,
+                VariablepayAmount = @VariablepayAmount,
+                EffectiveDate = @EffectiveDate,
+                variablePayRemark = @variablePayRemark
+            WHERE VariablePayId = @VariablePayId
+        `);
+
+        // Update VariablePayAdminApprovals
+        await pool.request()
+            .input('ApprovalID', sql.Int, ApprovalID)
+            .query(`
+                UPDATE [VariablePayAdminApprovals]
+                SET ApprovalStatusPay = 'Approved',
+                    ApprovedAdminDate = GETDATE()
+                WHERE ApprovalID = @ApprovalID
+            `);
+
+        console.log('Variable Pay approved successfully.');
+        return { success: true, message: 'Variable Pay approved successfully.' };
+    } catch (error) {
+        console.error('Error approving Variable Pay:', error);
+        throw new Error('Error approving Variable Pay.');
+    }
+}
+
+
+async function rejectAdminVariablePay(ApprovalID, Remarks) {
+    try {
+        const pool = await poolPromise;
+        console.log('Rejecting wages with ApprovalID:', ApprovalID, 'and Remarks:', Remarks);
+
+        // Fetch the approval record
+        const approvalResult = await pool.request()
+            .input('ApprovalID', sql.Int, ApprovalID)
+            .query(`
+                SELECT * FROM [VariablePayAdminApprovals]
+                WHERE ApprovalID = @ApprovalID
+            `);
+
+        if (approvalResult.recordset.length === 0) {
+            throw new Error('Approval record not found.');
+        }
+
+        const approvalData = approvalResult.recordset[0];
+
+        // Reject in VariablePay
+        await pool.request()
+            .input('VariablePayId', sql.Int, approvalData.VariablePayId)
+            .input('Remarks', sql.NVarChar, Remarks || null) // Allow null if no Remarks provided
+            .input('isApprovalReject', sql.Bit, 1)
+            .input('IsRejected', sql.Bit, 1)
+            .query(`
+                UPDATE [VariablePay]
+                SET ApprovalStatusPay = 'Rejected',
+                    Remarks = @Remarks,
+                    isApprovalReject = @isApprovalReject,
+                    IsRejected = @IsRejected
+                WHERE VariablePayId = @VariablePayId
+            `);
+
+        // Update VariablePayAdminApprovals
+        await pool.request()
+            .input('ApprovalID', sql.Int, ApprovalID)
+            .input('Remarks', sql.NVarChar, Remarks || null)
+            .query(`
+                UPDATE [VariablePayAdminApprovals]
+                SET ApprovalStatusPay = 'Rejected',
+                    RejectAdminDate = GETDATE(),
+                    Remarks = @Remarks
+                WHERE ApprovalID = @ApprovalID
+            `);
+
+        console.log('Variable Pay rejected successfully.');
+        return { success: true, message: 'Variable Pay rejected successfully.' };
+    } catch (error) {
+        console.error('Error rejecting Variable Pay:', error);
+        throw new Error('Error rejecting Variable Pay.');
+    }
+}
+
+
+
+const getVariablePayAdminApproval = async () => {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+        SELECT * FROM VariablePayAdminApprovals
+    `);
+    return result.recordset;
+};
+
+
+
+
+
+
+
+
+
+
+
+// async function approvalAdminVariablePay(ApprovalID) {
+//     try {
+//         const pool = await poolPromise;
+//         const request = pool.request();
+        
+//         request.input('ApprovalID', sql.Int, ApprovalID);
+        
+//         await request.query(`
+//             CREATE OR ALTER PROCEDURE spApproveVariablePay
+//     @ApprovalID INT
+// AS
+// BEGIN
+//     SET NOCOUNT ON;
+
+//     -- Mark the variable pay as approved
+//     UPDATE VariablePayAdminApprovals
+//     SET ApprovalStatusPay = 'Approved',
+//         ApprovedAdminDate = GETDATE()
+//     WHERE ApprovalID = @ApprovalID;
+
+//     -- Additional logic to update the main VariablePay table if necessary
+//     DECLARE @VariablePayId INT;
+//     SELECT @VariablePayId = VariablePayId FROM VariablePayAdminApprovals WHERE ApprovalID = @ApprovalID;
+
+//     UPDATE VariablePay
+//     SET IsApproved = 1, IsRejected = 0
+//     WHERE VariablePayId = @VariablePayId;
+// END;
+// GO
+//             `);
+        
+//         return { success: true, message: 'Variable Pay approved successfully.' };
+//     } catch (error) {
+//         console.error('Error in approving Variable Pay:', error);
+//         throw new Error('Error approving Variable Pay.');
+//     }
+// }
+
+// async function rejectAdminVariablePay(ApprovalID, Remarks) {
+//     try {
+//         const pool = await poolPromise;
+//         const request = pool.request();
+        
+//         request.input('ApprovalID', sql.Int, ApprovalID);
+//         request.input('Remarks', sql.NVarChar, Remarks);
+        
+//         await request.query(`
+//             CREATE OR ALTER PROCEDURE spRejectVariablePay
+//     @ApprovalID INT,
+//     @Remarks NVARCHAR(255)
+// AS
+// BEGIN
+//     SET NOCOUNT ON;
+
+//     -- Mark the variable pay as rejected
+//     UPDATE VariablePayAdminApprovals
+//     SET ApprovalStatusPay = 'Rejected',
+//         RejectAdminDate = GETDATE(),
+//         Remarks = @Remarks
+//     WHERE ApprovalID = @ApprovalID;
+
+//     -- Additional logic to update the main VariablePay table if necessary
+//     DECLARE @VariablePayId INT;
+//     SELECT @VariablePayId = VariablePayId FROM VariablePayAdminApprovals WHERE ApprovalID = @ApprovalID;
+
+//     UPDATE VariablePay
+//     SET IsApproved = 0, IsRejected = 1, Remarks = @Remarks
+//     WHERE VariablePayId = @VariablePayId;
+// END;
+// GO
+//         `);
+        
+//         return { success: true, message: 'Variable Pay rejected successfully.' };
+//     } catch (error) {
+//         console.error('Error in rejecting Variable Pay:', error);
+//         throw new Error('Error rejecting Variable Pay.');
+//     }
+// }
+
+
 module.exports = {
     registerData,
     searchFromWages,
-    checkExistingWages,
-    upsertLabourVariablePay
+    checkExistingVariablePay,
+    upsertLabourVariablePay,
+    getVariablePayAndLabourOnboardingJoin,
+    markVariablePayForApproval,
+    approvalAdminVariablePay,
+    rejectAdminVariablePay,
+    getVariablePayAdminApproval
 }

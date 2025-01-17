@@ -3674,6 +3674,41 @@ async function searchFromWages(query) {
     }
 }
 
+const getVariablePayAndLabourOnboardingJoin = async () => {
+    const pool = await poolPromise;
+
+    const result = await pool.request().query(`
+        SELECT 
+            onboarding.id,
+            onboarding.LabourID,
+            onboarding.name,
+            onboarding.businessUnit,
+            onboarding.projectName,
+            onboarding.departmentName,
+            onboarding.department,
+            variablepay.payAddedBy,
+            variablepay.PayStructure,
+            variablepay.AdvancePay,
+            variablepay.DebitPay,
+            variablepay.IncentivePay,
+            variablepay.VariablepayAmount,
+            variablepay.ApprovalStatusPay,
+            variablepay.CreatedAt,
+            variablepay.variablePayRemark,
+            variablepay.EffectiveDate,
+            variablepay.userId
+        FROM 
+            [labourOnboarding] AS onboarding
+        LEFT JOIN 
+            [VariablePay] AS variablepay
+        ON 
+            onboarding.LabourID = variablepay.LabourID
+        WHERE 
+            onboarding.status = 'Approved'
+    `);
+
+    return result.recordset;
+};
 
 module.exports = {
     checkAadhaarExists,
@@ -3755,6 +3790,7 @@ module.exports = {
     checkExistingWages,
     markWagesForApproval,
     approveWages,
-    rejectWages
+    rejectWages,
+    getVariablePayAndLabourOnboardingJoin
 
 };
