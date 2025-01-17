@@ -184,17 +184,26 @@ async function searchLaboursFromWages(req, res) {
 }
 
 
+const getVariablePayAndLabourOnboardingJoincontroller = async (req, res) => {
+    try {
+        const joinWagesLabour = await labourModel.getVariablePayAndLabourOnboardingJoin();
+        res.status(200).json(joinWagesLabour);
+    } catch (error) {
+        console.error('Error fetching data:', error);
+        res.status(500).json({ message: 'Error fetching data', error });
+    }
+};
+
 
 const upsertLabourVariablePay = async (req, res) => {
     try {
         const payload = req.body;
-        console.log('req.body++__++__', req.body);
 
         if (!payload.LabourID || !payload.payStructure) {
             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
         }
 
-        const existingWages = await labourModel.checkExistingWages(payload.LabourID);
+        const existingWages = await labourModel.checkExistingVariablePay(payload.LabourID);
         console.log('payload of wages 55', existingWages);
 
         // Check if existing wages were found or not
@@ -213,13 +222,108 @@ const upsertLabourVariablePay = async (req, res) => {
     }
 };
 
+const checkExistingVariablePayController = async (req, res) => {
+    try {
+        const { LabourID } = req.query;
+        if (!LabourID) {
+            return res.status(400).json({ message: 'Labour ID is required' });
+        }
+
+        const existingWages = await labourModel.checkExistingVariablePay(LabourID);
+
+        if (existingWages) {
+            res.status(200).json({
+                exists: true,
+                approved: existingWages.ApprovalStatusPay === 'Approved',
+                data: existingWages,
+            });
+        } else {
+            res.status(200).json({ exists: false });
+        }
+    } catch (error) {
+        console.error('Error checking existing wages:', error);
+        res.status(500).json({ message: 'Error checking existing wages', error });
+    }
+};
 
 
+const markVariablePayForApprovalController = async (req, res) => {
+    try {
+        const payload = req.body;
+        const { payId, LabourID, payAddedBy, variablePay, variablePayRemark, payStructure, effectiveDate, userId, name } = payload;
+console.log('payload variablePay',payload)
+        if (!LabourID || !payStructure) {
+            return res.status(400).json({ message: 'Labour ID, and Pay Structure are required' });
+        }
+
+        const result = await labourModel.markVariablePayForApproval(
+            payId,
+            LabourID,
+            payAddedBy,
+            variablePay,
+            variablePayRemark,
+            payStructure,
+            effectiveDate,
+            userId,
+            name
+        );
+
+        return res.status(200).json(result);
+    } catch (error) {
+        console.error('Error marking wages for approval:', error.message || error);
+        return res.status(500).json({ message: 'Error marking wages for approval', error: error.message || error });
+    }
+};
+
+
+async function approveVariablePayAdmin(req, res) {
+    const { ApprovalID } = req.query;
+    if (!ApprovalID) {
+        return res.status(400).json({ message: 'ApprovalID is required.' });
+    }
+    try {
+        const result = await labourModel.approvalAdminVariablePay(ApprovalID);
+        res.status(200).json(result);
+    } catch (error) {
+        console.error('Error in approving VariablePay:', error);
+        res.status(error.statusCode || 500).json({ message: error.message });
+    }
+}
+
+async function rejectVariablePayAdmin(req, res) {
+    const { ApprovalID, Remarks } = req.body;
+    console.log('ApprovalID, Remarks', req.body)
+    if (!ApprovalID) {
+        return res.status(400).json({ message: 'ApprovalID is required.' });
+    }
+    try {
+        const result = await labourModel.rejectAdminVariablePay(ApprovalID, Remarks);
+        res.status(200).json(result);
+    } catch (error) {
+        console.error('Error in rejecting VariablePay:', error);
+        res.status(error.statusCode || 500).json({ message: error.message });
+    }
+}
+
+const getVariablePayAdminApprovals = async (req, res) => {
+    try {
+        const approvals = await labourModel.getVariablePayAdminApproval();
+        res.status(200).json(approvals);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching approvals', error });
+    }
+};
 
 
 module.exports = {
     createRecord,
     searchLaboursFromWages,
-    upsertLabourVariablePay
+    upsertLabourVariablePay,
+    getVariablePayAndLabourOnboardingJoincontroller,
+    checkExistingVariablePayController,
+    markVariablePayForApprovalController,
+    approveVariablePayAdmin,
+    rejectVariablePayAdmin,
+    getVariablePayAdminApprovals
 
 }
