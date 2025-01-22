@@ -171,11 +171,11 @@ async function createRecord(req, res) {
 }
 
 
-async function searchLaboursFromWages(req, res) {
+async function searchLaboursFromVariablePay(req, res) {
     const { q } = req.query;
 
     try {
-        const results = await labourModel.searchFromWages(q);
+        const results = await labourModel.searchFromVariablePay(q);
         return res.json(results);
     } catch (error) {
         console.error(error);
@@ -277,33 +277,33 @@ console.log('payload variablePay',payload)
 
 
 async function approveVariablePayAdmin(req, res) {
-    const { ApprovalID } = req.query;
-    if (!ApprovalID) {
-        return res.status(400).json({ message: 'ApprovalID is required.' });
+    const { VariablePayId } = req.query;
+    if (!VariablePayId) {
+        return res.status(400).json({ message: 'VariablePayId is required.' });
     }
     try {
-        const result = await labourModel.approvalAdminVariablePay(ApprovalID);
+        const result = await labourModel.approvalAdminVariablePay(VariablePayId);
         res.status(200).json(result);
     } catch (error) {
         console.error('Error in approving VariablePay:', error);
         res.status(error.statusCode || 500).json({ message: error.message });
     }
-}
+};
 
 async function rejectVariablePayAdmin(req, res) {
-    const { ApprovalID, Remarks } = req.body;
-    console.log('ApprovalID, Remarks', req.body)
-    if (!ApprovalID) {
-        return res.status(400).json({ message: 'ApprovalID is required.' });
+    const { VariablePayId, Remarks } = req.body;
+    console.log('VariablePayId, Remarks', req.body)
+    if (!VariablePayId) {
+        return res.status(400).json({ message: 'VariablePayId is required.' });
     }
     try {
-        const result = await labourModel.rejectAdminVariablePay(ApprovalID, Remarks);
+        const result = await labourModel.rejectAdminVariablePay(VariablePayId, Remarks);
         res.status(200).json(result);
     } catch (error) {
         console.error('Error in rejecting VariablePay:', error);
         res.status(error.statusCode || 500).json({ message: error.message });
     }
-}
+};
 
 const getVariablePayAdminApprovals = async (req, res) => {
     try {
@@ -315,15 +315,246 @@ const getVariablePayAdminApprovals = async (req, res) => {
 };
 
 
+const exportVariablePayexcelSheetWithBU = async (req, res) => {
+    try {
+        const { projectName, startDate } = req.query;
+console.log('projectName, startDate ,',req.query)
+        if (!startDate) {
+            return res.status(400).json({ message: 'Missing required parameter: startDate' });
+        }
+
+        // Parse the 'startDate' parameter
+        const startDateObj = new Date(startDate);
+        if (isNaN(startDateObj)) {
+            return res.status(400).json({ message: 'Invalid startDate format.' });
+        }
+
+        // Calculate endDate as one month after startDate minus one day
+        const endDateObj = new Date(startDateObj);
+        endDateObj.setMonth(endDateObj.getMonth() + 1);
+        endDateObj.setDate(endDateObj.getDate() - 1);
+        const endDate = endDateObj.toISOString().split('T')[0];
+
+        // Extract month and year for file naming
+        const month = startDateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+        // Fetch wages data from the model
+        const wagesData = await labourModel.getVariablePayByDateRange(
+            projectName,
+            startDateObj.toISOString().split('T')[0],
+            endDate
+        );
+
+        // Handle the case where no data is found
+        if (wagesData.length === 0) {
+            return res.status(404).json({ message: 'No data found for the selected criteria.' });
+        }
+
+        // Process data: Exclude 'projectName', add 'ExportDate'
+        const processedData = wagesData.map(record => {
+            const { projectName, ...rest } = record; // Exclude 'projectName'
+            return {
+                ...rest,
+                ExportDate: startDate // Add 'ExportDate' column
+            };
+        });
+
+        // Create Excel workbook and worksheet
+        const workbook = xlsx.utils.book_new();
+        const worksheet = xlsx.utils.json_to_sheet(processedData, { header: Object.keys(processedData[0]) });
+
+        // Append the worksheet to the workbook
+        xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
+
+        // Generate Excel file as buffer
+        const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+        // Define a generic file name
+        const fileName = `VariablePay_${month}.xlsx`;
+
+        // Set response headers to prompt file download
+        res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+        res.setHeader('Content-Type', `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`);
+
+        res.send(buffer);
+    } catch (error) {
+        console.error('Error exporting Variable Pay:', error);
+        res.status(500).json({ message: 'Error exporting Variable Pay data.' });
+    }
+};
+
+
+const exportVariablePayexcelSheet = async (req, res) => {
+    try {
+        // Define the headers for the Excel sheet
+        const headers = [
+            'LabourID',
+            'PayStructure',
+            'AdvancePay',
+            'DebitPay',
+            'IncentivePay',
+            'VariablePayAmount',
+            'VariablePayRemark',
+            'EffectiveDate',
+            'ExportDate'
+        ];
+
+        // Get current date in YYYY-MM-DD format
+        const currentDate = new Date().toISOString().split('T')[0];
+
+        // Create Excel workbook and worksheet with only headers
+        const workbook = xlsx.utils.book_new();
+        const worksheetData = [headers];
+        const worksheet = xlsx.utils.aoa_to_sheet(worksheetData);
+
+        // Append the worksheet to the workbook
+        xlsx.utils.book_append_sheet(workbook, worksheet, 'Variable Pay');
+
+        // Generate Excel file as buffer
+        const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+        // Define the file name with current date
+        const fileName = `VariablePay_${currentDate}.xlsx`;
+
+        // Set response headers to prompt file download
+        res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        // Send the Excel file buffer as the response
+        res.send(buffer);
+    } catch (error) {
+        console.error('Error exporting Variable Pay:', error);
+        res.status(500).json({ message: 'Error exporting Variable Pay data.' });
+    }
+};
+
+
+
+// Utility function to convert Excel serial date to JavaScript Date
+const xlsxDateToJSDate = (serial) => {
+    // Handle Excel serial date (assuming it's a number)
+    if (typeof serial === 'number') {
+        const utc_days = Math.floor(serial - 25569);
+        const utc_value = utc_days * 86400;
+        const date_info = new Date(utc_value * 1000);
+
+        const fractional_day = serial - Math.floor(serial) + 0.0000001;
+
+        let total_seconds = Math.floor(86400 * fractional_day);
+
+        const seconds = total_seconds % 60;
+        total_seconds = Math.floor(total_seconds / 60);
+
+        const minutes = total_seconds % 60;
+        const hours = Math.floor(total_seconds / 60);
+
+        date_info.setUTCHours(hours);
+        date_info.setUTCMinutes(minutes);
+        date_info.setUTCSeconds(seconds);
+
+        return date_info;
+    } else if (typeof serial === 'string') {
+        return new Date(serial);
+    } else {
+        return null;
+    }
+};
+
+const importVariablePay = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const wagesEditedBy  = req.body.wagesEditedBy || 'System';
+        const filePath = req.file.path;
+
+        // Read the Excel file
+        const workbook = xlsx.readFile(filePath);
+        const sheetName = workbook.SheetNames[0];
+        const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null });
+
+        const errors = [];
+        let successCount = 0; // To track successful insertions
+
+        for (const [index, row] of rows.entries()) {
+            try {
+                // Trim and normalize string fields
+                for (let key in row) {
+                    if (typeof row[key] === 'string') {
+                        row[key] = row[key].trim();
+                    }
+                }
+
+                // Normalize PayStructure casing (e.g., capitalize first letter)
+                if (row.PayStructure && typeof row.PayStructure === 'string') {
+                    row.PayStructure = row.PayStructure.charAt(0).toUpperCase() + row.PayStructure.slice(1).toLowerCase();
+                }
+
+                // // Convert Excel date to JavaScript date if From_Date is defined
+                // if (row.From_Date) {
+                //     row.From_Date = xlsxDateToJSDate(row.From_Date);
+                // }
+
+                // Assign the editor
+                row.WagesEditedBy = wagesEditedBy;
+
+                // Log the PayStructure value after normalization
+                console.log(`Row ${index + 2}: PayStructure = "${row.PayStructure}"`);
+
+                // Insert the row into the database
+                await labourModel.insertVariablePayData(row);
+                successCount++;
+            } catch (error) {
+                // Log error details
+                console.error(`Error processing row ${index + 2}:`, error.message);
+                errors.push({
+                    LabourID: row.LabourID || '',
+                    PayStructure: row.PayStructure || '',
+                    VariablePayAmount: row.VariablePayAmount || '',
+                    WagesEditedBy: row.payAddedBy  || '',
+                    Error: error.message,
+                    RowNumber: index + 2 // Assuming header is at row 1
+                });
+            }
+        }
+
+        // Clean up uploaded file
+        fs.unlinkSync(filePath);
+
+        if (errors.length > 0) {
+            // Generate error Excel file
+            const errorWorkbook = xlsx.utils.book_new();
+            const errorSheet = xlsx.utils.json_to_sheet(errors);
+            xlsx.utils.book_append_sheet(errorWorkbook, errorSheet, 'Errors');
+            const buffer = xlsx.write(errorWorkbook, { type: 'buffer', bookType: 'xlsx' });
+
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', 'attachment; filename="Error_Rows.xlsx"');
+            return res.status(200).send(buffer); // Return Excel file for errors
+        }
+
+        res.status(200).json({ message: 'Data imported successfully!', successCount });
+    } catch (error) {
+        console.error('Import error:', error);
+        res.status(500).json({ message: 'Internal server error. Please try again.' });
+    }
+};
+
+
+
 module.exports = {
     createRecord,
-    searchLaboursFromWages,
+    searchLaboursFromVariablePay,
     upsertLabourVariablePay,
     getVariablePayAndLabourOnboardingJoincontroller,
     checkExistingVariablePayController,
     markVariablePayForApprovalController,
     approveVariablePayAdmin,
     rejectVariablePayAdmin,
-    getVariablePayAdminApprovals
+    getVariablePayAdminApprovals,
+    exportVariablePayexcelSheetWithBU,
+    exportVariablePayexcelSheet,
+    importVariablePay
 
 }

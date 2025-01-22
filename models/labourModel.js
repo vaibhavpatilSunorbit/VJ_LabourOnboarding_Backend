@@ -15,7 +15,7 @@ async function checkAadhaarExists(aadhaarNumber) {
         console.error('Error checking Aadhaar number:', error);
         throw new Error('Error checking Aadhaar number');
     }
-}
+};
 
 
 async function getNextUniqueID() {
@@ -981,7 +981,7 @@ async function search(query) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
-            .query('SELECT * FROM labourOnboarding WHERE name LIKE @query OR aadhaarNumber LIKE @query OR LabourID LIKE @query OR OnboardName LIKE @query OR workingHours LIKE @query');
+            .query('SELECT * FROM labourOnboarding WHERE name LIKE @query OR aadhaarNumber LIKE @query OR LabourID LIKE @query OR OnboardName LIKE @query OR workingHours LIKE @query OR businessUnit LIKE @query OR designation LIKE @query');
         return result.recordset;
     } catch (error) {
         throw error;
@@ -1803,7 +1803,7 @@ async function insertIntoLabourAttendanceSummary(summary) {
             .input('SelectedMonth', sql.NVarChar, summary.selectedMonth)
             .query(`
                 SELECT COUNT(*) AS count 
-                FROM LabourAttendanceSummary 
+                FROM [LabourAttendanceSummary] 
                 WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
             `);
 
@@ -1813,12 +1813,12 @@ async function insertIntoLabourAttendanceSummary(summary) {
         }
 
         const query = `
-            INSERT INTO LabourAttendanceSummary (
+            INSERT INTO [LabourAttendanceSummary] (
                 LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
-                TotalOvertimeHours, Shift, CreationDate, SelectedMonth
+                TotalOvertimeHours, Shift, CreationDate, SelectedMonth, Date
             ) VALUES (
                 @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
-                @TotalOvertimeHours, @Shift, @CreationDate, @SelectedMonth
+                @TotalOvertimeHours, @Shift, @CreationDate, @SelectedMonth, @Date
             )
         `;
 
@@ -1834,6 +1834,7 @@ async function insertIntoLabourAttendanceSummary(summary) {
             .input('Shift', sql.NVarChar, summary.shift)
             .input('CreationDate', sql.DateTime, summary.creationDate)
             .input('SelectedMonth', sql.NVarChar, summary.selectedMonth)
+            .input('Date', sql.Date, summary.date)
             .query(query);
 
         console.log(`Inserted summary for LabourId: ${summary.labourId}`);
@@ -1852,11 +1853,11 @@ async function insertIntoLabourAttendanceDetails(details) {
         const query = `
             IF NOT EXISTS (
                 SELECT 1
-                FROM LabourAttendanceDetails
+                FROM [LabourAttendanceDetails]
                 WHERE LabourId = @LabourId AND Date = @Date
             )
             BEGIN
-                INSERT INTO LabourAttendanceDetails (
+                INSERT INTO [LabourAttendanceDetails] (
                     LabourId, Date, FirstPunch, FirstPunchAttendanceId, FirstPunchDeviceId,
                     LastPunch, LastPunchAttendanceId, LastPunchDeviceId, 
                     TotalHours, Overtime, Status, CreationDate, projectName
@@ -2203,7 +2204,47 @@ async function showAttendanceCalenderSingleLabour(labourId, month, year) {
         console.error('Error fetching attendance details for a single labour:', error);
         throw error;
     }
-}
+};
+
+async function getHolidayDates(month, year) {
+    try {
+        // Ensure month is two digits
+        const formattedMonth = String(month).padStart(2, '0');
+
+        // Create startDate as the first day of the month
+        const startDate = `${year}-${formattedMonth}-01`;
+
+        // Calculate the last day of the month
+        const endDateObj = new Date(year, month, 0); // Month is 1-indexed here
+        const lastDay = endDateObj.getDate();
+        const endDate = `${year}-${formattedMonth}-${String(lastDay).padStart(2, '0')}`;
+
+        // Await the pool connection
+        const pool = await poolPromise;
+
+        // Use parameterized queries to prevent SQL injection
+        const query = `
+            SELECT CONVERT(VARCHAR(10), HolidayDate, 120) AS HolidayDate
+            FROM [dbo].[HolidayDate]
+            WHERE HolidayDate BETWEEN @startDate AND @endDate
+        `;
+
+        // Execute the query with parameters
+        const result = await pool.request()
+            .input('startDate', startDate)
+            .input('endDate', endDate)
+            .query(query);
+
+        // Extract and return the holiday dates
+        return result.recordset.map(holiday => holiday.HolidayDate);
+    } catch (error) {
+        // Log the error for debugging purposes
+        console.error('Error fetching holiday dates:', error);
+
+        // You can choose to throw the error to be handled by the caller
+        throw new Error('Failed to retrieve holiday dates. Please try again later.');
+    }
+};
 
 
 async function getTimesUpdateForMonth(labourId, date) {
@@ -2955,7 +2996,7 @@ async function getAttendanceByDateRange(projectName, startDate, endDate) {
          WHERE ProjectName = @projectName AND Date BETWEEN @startDate AND @endDate`
       );
     return result.recordset;
-  }
+  };
   
 
   
@@ -3624,7 +3665,7 @@ async function insertWagesData(row) {
             (LabourID, WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, EffectiveDate, CreatedAt)
             VALUES (@LabourID, @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @FixedMonthlyWages, @WeeklyOff, @EffectiveDate, @CreatedAt)
         `);
-}
+};
 
 
 const getWagesAndLabourOnboardingJoin = async () => {
@@ -3791,6 +3832,7 @@ module.exports = {
     markWagesForApproval,
     approveWages,
     rejectWages,
-    getVariablePayAndLabourOnboardingJoin
+    getVariablePayAndLabourOnboardingJoin,
+    getHolidayDates
 
 };
