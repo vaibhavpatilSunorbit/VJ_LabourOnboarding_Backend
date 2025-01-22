@@ -64,10 +64,13 @@ async function handleCheckAadhaar(req, res) {
 
         if (labourRecords && labourRecords.length > 0) {
             // Check if any record matches specific conditions
-            const resubmittedRecord = labourRecords.find(record => record.status === 'Resubmitted' && record.isApproved === 3);
+            const resubmittedRecord = labourRecords.find(record => 
+                (record.status === 'Resubmitted' && record.isApproved === 3) ||
+                (record.status === 'Disable' && record.isApproved === 4)
+            );
 
             if (resubmittedRecord) {
-                console.log("Returning skipCheck for Resubmitted and isApproved 3");
+                console.log("Returning skipCheck for Resubmitted or Disable with specific isApproved values");
                 return res.status(200).json({ exists: false, skipCheck: true, LabourID: resubmittedRecord.LabourID });
             }
 
@@ -429,11 +432,13 @@ finalOnboardName = finalOnboardName.toUpperCase();
             uploadInductionDoc = null
         } = req.files || {};  // Use {} as fallback if req.files is undefined
 
-        const processFileField = (fileField, reqFile) => {
-            if (typeof fileField === 'string' && fileField.startsWith('http')) {
-                return fileField; // URL
-            } else if (reqFile) {
-                return baseUrl + path.basename(reqFile[0].path); // Binary data uploaded, get URL path
+        const processFileField = (bodyField, fileField) => {
+            if (fileField) {
+                // Binary data uploaded, get URL path
+                return baseUrl + path.basename(fileField[0].path);
+            } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
+                // If no new file, use the existing URL
+                return bodyField;
             }
             return null; // No data available
         };
@@ -653,13 +658,15 @@ finalOnboardName = finalOnboardName.toUpperCase();
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files || {};
 
-        const processFileField = (fileField, reqFile) => {
-            if (typeof fileField === 'string' && fileField.startsWith('http')) {
-                return fileField;
-            } else if (reqFile) {
-                return baseUrl + path.basename(reqFile[0].path);
+        const processFileField = (bodyField, fileField) => {
+            if (fileField) {
+                // Binary data uploaded, get URL path
+                return baseUrl + path.basename(fileField[0].path);
+            } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
+                // If no new file, use the existing URL
+                return bodyField;
             }
-            return null;
+            return null; // No data available
         };
 
         const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
@@ -1812,7 +1819,7 @@ function calculateHoursWorked(punchDate, firstPunch, lastPunch) {
 
     const totalHours = (punchOutTime - punchInTime) / (1000 * 60 * 60); // Convert milliseconds to hours
     return totalHours.toFixed(2);  // Return hours with 2 decimal places
-}
+};
 
 async function getAttendance(req, res) {
     try {
@@ -2061,7 +2068,7 @@ async function getAllLaboursAttendance(req, res) {
         console.error('Error processing attendance:', err);
         res.status(500).json({ message: 'Error processing attendance' });
     }
-}
+};
 
 
 // async function processLaboursAttendance(date) {
@@ -2421,11 +2428,10 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('35 12 * * *', async () => {
+cron.schedule('56 18 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
-
 // cron.schedule('28 14 * * *', async () => {
 //     cronLogger.info('Scheduled cron triggered...');
 //     if (currentProcessingMonth) {
