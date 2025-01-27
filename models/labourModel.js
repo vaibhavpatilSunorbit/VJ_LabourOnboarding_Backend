@@ -203,7 +203,7 @@ async function registerData(labourData) {
         }
       });
 
-      console.log('Inserting data into database for OnboardName:', labourData.OnboardName);
+      //console.log('Inserting data into database for OnboardName:', labourData.OnboardName);
       const result = await request.query(`
       INSERT INTO labourOnboarding (
         LabourID, labourOwnership, uploadAadhaarFront, uploadAadhaarBack, uploadIdProof, name, aadhaarNumber,
@@ -218,7 +218,7 @@ async function registerData(labourData) {
         @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
         'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId, @departmentName)
       `);
-      console.log('Data successfully inserted for OnboardName:', labourData.OnboardName);
+      //console.log('Data successfully inserted for OnboardName:', labourData.OnboardName);
       return result.recordset;
   } catch (error) {
       throw error;
@@ -230,7 +230,7 @@ async function registerData(labourData) {
 
 async function updateData(labourData) {
     try {
-        console.log("labourData:........vaibhav now", labourData);
+        //console.log("labourData:........vaibhav now", labourData);
 
         const pool = await poolPromise;
         const request = pool.request();
@@ -254,7 +254,7 @@ async function updateData(labourData) {
             return null;
         }
 
-        console.log("Updating LabourID:", labourData.LabourID);
+        //console.log("Updating LabourID:", labourData.LabourID);
         request.input('LabourID', sql.NVarChar, labourData.LabourID);
 
     //     const finalOnboardName = labourData.OnboardName ? labourData.OnboardName : ''; // Fallback to empty string if undefined
@@ -295,7 +295,7 @@ labourData.OnboardName = finalOnboardName.toUpperCase();
         request.input('status', sql.NVarChar, 'Pending');
         request.input('isApproved', sql.Int, 0);
 
-        console.log("Executing SQL Update...");
+        //console.log("Executing SQL Update...");
         const updateResult = await request.query(`
             UPDATE labourOnboarding SET
                 labourOwnership = @labourOwnership,
@@ -359,13 +359,13 @@ labourData.OnboardName = finalOnboardName.toUpperCase();
             return null;
         }
 
-        console.log("Update successful:", updateResult.rowsAffected[0], "rows updated.");
+        //console.log("Update successful:", updateResult.rowsAffected[0], "rows updated.");
 
         // Fetch the updated record to return it
         const fetchResult = await request.query(`
             SELECT * FROM labourOnboarding WHERE LabourID = @LabourID
         `);
-        console.log('Data successfully inserted for OnboardName Edit button:', labourData.OnboardName);
+        //console.log('Data successfully inserted for OnboardName Edit button:', labourData.OnboardName);
         return fetchResult.recordset[0];  // Return the first row of the updated data
     } catch (error) {
         console.error('Error updating data:', error);
@@ -437,14 +437,14 @@ async function updateDataDisableStatus(labourData) {
           @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
           'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId, @departmentName)
         `);
-        console.log('Data successfully inserted for OnboardName Resubmmit button:', labourData.OnboardName);
+        //console.log('Data successfully inserted for OnboardName Resubmmit button:', labourData.OnboardName);
         return result.recordset;
     } catch (error) {
         throw error;
     };
 };
     // try {
-    //     console.log("labourData:", labourData);
+    //     //console.log("labourData:", labourData);
 
     //     const pool = await poolPromise;
     //     const request = pool.request();
@@ -465,7 +465,7 @@ async function updateDataDisableStatus(labourData) {
     //     //     return null;
     //     // }
 
-    //     // console.log("Updating LabourID:", labourData.LabourID);
+    //     // //console.log("Updating LabourID:", labourData.LabourID);
     //     // request.input('LabourID', sql.NVarChar, labourData.LabourID);
 
     //     const finalOnboardName = labourData.OnboardName ? labourData.OnboardName : ''; // Fallback to empty string if undefined
@@ -473,7 +473,7 @@ async function updateDataDisableStatus(labourData) {
 
     //     // New Logic: Check labourStatus to set LabourID, status, empId, and isApproved fields
     //     // if (labourData.status === 'Disable' && labourData.isApproved == 4) {
-    //     //     console.log('Labour is disabled and approved. Setting status to Pending, isApproved to 0, and LabourID to NULL');
+    //     //     //console.log('Labour is disabled and approved. Setting status to Pending, isApproved to 0, and LabourID to NULL');
             
     //     //     // Update fields
     //     //     labourData.LabourID = null; // Set LabourID to null
@@ -512,7 +512,7 @@ async function updateDataDisableStatus(labourData) {
     //            .input('isApproved', sql.Int, labourData.isApproved)
     //            .input('LabourID', sql.NVarChar, labourData.LabourID);
 
-    //     console.log("Executing SQL Update...");
+    //     //console.log("Executing SQL Update...");
     //     const updateResult = await request.query(`
     //         UPDATE labourOnboarding SET
     //             labourOwnership = @labourOwnership,
@@ -576,7 +576,7 @@ async function updateDataDisableStatus(labourData) {
     //         return null;
     //     }
 
-    //     console.log("Update successful:", updateResult.rowsAffected[0], "rows updated.");
+    //     //console.log("Update successful:", updateResult.rowsAffected[0], "rows updated.");
     //     return updateResult;
     //     // Fetch the updated record to return it
     //     // Return the first row of the updated data
@@ -659,7 +659,7 @@ async function registerDataUpdate(labourData) {
           @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
           'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId, @departmentName)
         `);
-        console.log('Data successfully inserted for OnboardName Resubmmit button:', labourData.OnboardName);
+        //console.log('Data successfully inserted for OnboardName Resubmmit button:', labourData.OnboardName);
         return result.recordset;
     } catch (error) {
         throw error;
@@ -739,7 +739,7 @@ async function registerDataUpdateDisable(labourData) {
           @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
           'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId, @departmentName, @isResubmit)
         `);
-        console.log('Data successfully inserted for OnboardName Resubmmit button:', labourData.OnboardName);
+        //console.log('Data successfully inserted for OnboardName Resubmmit button:', labourData.OnboardName);
         return result.recordset;
     } catch (error) {
         throw error;
@@ -784,7 +784,7 @@ async function getById(id) {
 //             throw new Error('Updated data is required and should not be empty or invalid.');
 //         }
 
-//         // console.log('Received updatedData:', updatedData);  
+//         // //console.log('Received updatedData:', updatedData);  
 
 //         const pool = await poolPromise;
 //         const request = pool.request().input('id', sql.Int, id);
@@ -858,7 +858,7 @@ async function getById(id) {
 //                 }
 
 //                 // Log the value and type being set for debugging
-//                 console.log(`Setting parameter ${index}:`, { value, type: typeof value });
+//                 //console.log(`Setting parameter ${index}:`, { value, type: typeof value });
 
 //                 // Check if the value is a valid string before adding it as a parameter
 //                 if (typeof value === 'string' && value.trim() === '') {
@@ -879,13 +879,13 @@ async function getById(id) {
 //     // Set status and IsApproved based on the presence of LabourID
 //     if (updatedData.LabourID && typeof updatedData.LabourID === 'string' && updatedData.LabourID.trim() !== '' && updatedData.LabourID !== 'null') {
 //         // LabourID is a non-empty string and not explicitly 'null'
-//         console.log("LabourID is present:", updatedData.LabourID);  // Debugging output
+//         //console.log("LabourID is present:", updatedData.LabourID);  // Debugging output
 //         updateQuery += "status = @status, IsApproved = @IsApproved WHERE id = @id";
 //         request.input('status', 'Approved');  // Set status to 'Approved'
 //         request.input('IsApproved', 1);       // Set IsApproved to 1
 //     } else {
 //         // LabourID is null, undefined, an empty string, or explicitly the string 'null'
-//         console.log("LabourID is null, undefined, or an empty string:", updatedData.LabourID);  // Debugging output
+//         //console.log("LabourID is null, undefined, or an empty string:", updatedData.LabourID);  // Debugging output
 //         updateQuery += "status = @status, IsApproved = @IsApproved WHERE id = @id";
 //         request.input('status', 'Pending');   // Set status to 'Pending'
 //         request.input('IsApproved', 0);       // Set IsApproved to 0
@@ -1011,7 +1011,7 @@ async function approveLabour(id, nextID) {
             .input('ApproveLabourDate', sql.DateTime, now)
             .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID, ApproveLabourDate = @ApproveLabourDate WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
         
-        console.log('Database update result:', result);
+        //console.log('Database update result:', result);
 
         if (result.rowsAffected[0] > 0) {
             const approvedResult = await pool.request()
@@ -1040,7 +1040,7 @@ async function approveDisableLabours(id, labourID) {
             .input('ApproveLabourDate', sql.DateTime, now)
             .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID, ApproveLabourDate = @ApproveLabourDate WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
         
-        console.log('Database update result:', result);
+        //console.log('Database update result:', result);
 
         if (result.rowsAffected[0] > 0) {
             const approvedResult = await pool.request()
@@ -1319,15 +1319,15 @@ async function getFormDataByAadhaar(aadhaarNumber) {
 //         // Query both tables
 //         const esslResult = await pool.request()
 //             .query('SELECT userId, esslStatus FROM [dbo].[API_EsslPayloads]');
-//             console.log("Essl Status Query Result:", esslResult.recordset);
+//             //console.log("Essl Status Query Result:", esslResult.recordset);
 //         const employeeMasterResult = await pool.request()
 //             .query('SELECT userId, employeeMasterStatus FROM [dbo].[API_ResponsePayloads]');
-//             console.log("Employee Master Status Query Result:", employeeMasterResult.recordset);
+//             //console.log("Employee Master Status Query Result:", employeeMasterResult.recordset);
 
 //         // Handle and validate userId properly
 //         const esslStatusMap = esslResult.recordset.reduce((map, record) => {
 //             const userId = validateId(record.userId);
-//             console.log(userId,"sadasdasdsadsad") // Ensure valid userId (as an int)
+//             //console.log(userId,"sadasdasdsadsad") // Ensure valid userId (as an int)
 //             if (userId !== null) {
 //                 map[userId] = record.esslStatus;
 //             }
@@ -1425,7 +1425,7 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 
 // async function getAttendanceByLabourId(labourId, month, year) {
 //     try {
-//         console.log('Fetching attendance from DB for:', { labourId, month, year });
+//         //console.log('Fetching attendance from DB for:', { labourId, month, year });
 //         const pool = await poolPromise3;
 //         const result = await pool
 //             .request()
@@ -1439,7 +1439,7 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 //                 AND YEAR(punch_date) = @year
 //                 ORDER BY punch_date, punch_time
 //             `);
-//             console.log('SQL Result:', result.recordset);
+//             //console.log('SQL Result:', result.recordset);
 //         return result.recordset;
 //     } catch (err) {
 //         console.error('SQL error', err);
@@ -1452,17 +1452,17 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 // // Fetch Approved Labour IDs
 // async function getAllApprovedLabourIds() {
 //     try {
-//         console.log('Attempting to connect to the database...');
+//         //console.log('Attempting to connect to the database...');
         
 //         const pool = await poolPromise;
         
-//         console.log('Connected to the database. Executing query...');
+//         //console.log('Connected to the database. Executing query...');
         
 //         const result = await pool
 //             .request()
 //             .query(`SELECT LabourID AS labourId FROM [dbo].[labourOnboarding] WHERE status = 'Approved'`);
         
-//         console.log('Fetched approved labour IDs:', result.recordset);
+//         //console.log('Fetched approved labour IDs:', result.recordset);
         
 //         return result.recordset; // Returns an array of approved labour IDs
 //     } catch (err) {
@@ -1499,7 +1499,7 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 //                 ORDER BY punch_date, punch_time
 //             `);
 
-//         console.log(`Fetched attendance for labour ID ${labourIds}:`, result.recordset);
+//         //console.log(`Fetched attendance for labour ID ${labourIds}:`, result.recordset);
 //         return result.recordset;
 //     } catch (err) {
 //         console.error('SQL error fetching attendance data', err);
@@ -1513,7 +1513,7 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 // Updated Model (model.js)
 // async function getAttendanceByLabourId(labourId, month, year) {
 //     try {
-//         console.log('Fetching attendance from DB for:', { labourId, month, year });
+//         //console.log('Fetching attendance from DB for:', { labourId, month, year });
 //         const pool = await poolPromise3;
 //         const result = await pool
 //             .request()
@@ -1527,7 +1527,7 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 //                 AND YEAR(punch_date) = @year
 //                 ORDER BY punch_date, punch_time
 //             `);
-//         // console.log('SQL Result:', result.recordset);
+//         // //console.log('SQL Result:', result.recordset);
 //         return result.recordset;
 //     } catch (err) {
 //         console.error('SQL error', err);
@@ -1538,12 +1538,12 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 // // Fetch Approved Labour IDs
 // async function getAllApprovedLabourIds() {
 //     try {
-//         console.log('Attempting to connect to the database...');
+//         //console.log('Attempting to connect to the database...');
 //         const pool = await poolPromise;
 //         const result = await pool
 //             .request()
 //             .query(`SELECT LabourID AS labourId FROM [dbo].[labourOnboarding] WHERE status = 'Approved'`);
-//         console.log('Fetched approved labour IDs:', result.recordset);
+//         //console.log('Fetched approved labour IDs:', result.recordset);
 //         return result.recordset; // Returns an array of approved labour IDs
 //     } catch (err) {
 //         console.error('SQL error fetching approved labour IDs', err);
@@ -1556,7 +1556,7 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 
 async function getAttendanceByLabourId(labourId, month, year) {
     try {
-        console.log('Fetching attendance from DB for:', { labourId, month, year });
+        //console.log('Fetching attendance from DB for:', { labourId, month, year });
         const pool = await poolPromise3;
         const result = await pool
             .request()
@@ -1570,7 +1570,7 @@ async function getAttendanceByLabourId(labourId, month, year) {
                 AND YEAR(punch_date) = @year
                 ORDER BY punch_date, punch_time
             `);
-        // console.log('SQL Result:', result.recordset);
+        // //console.log('SQL Result:', result.recordset);
         return result.recordset;
     } catch (err) {
         console.error('SQL error', err);
@@ -1581,12 +1581,12 @@ async function getAttendanceByLabourId(labourId, month, year) {
 // Fetch Approved Labour IDs with Working Hours
 async function getAllApprovedLabours() {
     try {
-        console.log('Attempting to connect to the database...');
+        //console.log('Attempting to connect to the database...');
         const pool = await poolPromise;
         const result = await pool
             .request()
-            .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [dbo].[labourOnboarding] WHERE status = 'Approved'`);
-        console.log('Fetched approved labours:', result.recordset);
+            .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [LabourOnboardingForm].[dbo].[labourOnboarding] WHERE status = 'Approved'`);
+        //console.log('Fetched approved labours:', result.recordset);
         return result.recordset; // Returns an array of approved labour IDs and working hours
     } catch (err) {
         console.error('SQL error fetching approved labour IDs', err);
@@ -1597,13 +1597,13 @@ async function getAllApprovedLabours() {
 // Fetch Labour Details by ID
 async function getLabourDetailsById(labourId) {
     try {
-        console.log('Fetching labour details from DB for:', labourId);
+        //console.log('Fetching labour details from DB for:', labourId);
         const pool = await poolPromise;
         const result = await pool
             .request()
             .input('labourId', sql.NVarChar, labourId)
             .query(`SELECT LabourID AS labourId, workingHours FROM [dbo].[labourOnboarding] WHERE LabourID = @labourId`);
-        console.log('Fetched labour details:', result.recordset[0]);
+        //console.log('Fetched labour details:', result.recordset[0]);
         return result.recordset[0];
     } catch (err) {
         console.error('SQL error fetching labour details', err);
@@ -1709,7 +1709,7 @@ async function saveWeeklyOffs(LabourID, weeklyOffDates) {
 
 async function getAttendanceByLabourIdForDate(labourId, date) {
     try {
-        console.log('Fetching attendance from DB for:', { labourId, date });
+        //console.log('Fetching attendance from DB for:', { labourId, date });
         const pool = await poolPromise3;
         const result = await pool
             .request()
@@ -1803,17 +1803,17 @@ async function insertIntoLabourAttendanceSummary(summary) {
             .input('SelectedMonth', sql.NVarChar, summary.selectedMonth)
             .query(`
                 SELECT COUNT(*) AS count 
-                FROM [LabourAttendanceSummary] 
+                FROM [dbo].[LabourAttendanceSummary] 
                 WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
             `);
 
         if (existingRecord.recordset[0].count > 0) {
-            console.log(`Record already exists for LabourId: ${summary.labourId} in month: ${summary.selectedMonth}`);
+            //console.log(`Record already exists for LabourId: ${summary.labourId} in month: ${summary.selectedMonth}`);
             return; 
         }
 
         const query = `
-            INSERT INTO [LabourAttendanceSummary] (
+            INSERT INTO [dbo].[LabourAttendanceSummary] (
                 LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
                 TotalOvertimeHours, Shift, CreationDate, SelectedMonth, Date
             ) VALUES (
@@ -1837,7 +1837,7 @@ async function insertIntoLabourAttendanceSummary(summary) {
             .input('Date', sql.Date, summary.date)
             .query(query);
 
-        console.log(`Inserted summary for LabourId: ${summary.labourId}`);
+        //console.log(`Inserted summary for LabourId: ${summary.labourId}`);
     } catch (err) {
         console.error('Error inserting into LabourAttendanceSummary:', err);
         throw err;
@@ -1853,11 +1853,11 @@ async function insertIntoLabourAttendanceDetails(details) {
         const query = `
             IF NOT EXISTS (
                 SELECT 1
-                FROM [LabourAttendanceDetails]
+                FROM [dbo].[LabourAttendanceDetails]
                 WHERE LabourId = @LabourId AND Date = @Date
             )
             BEGIN
-                INSERT INTO [LabourAttendanceDetails] (
+                INSERT INTO [dbo].[LabourAttendanceDetails] (
                     LabourId, Date, FirstPunch, FirstPunchAttendanceId, FirstPunchDeviceId,
                     LastPunch, LastPunchAttendanceId, LastPunchDeviceId, 
                     TotalHours, Overtime, Status, CreationDate, projectName
@@ -1886,7 +1886,7 @@ async function insertIntoLabourAttendanceDetails(details) {
             .input('CreationDate', sql.DateTime, details.creationDate)
             .query(query);
 
-        console.log(`Attempted to insert details for LabourId: ${details.labourId} on Date: ${details.date}`);
+        //console.log(`Attempted to insert details for LabourId: ${details.labourId} on Date: ${details.date}`);
     } catch (err) {
         console.error('Error inserting into LabourAttendanceDetails:', err);
         throw err;
@@ -1923,7 +1923,7 @@ async function insertIntoLabourAttendanceDetails(details) {
 //             .input('CreationDate', sql.DateTime, details.creationDate)
 //             .query(query);
 
-//         console.log(`Inserted details for LabourId: ${details.labourId} on Date: ${details.date}`);
+//         //console.log(`Inserted details for LabourId: ${details.labourId} on Date: ${details.date}`);
 //     } catch (err) {
 //         console.error('Error inserting into LabourAttendanceDetails:', err);
 //         throw err;
@@ -1933,7 +1933,7 @@ async function insertIntoLabourAttendanceDetails(details) {
 
 
 async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
-    // console.log('date++__++__++__',date)
+    // //console.log('date++__++__++__',date)
     try {
         const pool = await poolPromise;
 
@@ -1995,7 +1995,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                     WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
                 `);
 
-            console.log(`Updated summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
+            //console.log(`Updated summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
         } else {
             // Insert new record
             await pool
@@ -2019,7 +2019,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                     )
                 `);
 
-            console.log(`Inserted summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
+            //console.log(`Inserted summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
         }
     } catch (err) {
         console.error('Error in insertOrUpdateLabourAttendanceSummary:', err);
@@ -2318,7 +2318,7 @@ async function markAttendanceForApproval(
             )
         `);
 
-        console.log('Attendance marked for admin approval.');
+        //console.log('Attendance marked for admin approval.');
     } catch (error) {
         console.error('Error marking attendance for approval:', error);
         throw new Error('Error marking attendance for admin approval.');
@@ -2347,10 +2347,10 @@ async function approveAttendance(id) {
         // Extract only the date part of the Date field
         const formattedDate = approvalData.Date.toISOString().split('T')[0];
 
-        console.log('Approval Data:', {
-            ...approvalData,
-            Date: formattedDate,
-        });
+        //console.log('Approval Data:', {
+        //     ...approvalData,
+        //     Date: formattedDate,
+        // });
 
         // Call upsertAttendance to handle insertion or update of LabourAttendanceDetails
         await upsertAttendance({
@@ -2387,7 +2387,7 @@ async function approveAttendance(id) {
                 WHERE LabourId = @labourId AND Date = @date
             `);
 
-        console.log('Attendance approved and updated successfully.');
+        //console.log('Attendance approved and updated successfully.');
         return { success: true, message: 'Attendance approved successfully.' };
     } catch (error) {
         console.error('Error approving attendance:', error);
@@ -2418,10 +2418,10 @@ async function rejectAttendanceAdmin(id, rejectReason) {
         // Extract only the date part of the Date field
         const formattedDate = approvalData.Date.toISOString().split('T')[0];
 
-        console.log('Approval Data:', {
-            ...approvalData,
-            Date: formattedDate,
-        });
+        //console.log('Approval Data:', {
+        //     ...approvalData,
+        //     Date: formattedDate,
+        // });
 
         // Call upsertAttendance to handle insertion or update of LabourAttendanceDetails
         await upsertAttendance({
@@ -2460,7 +2460,7 @@ async function rejectAttendanceAdmin(id, rejectReason) {
                 WHERE LabourId = @labourId AND Date = @date
             `);
 
-        console.log('Attendance Rejected and updated successfully.');
+        //console.log('Attendance Rejected and updated successfully.');
         return { success: true, message: 'Attendance Rejected successfully.' };
     } catch (error) {
         console.error('Error approving attendance:', error);
@@ -2581,7 +2581,7 @@ async function fetchAttendanceDetails(labourId, month, year, attendance) {
 //           const maxTimesUpdate = timesUpdateResult.recordset[0]?.MaxTimesUpdate || 0;
   
 //           if (maxTimesUpdate >= 3) {
-//               console.log('Maximum allowed edits for this month have been reached. It will be sent for Admin Approval.');
+//               //console.log('Maximum allowed edits for this month have been reached. It will be sent for Admin Approval.');
 //               await pool.request()
 //                   .input('labourId', sql.NVarChar, labourId)
 //                   .input('date', sql.Date, date)
@@ -2725,7 +2725,7 @@ async function fetchAttendanceDetails(labourId, month, year, attendance) {
 //             .input('onboardName', sql.NVarChar, onboardName)
 //             .query(query);
 
-//         console.log('Upsert successful');
+//         //console.log('Upsert successful');
 //     } catch (error) {
 //         console.error('Error performing upsert:', error);
 //         if (error.statusCode) {
@@ -2910,7 +2910,7 @@ async function upsertAttendance({
             .input('onboardName', sql.NVarChar, onboardName)
             .query(query);
 
-        console.log('Upsert successful');
+        //console.log('Upsert successful');
     } catch (error) {
         console.error('Error performing upsert:', error);
         if (error.statusCode) {
@@ -2921,7 +2921,7 @@ async function upsertAttendance({
             throw serverError;
         }
     }
-}
+};
 
 
 async function LabourAttendanceApprovalModel() {
@@ -2953,7 +2953,7 @@ async function rejectAttendance(id, rejectReason) {
             `);
 
         if (existingRecord.recordset.length === 0) {
-            console.log('No record found for AttendanceId:', id);
+            //console.log('No record found for AttendanceId:', id);
             return false; // Record not found
         }
 
@@ -2974,7 +2974,7 @@ async function rejectAttendance(id, rejectReason) {
                 WHERE AttendanceId = @id
             `);
 
-        console.log('Attendance rejected successfully for ID:', id);
+        //console.log('Attendance rejected successfully for ID:', id);
         return true; // Success
     } catch (error) {
         console.error('Error rejecting attendance:', error);
@@ -3019,10 +3019,10 @@ async function getAttendanceByDateRange(projectName, startDate, endDate) {
         );
   
       if (result.recordset.length > 0) {
-        console.log(`Row matched:`, row);
+        //console.log(`Row matched:`, row);
         matchedRows.push(row);
       } else {
-        console.log(`Row unmatched:`, row);
+        //console.log(`Row unmatched:`, row);
         unmatchedRows.push(row);
       }
     }
@@ -3052,7 +3052,7 @@ async function getAttendanceByDateRange(projectName, startDate, endDate) {
            WHERE AttendanceId = @AttendanceId AND LabourId = @LabourId AND Date = @Date`
         );
   
-      console.log(`Row updated:`, row);
+      //console.log(`Row updated:`, row);
     }
   }
   
@@ -3077,11 +3077,11 @@ async function getAttendanceByDateRange(projectName, startDate, endDate) {
         row.OvertimeManually || null,
         row.RemarkManually || null
       );
-      console.log(`Row to insert:`, row);
+      //console.log(`Row to insert:`, row);
     });
   
     await pool.request().bulk(table);
-    console.log(`All unmatched rows inserted.`);
+    //console.log(`All unmatched rows inserted.`);
   }
 // ------------------------   ////////////////////////////////////----------end -------  
   
@@ -3091,7 +3091,7 @@ async function getAttendanceByDateRange(projectName, startDate, endDate) {
 // // Fetch attendance by Labour ID
 // async function getAttendanceByLabourId(labourId, month, year) {
 //     try {
-//         console.log('Fetching attendance from DB for:', { labourId, month, year });
+//         //console.log('Fetching attendance from DB for:', { labourId, month, year });
 //         const pool = await poolPromise3;
 //         const result = await pool
 //             .request()
@@ -3115,12 +3115,12 @@ async function getAttendanceByDateRange(projectName, startDate, endDate) {
 // // Fetch approved Labour IDs with working hours
 // async function getAllApprovedLabours() {
 //     try {
-//         console.log('Attempting to connect to the database...');
+//         //console.log('Attempting to connect to the database...');
 //         const pool = await poolPromise;
 //         const result = await pool
 //             .request()
 //             .query(`SELECT LabourID AS labourId, workingHours FROM [dbo].[labourOnboarding] WHERE status = 'Approved'`);
-//         console.log('Fetched approved labours:', result.recordset);
+//         //console.log('Fetched approved labours:', result.recordset);
 //         return result.recordset; // Returns an array of approved labour IDs and working hours
 //     } catch (err) {
 //         console.error('SQL error fetching approved labour IDs', err);
@@ -3131,13 +3131,13 @@ async function getAttendanceByDateRange(projectName, startDate, endDate) {
 // // Fetch labour details by ID
 // async function getLabourDetailsById(labourId) {
 //     try {
-//         console.log('Fetching labour details from DB for:', labourId);
+//         //console.log('Fetching labour details from DB for:', labourId);
 //         const pool = await poolPromise;
 //         const result = await pool
 //             .request()
 //             .input('labourId', sql.NVarChar, labourId)
 //             .query(`SELECT LabourID AS labourId, workingHours FROM [dbo].[labourOnboarding] WHERE LabourID = @labourId`);
-//         console.log('Fetched labour details:', result.recordset[0]);
+//         //console.log('Fetched labour details:', result.recordset[0]);
 //         return result.recordset[0];
 //     } catch (err) {
 //         console.error('SQL error fetching labour details', err);
@@ -3214,7 +3214,7 @@ const getLabourMonthlyWages = async () => {
 // Add or update wages
 const upsertLabourMonthlyWages = async (wage) => {
     const pool = await poolPromise;
-    console.log('Payload received for wages:', wage);
+    //console.log('Payload received for wages:', wage);
     // Step 2: Perform the upsert operation
     const onboardingData = await pool.request()
     .input('LabourID', sql.NVarChar, wage.labourId || '')
@@ -3268,7 +3268,7 @@ await pool.request()
     .input('departmentName', sql.NVarChar, labourDetails.departmentName || '')
     .input('EffectiveDate', sql.Date, wage.effectiveDate || null)
     .query(query);
-    console.log('Wages successfully saved with EffectiveDate:', wage.effectiveDate);
+    //console.log('Wages successfully saved with EffectiveDate:', wage.effectiveDate);
 };
 
 
@@ -3356,7 +3356,7 @@ async function markWagesForApproval(
             )
         `);
 
-        console.log('Wages marked for admin approval.');
+        //console.log('Wages marked for admin approval.');
         return { success: true, message: 'Wages marked for admin approval.' };
     } catch (error) {
         console.error('Error marking wages for approval:', error.message || error);
@@ -3369,7 +3369,7 @@ async function markWagesForApproval(
 async function approveWages(ApprovalID) {
     try {
         const pool = await poolPromise;
-        console.log('approvalWages ID in model.js:', ApprovalID);
+        //console.log('approvalWages ID in model.js:', ApprovalID);
 
         // Fetch the approval record
         const approvalResult = await pool.request()
@@ -3384,7 +3384,7 @@ async function approveWages(ApprovalID) {
         }
 
         const approvalData = approvalResult.recordset[0];
-        console.log('approvalData:', approvalData);
+        //console.log('approvalData:', approvalData);
 
         // Approve in LabourMonthlyWages
         await pool.request()
@@ -3403,7 +3403,8 @@ async function approveWages(ApprovalID) {
                 MonthlyWages = @MonthlyWages,
                 PerHourWages = @PerHourWages,
                 EffectiveDate = @EffectiveDate,
-                Remarks = @Remarks
+                Remarks = @Remarks,
+                ApprovalDate = GETDATE()
             WHERE WageID = @WageID
         `);
 
@@ -3417,7 +3418,7 @@ async function approveWages(ApprovalID) {
                 WHERE ApprovalID = @ApprovalID
             `);
 
-        console.log('Wages approved successfully.');
+        //console.log('Wages approved successfully.');
         return { success: true, message: 'Wages approved successfully.' };
     } catch (error) {
         console.error('Error approving wages:', error);
@@ -3429,7 +3430,7 @@ async function approveWages(ApprovalID) {
 async function rejectWages(ApprovalID, Remarks) {
     try {
         const pool = await poolPromise;
-        console.log('Rejecting wages with ApprovalID:', ApprovalID, 'and Remarks:', Remarks);
+        //console.log('Rejecting wages with ApprovalID:', ApprovalID, 'and Remarks:', Remarks);
 
         // Fetch the approval record
         const approvalResult = await pool.request()
@@ -3470,7 +3471,7 @@ async function rejectWages(ApprovalID, Remarks) {
                 WHERE ApprovalID = @ApprovalID
             `);
 
-        console.log('Wages rejected successfully.');
+        //console.log('Wages rejected successfully.');
         return { success: true, message: 'Wages rejected successfully.' };
     } catch (error) {
         console.error('Error rejecting wages:', error);
@@ -3688,14 +3689,16 @@ const getWagesAndLabourOnboardingJoin = async () => {
             wages.CreatedAt,
             wages.FixedMonthlyWages,
             wages.EffectiveDate
-        FROM 
+        FROM
             [dbo].[labourOnboarding] AS onboarding
-        LEFT JOIN 
+        LEFT JOIN
             [dbo].[LabourMonthlyWages] AS wages
-        ON 
+        ON
             onboarding.LabourID = wages.LabourID
-        WHERE 
+        WHERE
             onboarding.status = 'Approved'
+            ORDER BY
+    onboarding.LabourID;
     `);
 
     return result.recordset;

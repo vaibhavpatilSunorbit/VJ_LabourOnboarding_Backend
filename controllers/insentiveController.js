@@ -26,7 +26,7 @@ async function createRecord(req, res) {
             const finalOnboardName = Array.isArray(OnboardName) ? OnboardName[0] : OnboardName;
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files;
-        console.log('Received IDs:', { departmentId, designationId, labourCategoryId });
+        //console.log('Received IDs:', { departmentId, designationId, labourCategoryId });
         // Validate file fields
         if (!photoSrc || !uploadIdProof) {
             return res.status(400).json({ msg: 'All file fields are required' });
@@ -88,18 +88,18 @@ async function createRecord(req, res) {
     `;
         }
 
-        console.log(`Querying for projectName: ${projectName}`); // Debug log
+        //console.log(`Querying for projectName: ${projectName}`); // Debug log
 
         const projectResult = await projectRequest.query(query);
 
         if (projectResult.recordset.length === 0) {
-            // console.log('Invalid project name:', projectName); 
+            // //console.log('Invalid project name:', projectName); 
             return res.status(400).json({ msg: 'Invalid project name' });
         }
 
         const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
         const businessUnit = projectResult.recordset[0].Description;
-        console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
+        //console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
 
         // **********************************  NEW  ********************
 
@@ -153,7 +153,7 @@ async function createRecord(req, res) {
         const departmentName = departmentResult.recordset[0].Department_Name;
 
         const creationDate = new Date();
-        console.log('Received OnboardName:', finalOnboardName);
+        //console.log('Received OnboardName:', finalOnboardName);
         const data = await labourModel.registerData({
             labourOwnership, uploadAadhaarFront: frontImageUrl, uploadAadhaarBack: backImageUrl, uploadIdProof: IdProofImageUrl, uploadInductionDoc: uploadInductionDocImageUrl, name, aadhaarNumber,
             dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining, From_Date: fromDate.toISOString().split('T')[0], Period: period, address, pincode, taluka,
@@ -162,7 +162,7 @@ async function createRecord(req, res) {
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName: finalOnboardName, expiryDate, ValidTill: validTillDate.toISOString().split('T')[0],
             retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location, CreationDate: creationDate.toISOString(), departmentId, departmentName, designationId, labourCategoryId
         });
-        console.log('Inserted OnboardName:', finalOnboardName);
+        //console.log('Inserted OnboardName:', finalOnboardName);
         return res.status(201).json({ msg: "User created successfully", data: data });
     } catch (err) {
         console.error(err);
@@ -204,15 +204,15 @@ const upsertLabourVariablePay = async (req, res) => {
         }
 
         const existingWages = await labourModel.checkExistingVariablePay(payload.LabourID);
-        console.log('payload of wages 55', existingWages);
+        //console.log('payload of wages 55', existingWages);
 
         // Check if existing wages were found or not
         if (existingWages) {
-            console.log("Updating existing wages because a record was found.");
+            //console.log("Updating existing wages because a record was found.");
             await labourModel.upsertLabourVariablePay(payload);
             return res.status(200).json({ message: 'VariablePay updated successfully.' });
         } else {
-            console.log("No existing wages found, inserting new wages.");
+            //console.log("No existing wages found, inserting new wages.");
             await labourModel.upsertLabourVariablePay(payload);
             return res.status(200).json({ message: 'VariablePay added successfully.' });
         }
@@ -251,7 +251,7 @@ const markVariablePayForApprovalController = async (req, res) => {
     try {
         const payload = req.body;
         const { payId, LabourID, payAddedBy, variablePay, variablePayRemark, payStructure, effectiveDate, userId, name } = payload;
-console.log('payload variablePay',payload)
+//console.log('payload variablePay',payload)
         if (!LabourID || !payStructure) {
             return res.status(400).json({ message: 'Labour ID, and Pay Structure are required' });
         }
@@ -292,7 +292,7 @@ async function approveVariablePayAdmin(req, res) {
 
 async function rejectVariablePayAdmin(req, res) {
     const { VariablePayId, Remarks } = req.body;
-    console.log('VariablePayId, Remarks', req.body)
+    //console.log('VariablePayId, Remarks', req.body)
     if (!VariablePayId) {
         return res.status(400).json({ message: 'VariablePayId is required.' });
     }
@@ -318,7 +318,7 @@ const getVariablePayAdminApprovals = async (req, res) => {
 const exportVariablePayexcelSheetWithBU = async (req, res) => {
     try {
         const { projectName, startDate } = req.query;
-console.log('projectName, startDate ,',req.query)
+//console.log('projectName, startDate ,',req.query)
         if (!startDate) {
             return res.status(400).json({ message: 'Missing required parameter: startDate' });
         }
@@ -500,7 +500,7 @@ const importVariablePay = async (req, res) => {
                 row.WagesEditedBy = wagesEditedBy;
 
                 // Log the PayStructure value after normalization
-                console.log(`Row ${index + 2}: PayStructure = "${row.PayStructure}"`);
+                //console.log(`Row ${index + 2}: PayStructure = "${row.PayStructure}"`);
 
                 // Insert the row into the database
                 await labourModel.insertVariablePayData(row);
@@ -542,6 +542,232 @@ const importVariablePay = async (req, res) => {
 };
 
 
+// ----------------------------------------------------------    SALARY GENERATION PROCESS START 27-01-25   -----------------------------------------------------
+// ----------------------------------------------------------    SALARY GENERATION PROCESS START 27-01-25   -----------------------------------------------------
+
+
+/**
+ * Generate payroll for all eligible labours in a given month/year.
+ */
+async function generateMonthlyPayroll(req, res) {
+    try {
+        const { month, year } = req.body; // or req.query; adjust as needed
+
+        if (!month || !year) {
+            return res.status(400).json({
+                message: "Month and Year are required to generate payroll."
+            });
+        }
+
+        // Generate the payroll
+        const salaries = await labourModel.generateMonthlyPayroll(month, year);
+
+        // If you want to store the result in a table, you could do so inside the model or here
+        // For this example, we just return the calculated salaries
+        return res.status(200).json({
+            message: "Payroll generated successfully.",
+            data: salaries
+        });
+    } catch (error) {
+        console.error("Error generating monthly payroll:", error);
+        return res.status(500).json({
+            message: "Error generating monthly payroll.",
+            error: error.message
+        });
+    }
+}
+
+/**
+ * (Optional) Generate payroll for a single labour.
+ */
+async function generateMonthlyPayrollForSingleLabour(req, res) {
+    try {
+        const { labourId } = req.params;
+        const { month, year } = req.body;
+
+        if (!labourId || !month || !year) {
+            return res.status(400).json({
+                message: "LabourID, Month, and Year are required."
+            });
+        }
+
+        const result = await labourModel.calculateSalaryForLabour(labourId, month, year);
+        if (!result) {
+            return res.status(404).json({
+                message: "Could not generate salary. Labour might not have wages or valid attendance."
+            });
+        }
+
+        return res.status(200).json({
+            message: "Payroll generated successfully for single labour.",
+            data: result
+        });
+    } catch (error) {
+        console.error("Error generating payroll for single labour:", error);
+        return res.status(500).json({
+            message: "Error generating payroll for single labour.",
+            error: error.message
+        });
+    }
+};
+
+
+// ----------------------------------------------------------     FOR FRONTEND API'S =--------------
+
+
+/**
+ * 1) Get all labour IDs eligible for payroll
+ */
+async function getEligibleLaboursAPI(req, res) {
+    try {
+        const { month, year } = req.query;
+        if (!month || !year) {
+            return res.status(400).json({ message: 'month and year are required.' });
+        }
+
+        const labourIds = await labourModel.getEligibleLabours(parseInt(month), parseInt(year));
+        return res.status(200).json({ labourIds });
+    } catch (error) {
+        console.error('Error fetching eligible labours:', error);
+        return res.status(500).json({ message: 'Error fetching eligible labours.', error: error.message });
+    }
+}
+
+/**
+ * 2) Get attendance summary for a single labour
+ */
+async function getAttendanceSummaryAPI(req, res) {
+    try {
+        const { labourId } = req.params;
+        const { month, year } = req.query;
+        if (!labourId || !month || !year) {
+            return res.status(400).json({ message: 'labourId, month, and year are required.' });
+        }
+
+        const attendance = await labourModel.getAttendanceSummaryForLabour(labourId, parseInt(month), parseInt(year));
+        return res.status(200).json(attendance);
+    } catch (error) {
+        console.error('Error fetching attendance summary:', error);
+        return res.status(500).json({ message: 'Error fetching attendance summary.', error: error.message });
+    }
+}
+
+/**
+ * 3) Get wage info for a single labour
+ */
+async function getWageInfoAPI(req, res) {
+    try {
+        const { labourId } = req.params;
+        const { month, year } = req.query;
+        if (!labourId || !month || !year) {
+            return res.status(400).json({ message: 'labourId, month, and year are required.' });
+        }
+
+        const wageInfo = await labourModel.getWageInfoForLabour(labourId, parseInt(month), parseInt(year));
+        if (!wageInfo) {
+            return res.status(404).json({ message: 'No approved wage record found for this labour and month/year.' });
+        }
+
+        return res.status(200).json(wageInfo);
+    } catch (error) {
+        console.error('Error fetching wage info:', error);
+        return res.status(500).json({ message: 'Error fetching wage info.', error: error.message });
+    }
+}
+
+/**
+ * 4) Get variable pay for a single labour
+ */
+async function getVariablePayAPI(req, res) {
+    try {
+        const { labourId } = req.params;
+        const { month, year } = req.query;
+        if (!labourId || !month || !year) {
+            return res.status(400).json({ message: 'labourId, month, and year are required.' });
+        }
+
+        const varPay = await labourModel.getVariablePayForLabour(labourId, parseInt(month), parseInt(year));
+        return res.status(200).json(varPay);
+    } catch (error) {
+        console.error('Error fetching variable pay:', error);
+        return res.status(500).json({ message: 'Error fetching variable pay.', error: error.message });
+    }
+}
+
+/**
+ * 5) Calculate salary for a single labour (but do not insert)
+ */
+async function calculateSingleLabourAPI(req, res) {
+    try {
+        const { labourId } = req.params;
+        const { month, year } = req.query;
+        if (!labourId || !month || !year) {
+            return res.status(400).json({ message: 'labourId, month, and year are required.' });
+        }
+
+        const salaryDetail = await labourModel.calculateSalaryForLabour(labourId, parseInt(month), parseInt(year));
+        if (!salaryDetail) {
+            return res.status(404).json({ message: 'No salary data found (missing wage record or attendance?).' });
+        }
+        return res.status(200).json(salaryDetail);
+    } catch (error) {
+        console.error('Error calculating single labour salary:', error);
+        return res.status(500).json({ message: 'Error calculating single labour salary.', error: error.message });
+    }
+}
+
+/**
+ * 6) Generate payroll for all eligible labours in a given month/year (INSERT records)
+ */
+async function generateMonthlyPayrollAPI(req, res) {
+    try {
+        const { month, year } = req.body; 
+        if (!month || !year) {
+            return res.status(400).json({ message: 'month and year are required.' });
+        }
+
+        // This calls the logic that loops over all labour IDs, calculates salary, and inserts.
+        const results = await labourModel.generateMonthlyPayroll(parseInt(month), parseInt(year));
+
+        return res.status(200).json({
+            message: 'Payroll generated successfully.',
+            data: results
+        });
+    } catch (error) {
+        console.error('Error generating monthly payroll:', error);
+        return res.status(500).json({ message: 'Error generating monthly payroll.', error: error.message });
+    }
+}
+
+/**
+ * 7) (Optional) Fetch final salaries from [MonthlySalaryGeneration]
+ */
+async function getMonthlySalariesAPI(req, res) {
+    try {
+        const { month, year } = req.query;
+        if (!month || !year) {
+            return res.status(400).json({ message: 'month and year are required.' });
+        }
+
+        const pool = await poolPromise; // or use your model
+        const result = await pool.request()
+            .input('month', sql.Int, parseInt(month))
+            .input('year', sql.Int, parseInt(year))
+            .query(`
+                SELECT *
+                FROM [dbo].[MonthlySalaryGeneration]
+                WHERE SalaryMonth = @month
+                  AND SalaryYear = @year
+            `);
+
+        return res.status(200).json(result.recordset);
+    } catch (error) {
+        console.error('Error fetching monthly salaries:', error);
+        return res.status(500).json({ message: 'Error fetching monthly salaries.', error: error.message });
+    }
+}
+
+
 
 module.exports = {
     createRecord,
@@ -555,6 +781,16 @@ module.exports = {
     getVariablePayAdminApprovals,
     exportVariablePayexcelSheetWithBU,
     exportVariablePayexcelSheet,
-    importVariablePay
+    importVariablePay,
+// ------------------------------------------------------   salary generation process -----------------------------------
+    generateMonthlyPayroll,
+    generateMonthlyPayrollForSingleLabour,
+    getEligibleLaboursAPI,
+    getAttendanceSummaryAPI,
+    getWageInfoAPI,
+    getVariablePayAPI,
+    calculateSingleLabourAPI,
+    generateMonthlyPayrollAPI,
+    getMonthlySalariesAPI
 
 }
