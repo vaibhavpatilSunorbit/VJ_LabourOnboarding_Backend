@@ -1950,12 +1950,13 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                     SUM(CASE WHEN Status = 'A' THEN 1 ELSE 0 END) AS AbsentDays,
                     SUM(CASE WHEN Status = 'MP' THEN 1 ELSE 0 END) AS MissPunchDays,
                     SUM(Overtime) AS TotalOvertimeHours
+                    SUM(OvertimeManually) AS TotalOvertimeHoursManually
                 FROM LabourAttendanceDetails
                 WHERE LabourId = @LabourId
                 AND FORMAT(Date, 'yyyy-MM') = @SelectedMonth
             `);
 
-        const { TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays, TotalOvertimeHours } =
+        const { TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays, TotalOvertimeHours, TotalOvertimeHoursManually } =
             summaryData.recordset[0];
 
         // Check if an existing summary record exists for this LabourId and SelectedMonth
@@ -1980,6 +1981,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                 .input('AbsentDays', sql.Int, AbsentDays)
                 .input('MissPunchDays', sql.Int, MissPunchDays)
                 .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
+                .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
                 .input('CreationDate', sql.DateTime, new Date())
                 .input('SelectedMonth', sql.NVarChar, date.substring(0, 7))
                 .query(`
@@ -1991,6 +1993,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                         AbsentDays = @AbsentDays,
                         MissPunchDays = @MissPunchDays,
                         TotalOvertimeHours = @TotalOvertimeHours,
+                        TotalOvertimeHoursManually = @TotalOvertimeHoursManually,
                         CreationDate = @CreationDate
                     WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
                 `);
@@ -2007,15 +2010,16 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                 .input('AbsentDays', sql.Int, AbsentDays)
                 .input('MissPunchDays', sql.Int, MissPunchDays)
                 .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
+                .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
                 .input('CreationDate', sql.DateTime, new Date())
                 .input('SelectedMonth', sql.NVarChar, date.substring(0, 7))
                 .query(`
                     INSERT INTO LabourAttendanceSummary (
                         LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
-                        TotalOvertimeHours, CreationDate, SelectedMonth
+                        TotalOvertimeHours, TotalOvertimeHoursManually, CreationDate, SelectedMonth
                     ) VALUES (
                         @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
-                        @TotalOvertimeHours, @CreationDate, @SelectedMonth
+                        @TotalOvertimeHours, @TotalOvertimeHoursManually, @CreationDate, @SelectedMonth
                     )
                 `);
 
@@ -2025,7 +2029,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
         console.error('Error in insertOrUpdateLabourAttendanceSummary:', err);
         throw err;
     }
-}
+};
 
 
 async function deleteAttendanceDetails(month, year) {
@@ -2910,6 +2914,7 @@ async function upsertAttendance({
             .input('onboardName', sql.NVarChar, onboardName)
             .query(query);
 
+            await insertOrUpdateLabourAttendanceSummary(labourId, date);
         //console.log('Upsert successful');
     } catch (error) {
         console.error('Error performing upsert:', error);

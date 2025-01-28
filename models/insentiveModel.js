@@ -110,6 +110,7 @@ const getVariablePayAndLabourOnboardingJoin = async () => {
             onboarding.LabourID = variablepay.LabourID
         WHERE 
             onboarding.status = 'Approved'
+            ORDER BY LabourID
     `);
 
     return result.recordset;
@@ -834,8 +835,8 @@ async function getVariablePayForLabour(labourId, month, year) {
                 FROM [VariablePay]
                 WHERE
                     LabourID = @labourId
-                    AND [Month] = @month
-                    AND [Year] = @year
+                    AND Month(EffectiveDate) = @month
+                    AND Year(EffectiveDate) = @year
             `);
 
         // If no rows returned or the sums are all null, default to 0
@@ -882,18 +883,19 @@ async function getVariablePayForLabour(labourId, month, year) {
 async function getWageInfoForLabour(labourId, month, year) {
     try {
         const pool = await poolPromise;
+
+        // Fetch all wage entries for the labour within the desired month and year
         const result = await pool.request()
             .input('labourId', sql.NVarChar, labourId)
             .input('month', sql.Int, month)
             .input('year', sql.Int, year)
             .query(`
-              SELECT TOP 1
+              SELECT
                 WageID,
                 FromDate,
                 ApprovalDate,
                 EffectiveDate,
                 PayStructure,
-                -- If you have a column to distinguish daily vs monthly wages, you might store in PayStructure or elsewhere
                 DailyWages,
                 PerHourWages,
                 MonthlyWages,
@@ -904,22 +906,85 @@ async function getWageInfoForLabour(labourId, month, year) {
               WHERE
                   LabourID = @labourId
                   AND isApprovalDoneAdmin = 1
-                  AND MONTH(FromDate) = @month
-                  AND YEAR(FromDate)  = @year
-                  AND MONTH(ApprovalDate) = @month
-                  AND YEAR(ApprovalDate)  = @year
-              ORDER BY FromDate DESC;  
+                  AND (MONTH(FromDate) <= @month AND YEAR(FromDate) <= @year)
+                  AND (MONTH(ApprovalDate) <= @month AND YEAR(ApprovalDate) <= @year)
+              ORDER BY FromDate DESC, ApprovalDate DESC;  
             `);
 
         if (!result.recordset.length) {
-            return null;  // No wages found for this labour
+            return null; // No wages found for this labour
         }
-        return result.recordset[0];
+
+        // Iterate through the wage records to calculate the applicable wage for the specified month
+        let applicableWage = null;
+
+        for (const wage of result.recordset) {
+            const fromDate = new Date(wage.FromDate);
+            const approvalDate = new Date(wage.ApprovalDate);
+
+            // Check if this wage entry is valid for the given month/year
+            if (
+                (fromDate.getFullYear() < year || (fromDate.getFullYear() === year && fromDate.getMonth() + 1 <= month)) &&
+                (approvalDate.getFullYear() < year || (approvalDate.getFullYear() === year && approvalDate.getMonth() + 1 <= month))
+            ) {
+                // If a previous wage entry exists and overlaps with the current month, consider it
+                if (!applicableWage || fromDate > new Date(applicableWage.FromDate)) {
+                    applicableWage = wage;
+                }
+
+                // If the `EffectiveDate` exists and is within the month, use it for calculations
+                const effectiveDate = wage.EffectiveDate ? new Date(wage.EffectiveDate) : null;
+                if (effectiveDate && effectiveDate.getFullYear() === year && effectiveDate.getMonth() + 1 === month) {
+                    applicableWage = wage;
+                }
+            }
+        }
+
+        if (!applicableWage) {
+            return null; // No applicable wage entry found
+        }
+
+        // Calculate the daily or monthly wage for the specific dates
+        const daysInMonth = new Date(year, month, 0).getDate();
+        const fromDate = new Date(applicableWage.FromDate);
+        const effectiveDate = applicableWage.EffectiveDate ? new Date(applicableWage.EffectiveDate) : null;
+
+        let daysApplicable = daysInMonth;
+
+        if (fromDate.getFullYear() === year && fromDate.getMonth() + 1 === month) {
+            daysApplicable -= fromDate.getDate() - 1;
+        }
+
+        if (effectiveDate && effectiveDate.getFullYear() === year && effectiveDate.getMonth() + 1 === month) {
+            daysApplicable = daysInMonth - (effectiveDate.getDate() - 1);
+        }
+
+        // Calculate wages based on applicable days
+        let calculatedWages = {
+            dailyWages: 0,
+            monthlyWages: 0
+        };
+
+        if (applicableWage.PayStructure.toLowerCase().includes('daily')) {
+            calculatedWages.dailyWages = applicableWage.DailyWages * daysApplicable;
+        } else if (applicableWage.FixedMonthlyWages) {
+            calculatedWages.monthlyWages = (applicableWage.FixedMonthlyWages / daysInMonth) * daysApplicable;
+        } else {
+            calculatedWages.monthlyWages = (applicableWage.MonthlyWages / daysInMonth) * daysApplicable;
+        }
+
+        // Return the applicable wage information along with calculated wages
+        return {
+            ...applicableWage,
+            daysApplicable,
+            calculatedWages
+        };
     } catch (error) {
         console.error('Error in getWageInfoForLabour:', error);
         throw error;
     }
-};
+}
+
 
 
 /**
@@ -936,30 +1001,30 @@ async function getEligibleLabours(month, year) {
             .input('year', sql.Int, year)
 
             // .query(`
-            //     WITH AttendanceCTE AS (
-            //         SELECT 
-            //             LabourId,
-            //             SUM(
-            //                 CASE 
-            //                     WHEN [Status] IN ('P','HD','H','MP','O') 
-            //                     THEN 1 
-            //                     ELSE 0
-            //                 END
-            //             ) AS AttendanceCount
-            //         FROM [dbo].[LabourAttendanceDetails]
-            //         WHERE 
-            //             MONTH([Date]) = @month
-            //             AND YEAR([Date])  = @year
-            //         GROUP BY LabourId
-            //     )
-            //     SELECT A.LabourId
-            //     FROM AttendanceCTE A
-            //          INNER JOIN [dbo].[LabourMonthlyWages] W
-            //                  ON A.LabourId = W.LabourID
-            //     WHERE A.AttendanceCount > 0
-            //       AND W.isApprovalDoneAdmin = 1
-            //     GROUP BY A.LabourId
-            // ORDER BY 
+        //         WITH AttendanceCTE AS (
+        //             SELECT 
+        //                 LabourId,
+        //                 SUM(
+        //                     CASE 
+        //                         WHEN [Status] IN ('P','HD','H','MP','O') 
+        //                         THEN 1 
+        //                         ELSE 0
+        //                     END
+        //                 ) AS AttendanceCount
+        //             FROM [dbo].[LabourAttendanceDetails]
+        //             WHERE 
+        //                 MONTH([Date]) = @month
+        //                 AND YEAR([Date])  = @year
+        //             GROUP BY LabourId
+        //         )
+        //         SELECT A.LabourId
+        //         FROM AttendanceCTE A
+        //              INNER JOIN [dbo].[LabourMonthlyWages] W
+        //                      ON A.LabourId = W.LabourID
+        //         WHERE A.AttendanceCount > 0
+        //           AND W.isApprovalDoneAdmin = 1
+        //         GROUP BY A.LabourId
+        //     ORDER BY 
         // A.LabourId;
             // `);
 
@@ -991,65 +1056,293 @@ async function getEligibleLabours(month, year) {
 // ------------------------------------------------------------------------------   END AND START   ---------------------------------------------------------------------------------------------
 
 .query(`
-  WITH AttendanceCTE AS (
+    WITH AttendanceCTE AS (
+        SELECT 
+            LabourId,
+            SUM(
+                CASE 
+                    WHEN [Status] IN ('P', 'HD', 'H', 'MP', 'O') 
+                    THEN 1 
+                    ELSE 0
+                END
+            ) AS AttendanceCount
+        FROM [dbo].[LabourAttendanceDetails]
+        WHERE 
+            MONTH([Date]) = @month
+            AND YEAR([Date]) = @year
+        GROUP BY LabourId
+    )
     SELECT 
-        LabourId,
-        SUM(
-            CASE 
-                WHEN [Status] IN ('P', 'HD', 'H', 'MP', 'O') 
-                THEN 1 
-                ELSE 0
-            END
-        ) AS AttendanceCount
-    FROM [dbo].[LabourAttendanceDetails]
+        onboarding.id,
+        onboarding.LabourID AS LabourId,
+        onboarding.name,
+        onboarding.businessUnit,
+        onboarding.projectName,
+        onboarding.departmentName,
+        onboarding.department,
+        AttendanceCTE.AttendanceCount
+    FROM 
+        AttendanceCTE
+    INNER JOIN 
+        [labourOnboarding] AS onboarding
+    ON 
+        AttendanceCTE.LabourId = onboarding.LabourID
     WHERE 
-        MONTH([Date]) = 9
-        AND YEAR([Date]) = 2024
-    GROUP BY LabourId
-)
-SELECT LabourId, AttendanceCount
-FROM AttendanceCTE
-ORDER BY LabourId;
+        onboarding.status = 'Approved'
+        AND AttendanceCTE.AttendanceCount > 0
+    ORDER BY 
+        onboarding.LabourID;
 `);
 
+// Map results to an array of labour details
+const labourDetails = result.recordset.map(row => ({
+id: row.id,
+labourId: row.LabourId,
+name: row.name,
+businessUnit: row.businessUnit,
+projectName: row.projectName,
+departmentName: row.departmentName,
+department: row.department,
+attendanceCount: row.AttendanceCount
+}));
+return labourDetails;
 // -----------------------------------------------------------    END     ----------------------------------------------------
 
-        const labourIds = result.recordset.map(row => row.LabourId);
-        return labourIds;
+        // const labourIds = result.recordset.map(row => row.LabourId);
+        // return labourIds;
     } catch (error) {
         console.error('Error in getEligibleLabours:', error);
         throw error;
     }
+};
+
+// ------------------------------------------     calculate OT ----------------------
+
+async function calculateTotalOvertime(labourId, month, year) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('labourId', sql.NVarChar, labourId)
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .query(`
+                SELECT 
+                    SUM(CASE WHEN Overtime < 4 THEN Overtime ELSE 4 END) AS TotalOvertime,
+                    SUM(CASE WHEN OvertimeManually < 4 THEN OvertimeManually ELSE 4 END) AS TotalOvertimeManually
+                FROM LabourAttendanceDetails
+                WHERE LabourId = @labourId
+                  AND MONTH(Date) = @month
+                  AND YEAR(Date) = @year
+            `);
+
+
+//             .query(`
+//                SELECT 
+//     SUM(
+//         CASE 
+//             WHEN Overtime < 4 AND OvertimeManually < 4 THEN 
+//                 CASE WHEN Overtime < OvertimeManually THEN Overtime ELSE OvertimeManually END
+//             WHEN Overtime < 4 THEN Overtime
+//             WHEN OvertimeManually < 4 THEN OvertimeManually
+//             ELSE 4
+//         END
+//     ) AS TotalEffectiveOvertime
+// FROM LabourAttendanceDetails
+//                 WHERE LabourId = @labourId
+//                   AND MONTH(Date) = @month
+//                   AND YEAR(Date) = @year
+//             `);
+
+if (!result.recordset || result.recordset.length === 0) {
+    throw new Error('No data found for the given inputs.');
 }
+        const { TotalOvertime = 0, TotalOvertimeManually = 0 } = result.recordset[0] || {};
+        const cappedOvertime = Math.min(TotalOvertime || 0, TotalOvertimeManually || 0, 120);
+
+        return cappedOvertime;
+    } catch (error) {
+        console.error('Error in calculateTotalOvertime:', error);
+        throw error;
+    }
+};
 
 
 /**
  * Calculate net salary for a single labour for the given month/year.
  * Returns an object with the final breakdown.
  */
+
+// async function calculateSalaryForLabour(labourId, month, year) {
+//     try {
+//         // A) Attendance
+//         const attendance = await getAttendanceSummaryForLabour(labourId, month, year);
+
+//         // B) Wages
+//         const wages = await getWageInfoForLabour(labourId, month, year);
+
+//         // C) Variable Pay
+//         const variablePay = await getVariablePayForLabour(labourId, month, year);
+
+//         if (!wages) {
+//             // Means no approved wages for this labour
+//             return null;
+//         }
+
+//         // --- Destructure attendance ---
+//         const { 
+//             presentDays = 0, 
+//             absentDays = 0, 
+//             halfDays = 0, 
+//             normalOvertimeCount = 0, 
+//             holidayOvertimeCount = 0 
+//         } = attendance;
+
+//         // --- Destructure wages ---
+//         const wageType = wages.PayStructure || '';
+//         const dailyWageRate = wages.DailyWages || 0;
+//         const monthlySalary = wages.MonthlyWages || 0;
+//         const weeklyOffDays = wages.WeeklyOff || 0;
+//         const fixedMonthlyWage = wages.FixedMonthlyWages || 0;
+
+//         // --- Destructure variable pay ---
+//         const {
+//             advance,
+//             advanceRemarks,
+//             debit,
+//             debitRemarks,
+//             incentive,
+//             incentiveRemarks
+//         } = variablePay;
+
+//         // 1) Basic Salary & Overtime
+//         let basicSalary = 0;
+//         let totalOvertimeDays = normalOvertimeCount + holidayOvertimeCount;
+//         let overtimePay = 0;
+
+//         if (wageType.toLowerCase().includes('daily')) {
+//             // Daily wages
+//             basicSalary = dailyWageRate * presentDays;
+//             // OT rate: dailyWageRate * 1.5 (or your custom logic)
+//             overtimePay = totalOvertimeDays * dailyWageRate * 1.5;
+//         } else {
+//             // Monthly wages
+//             const baseMonthly = fixedMonthlyWage || monthlySalary;
+//             basicSalary = baseMonthly;
+
+//             // e.g. 30 days in the month
+//             const dailyRate = baseMonthly / 30;
+
+//             // Absent & Half-day deduction
+//             const absentDaysDeduction = absentDays * dailyRate;
+//             const halfDaysDeduction   = halfDays * (dailyRate / 2);
+
+//             overtimePay = totalOvertimeDays * dailyRate * 1.5;
+
+//             // We'll place these attendance deductions in totalDeductions
+//             var totalAttendanceDeductions = absentDaysDeduction + halfDaysDeduction;
+//         }
+
+//         // 2) WeeklyOff Logic
+//         let weeklyOffPay = 0;
+//         if (weeklyOffDays > 0) {
+//             if (presentDays > 15) {
+//                 // Full pay
+//                 if (wageType.toLowerCase().includes('Daily Wages')) {
+//                     weeklyOffPay = weeklyOffDays * dailyWageRate;
+//                 } else {
+//                     const baseMonthly = fixedMonthlyWage || monthlySalary;
+//                     const dailyRate = baseMonthly / 30;
+//                     weeklyOffPay = weeklyOffDays * dailyRate;
+//                 }
+//             } else {
+//                 // Half pay
+//                 if (wageType.toLowerCase().includes('Fixed Monthly Wages')) {
+//                     weeklyOffPay = weeklyOffDays * dailyWageRate * 0.5;
+//                 } else {
+//                     const baseMonthly = fixedMonthlyWage || monthlySalary;
+//                     const dailyRate = baseMonthly / 30;
+//                     weeklyOffPay = weeklyOffDays * dailyRate * 0.5;
+//                 }
+//             }
+//         }
+
+//         // 3) Deductions
+//         let totalDeductions = 0;
+//         if (typeof totalAttendanceDeductions !== 'undefined') {
+//             totalDeductions += totalAttendanceDeductions;
+//         }
+//         totalDeductions += (advance || 0);
+//         totalDeductions += (debit   || 0);
+
+//         // 4) Bonuses / Incentives
+//         let bonuses = 0;
+//         bonuses += (incentive || 0);
+
+//         // 5) Gross Pay
+//         const grossPay = basicSalary + overtimePay + weeklyOffPay + bonuses;
+
+//         // 6) Net Pay (no PF/ESI/TDS)
+//         let netPay = grossPay - totalDeductions;
+//         // If negative, clamp to 0 if that is your policy
+//         if (netPay < 0) {
+//             netPay = 0;
+//         }
+
+//         // 7) Return final breakdown
+//         return {
+//             labourId,
+//             month,
+//             year,
+//             wageType,
+//             presentDays,
+//             absentDays,
+//             halfDays,
+//             normalOvertimeCount,
+//             holidayOvertimeCount,
+//             basicSalary,
+//             overtimePay,
+//             weeklyOffPay,
+//             bonuses,
+//             totalDeductions,
+//             grossPay,
+//             netPay,
+
+//             // Variable Pay Info
+//             variablePay: {
+//                 advance, advanceRemarks,
+//                 debit,   debitRemarks,
+//                 incentive, incentiveRemarks
+//             }
+//         };
+//     } catch (error) {
+//         console.error('Error in calculateSalaryForLabour:', error);
+//         throw error;
+//     }
+// };
+
+
+
 async function calculateSalaryForLabour(labourId, month, year) {
     try {
         // A) Attendance
-        const attendance = await getAttendanceSummaryForLabour(labourId, month, year);
+        const attendance = (await getAttendanceSummaryForLabour(labourId, month, year)) || {};
 
         // B) Wages
-        const wages = await getWageInfoForLabour(labourId, month, year);
+        const wages = (await getWageInfoForLabour(labourId, month, year)) || {};
 
         // C) Variable Pay
-        const variablePay = await getVariablePayForLabour(labourId, month, year);
+        const variablePay = (await getVariablePayForLabour(labourId, month, year)) || {};
 
-        if (!wages) {
+        if (!wages || Object.keys(wages).length === 0) {
             // Means no approved wages for this labour
-            return null;
+            return { message: "No wage information found for this labour." };
         }
 
         // --- Destructure attendance ---
-        const { 
-            presentDays = 0, 
-            absentDays = 0, 
-            halfDays = 0, 
-            normalOvertimeCount = 0, 
-            holidayOvertimeCount = 0 
+        const {
+            presentDays = 0,
+            absentDays = 0,
+            halfDays = 0
         } = attendance;
 
         // --- Destructure wages ---
@@ -1061,99 +1354,81 @@ async function calculateSalaryForLabour(labourId, month, year) {
 
         // --- Destructure variable pay ---
         const {
-            advance,
-            advanceRemarks,
-            debit,
-            debitRemarks,
-            incentive,
-            incentiveRemarks
+            advance = 0,
+            advanceRemarks = '',
+            debit = 0,
+            debitRemarks = '',
+            incentive = 0,
+            incentiveRemarks = ''
         } = variablePay;
 
-        // 1) Basic Salary & Overtime
+        // --- Calculate Total Overtime ---
+        const cappedOvertime = await calculateTotalOvertime(labourId, month, year);
+
+        // 1) Basic Salary & Overtime Pay
         let basicSalary = 0;
-        let totalOvertimeDays = normalOvertimeCount + holidayOvertimeCount;
         let overtimePay = 0;
+        let totalAttendanceDeductions = 0;
 
         if (wageType.toLowerCase().includes('daily')) {
-            // Daily wages
             basicSalary = dailyWageRate * presentDays;
-            // OT rate: dailyWageRate * 1.5 (or your custom logic)
-            overtimePay = totalOvertimeDays * dailyWageRate * 1.5;
+            overtimePay = cappedOvertime * (dailyWageRate / 8) * 1.5; // OT rate: 1.5x hourly rate
         } else {
-            // Monthly wages
             const baseMonthly = fixedMonthlyWage || monthlySalary;
             basicSalary = baseMonthly;
 
-            // e.g. 30 days in the month
             const dailyRate = baseMonthly / 30;
-
-            // Absent & Half-day deduction
             const absentDaysDeduction = absentDays * dailyRate;
-            const halfDaysDeduction   = halfDays * (dailyRate / 2);
+            const halfDaysDeduction = halfDays * (dailyRate / 2);
+            totalAttendanceDeductions = absentDaysDeduction + halfDaysDeduction;
 
-            overtimePay = totalOvertimeDays * dailyRate * 1.5;
-
-            // We'll place these attendance deductions in totalDeductions
-            var totalAttendanceDeductions = absentDaysDeduction + halfDaysDeduction;
+            overtimePay = cappedOvertime * (dailyRate / 8) * 1.5;
         }
 
-        // 2) WeeklyOff Logic
+        // 2) Weekly Off Pay Calculation
         let weeklyOffPay = 0;
         if (weeklyOffDays > 0) {
             if (presentDays > 15) {
-                // Full pay
-                if (wageType.toLowerCase().includes('daily')) {
-                    weeklyOffPay = weeklyOffDays * dailyWageRate;
-                } else {
-                    const baseMonthly = fixedMonthlyWage || monthlySalary;
-                    const dailyRate = baseMonthly / 30;
-                    weeklyOffPay = weeklyOffDays * dailyRate;
-                }
+                weeklyOffPay = weeklyOffDays * dailyWageRate;
             } else {
-                // Half pay
-                if (wageType.toLowerCase().includes('daily')) {
-                    weeklyOffPay = weeklyOffDays * dailyWageRate * 0.5;
-                } else {
-                    const baseMonthly = fixedMonthlyWage || monthlySalary;
-                    const dailyRate = baseMonthly / 30;
-                    weeklyOffPay = weeklyOffDays * dailyRate * 0.5;
-                }
+                weeklyOffPay = weeklyOffDays * dailyWageRate * 0.5; // Half pay
             }
         }
 
         // 3) Deductions
         let totalDeductions = 0;
-        if (typeof totalAttendanceDeductions !== 'undefined') {
-            totalDeductions += totalAttendanceDeductions;
-        }
-        totalDeductions += (advance || 0);
-        totalDeductions += (debit   || 0);
+        totalDeductions += totalAttendanceDeductions;
+        totalDeductions += advance;
+        totalDeductions += debit;
 
-        // 4) Bonuses / Incentives
+        // 4) Bonuses/Incentives
         let bonuses = 0;
-        bonuses += (incentive || 0);
+        bonuses += incentive;
 
         // 5) Gross Pay
         const grossPay = basicSalary + overtimePay + weeklyOffPay + bonuses;
 
-        // 6) Net Pay (no PF/ESI/TDS)
-        let netPay = grossPay - totalDeductions;
-        // If negative, clamp to 0 if that is your policy
+        // 6) Net Pay (Allow negative salary)
+        const netPay = grossPay - totalDeductions;
+
+        // Create a description for net pay if it is negative
+        let netPayDescription = "Net Pay";
         if (netPay < 0) {
-            netPay = 0;
+            netPayDescription = "Negative Salary (Amount owed by labour)";
         }
 
-        // 7) Return final breakdown
+        // 7) Final Response Object
         return {
             labourId,
             month,
             year,
             wageType,
+            dailyWageRate,
+            fixedMonthlyWage,
             presentDays,
             absentDays,
             halfDays,
-            normalOvertimeCount,
-            holidayOvertimeCount,
+            cappedOvertime,
             basicSalary,
             overtimePay,
             weeklyOffPay,
@@ -1161,19 +1436,24 @@ async function calculateSalaryForLabour(labourId, month, year) {
             totalDeductions,
             grossPay,
             netPay,
+            netPayDescription, // Add a description for clarity
 
             // Variable Pay Info
             variablePay: {
-                advance, advanceRemarks,
-                debit,   debitRemarks,
-                incentive, incentiveRemarks
+                advance,
+                advanceRemarks,
+                debit,
+                debitRemarks,
+                incentive,
+                incentiveRemarks
             }
         };
     } catch (error) {
         console.error('Error in calculateSalaryForLabour:', error);
         throw error;
     }
-};
+}
+
 
 
 
@@ -1181,6 +1461,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
  * Generate salary for **all** eligible labours in a given month/year.
  * Returns an array of salary objects.
  */
+
 async function generateMonthlyPayroll(month, year) {
     try {
         const eligibleLabours = await getEligibleLabours(month, year);
@@ -1188,8 +1469,8 @@ async function generateMonthlyPayroll(month, year) {
 
         const pool = await poolPromise;
 
-        for (const labourId of eligibleLabours) {
-            const salaryDetail = await calculateSalaryForLabour(labourId, month, year);
+        for (const labour of eligibleLabours) {
+            const salaryDetail = await calculateSalaryForLabour(labour.labourId, month, year);
 
             if (salaryDetail) {
                 // 1) Push into the array (for returning if needed)
@@ -1204,8 +1485,6 @@ async function generateMonthlyPayroll(month, year) {
                     .input('presentDays', sql.Int, salaryDetail.presentDays)
                     .input('absentDays', sql.Int, salaryDetail.absentDays)
                     .input('halfDays', sql.Int, salaryDetail.halfDays)
-                    .input('normalOT', sql.Int, salaryDetail.normalOvertimeCount)
-                    .input('holidayOT', sql.Int, salaryDetail.holidayOvertimeCount)
                     .input('basicSalary', sql.Decimal(18,2), salaryDetail.basicSalary)
                     .input('overtimePay', sql.Decimal(18,2), salaryDetail.overtimePay)
                     .input('weeklyOffPay', sql.Decimal(18,2), salaryDetail.weeklyOffPay)
@@ -1224,7 +1503,6 @@ async function generateMonthlyPayroll(month, year) {
                         (
                             LabourID, SalaryMonth, SalaryYear, WageType,
                             PresentDays, AbsentDays, HalfDays,
-                            NormalOvertimeCount, HolidayOvertimeCount,
                             BasicSalary, OvertimePay, WeeklyOffPay, Bonuses,
                             TotalDeductions, GrossPay, NetPay,
                             AdvanceRemarks, DebitRemarks, IncentiveRemarks
@@ -1233,7 +1511,6 @@ async function generateMonthlyPayroll(month, year) {
                         (
                             @labourId, @salaryMonth, @salaryYear, @wageType,
                             @presentDays, @absentDays, @halfDays,
-                            @normalOT, @holidayOT,
                             @basicSalary, @overtimePay, @weeklyOffPay, @bonuses,
                             @totalDeductions, @grossPay, @netPay,
                             @advanceRemarks, @debitRemarks, @incentiveRemarks
@@ -1247,7 +1524,8 @@ async function generateMonthlyPayroll(month, year) {
         console.error('Error generating monthly payroll:', error);
         throw error;
     }
-};
+}
+
 
 
 
@@ -1272,5 +1550,6 @@ module.exports = {
     getWageInfoForLabour,
     getEligibleLabours,
     calculateSalaryForLabour,
-    generateMonthlyPayroll
+    generateMonthlyPayroll,
+    calculateTotalOvertime
 }

@@ -768,6 +768,90 @@ async function getMonthlySalariesAPI(req, res) {
 }
 
 
+/**
+ * 8) Get Overtime for a single labour
+ */
+async function getOvertimeMonthlyAPI(req, res) {
+    try {
+        const { labourId } = req.params;
+        const { month, year } = req.query;
+
+        // Validate required inputs
+        if (!labourId || !month || !year) {
+            return res.status(400).json({ message: 'labourId, month, and year are required.' });
+        }
+
+        const TotalOvertime = await labourModel.calculateTotalOvertime(
+            labourId, 
+            parseInt(month), 
+            parseInt(year)
+        );
+
+        return res.status(200).json({ totalOvertime: TotalOvertime }); // Properly format response
+    } catch (error) {
+        console.error('Error fetching Overtime:', error);
+        return res.status(500).json({ message: 'Error fetching Overtime.', error: error.message });
+    }
+};
+
+
+/**
+ * Fetch salary generation data for all eligible labours
+ */
+async function getSalaryGenerationDataAPI(req, res) {
+    try {
+        const { month, year } = req.query;
+
+        if (!month || !year) {
+            return res.status(400).json({ message: 'Month and year are required.' });
+        }
+
+        // Fetch eligible labours
+        const eligibleLabours = await labourModel.getEligibleLabours(parseInt(month), parseInt(year));
+
+        const salaryData = await Promise.all(
+            eligibleLabours.map(async (labour) => {
+                const labourId = labour.labourId;
+
+                // Fetch attendance summary
+                const attendance = await labourModel.getAttendanceSummaryForLabour(labourId, parseInt(month), parseInt(year));
+
+                // Fetch wage info
+                const wages = await labourModel.getWageInfoForLabour(labourId, parseInt(month), parseInt(year));
+
+                // Fetch variable pay
+                const variablePay = await labourModel.getVariablePayForLabour(labourId, parseInt(month), parseInt(year));
+
+                // Fetch total overtime
+                const totalOvertime = await labourModel.calculateTotalOvertime(labourId, parseInt(month), parseInt(year));
+
+                return {
+                    labourId,
+                    name: labour.name,
+                    project: labour.businessUnit,
+                    department: labour.departmentName,
+                    attendance: {
+                        presentDays: attendance.presentDays,
+                        halfDays: attendance.halfDays,
+                        absentDays: attendance.absentDays,
+                        missPunchDays: attendance.missPunchDays,
+                    },
+                    wages,
+                    variablePay,
+                    totalOvertime,
+                };
+            })
+        );
+
+        return res.status(200).json(salaryData);
+    } catch (error) {
+        console.error('Error fetching salary generation data:', error);
+        return res.status(500).json({ message: 'Error fetching salary generation data.', error: error.message });
+    }
+}
+
+
+
 
 module.exports = {
     createRecord,
@@ -791,6 +875,8 @@ module.exports = {
     getVariablePayAPI,
     calculateSingleLabourAPI,
     generateMonthlyPayrollAPI,
-    getMonthlySalariesAPI
+    getMonthlySalariesAPI,
+    getOvertimeMonthlyAPI,
+    getSalaryGenerationDataAPI
 
 }
