@@ -22,53 +22,45 @@ router.post('/importVariablePay', upload.single('file'), insentiveController.imp
 // --------------------------------------------------   routes for salary generation process -----------------------------------
 router.post('/generateMonthlyPayroll', insentiveController.generateMonthlyPayroll);
 router.post('/generateMonthlyPayroll/:labourId', insentiveController.generateMonthlyPayrollForSingleLabour);
-// labourRoutes.js or payrollRoutes.js
+
+/** 1)*/   router.get('/payroll/eligibleLaboursForSalaryGeneration', insentiveController.getEligibleLaboursAPI);
+/** 2)*/   router.get('/payroll/:labourId/attendanceSummary', insentiveController.getAttendanceSummaryAPI);
+/** 3)*/   router.get('/payroll/:labourId/wageInfo', insentiveController.getWageInfoAPI);
+/** 4)*/   router.get('/payroll/:labourId/variablePay', insentiveController.getVariablePayAPI);
+/** 5)*/   router.get('/payroll/:labourId/calculateSingleLabour', insentiveController.calculateSingleLabourAPI);
+/** 7)*/   router.get('/payroll/monthlySalaries', insentiveController.getMonthlySalariesAPI);
+/** 8)*/   router.get('/payroll/:labourId/getOvertimeMonthly', insentiveController.getOvertimeMonthlyAPI);
+/** 6)*/   router.post('/payroll/generateMonthlySalaryGeneration', insentiveController.generateMonthlyPayrollAPI);
+/** 9)*/   router.get('/payroll/salaryGenerationData', insentiveController.getSalaryGenerationDataAPI);
+
+
 
 
 /**
- * 1) GET /api/payroll/eligibleLabours?month=12&year=2024
+ * 1) GET /api/payroll/eligibleLaboursForSalaryGeneration?month=12&year=2024
  *    Returns a list of labour IDs who have at least 1 day attendance
  *    and have an approved wage record for the given month/year.
- */
-router.get('/eligibleLabours', insentiveController.getEligibleLaboursAPI);
 
-/**
- * 2) GET /api/payroll/labour/:labourId/attendance?month=12&year=2024
+ * 2) GET /api/payroll/labour/:labourId/attendanceSummary?month=12&year=2024
  *    Returns attendance summary (presentDays, absentDays, etc.) for a single labour in the month/year.
- */
-router.get('/:labourId/attendance', insentiveController.getAttendanceSummaryAPI);
 
-/**
  * 3) GET /api/payroll/labour/:labourId/wageInfo?month=12&year=2024
  *    Returns the wage info (daily or monthly, weeklyOff, etc.) for that labour in the month/year.
- */
-router.get('/:labourId/wageInfo', insentiveController.getWageInfoAPI);
 
-/**
  * 4) GET /api/payroll/labour/:labourId/variablePay?month=12&year=2024
  *    Returns the variable pay amounts and remarks (advance, debit, incentive) for that labour in the month/year.
- */
-router.get('/:labourId/variablePay', insentiveController.getVariablePayAPI);
 
-/**
- * 5) GET /api/payroll/labour/:labourId/calculate?month=12&year=2024
+ * 5) GET /api/payroll/labour/:labourId/calculateSingleLabour  
  *    Calculates the final salary for a single labour (but does not insert).
- */
-router.get('/:labourId/calculate', insentiveController.calculateSingleLabourAPI);
 
-/**
- * 6) POST /api/payroll/generate
+ * 6) POST /api/payroll/generateMonthlySalaryGeneration
  *    { "month": 12, "year": 2024 }
  *    Generates monthly payroll for all eligible labours and inserts into [MonthlySalaryGeneration].
  *    Returns an array of final results.
- */
-router.post('/generate', insentiveController.generateMonthlyPayrollAPI);
 
-/**
  * 7) GET /api/payroll/monthlySalaries?month=12&year=2024
  *    Retrieves final salary records from [MonthlySalaryGeneration] for that month/year (if you want to show them).
  */
-router.get('/monthlySalaries', insentiveController.getMonthlySalariesAPI);
 
 
 // router.get('/showAttendanceCalenderSingleLabour/:id', insentiveController.getAttendanceCalenderSingleLabour);
