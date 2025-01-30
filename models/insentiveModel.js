@@ -273,9 +273,6 @@ async function markVariablePayForApproval(
 async function approvalAdminVariablePay(VariablePayId) {
     try {
         const pool = await poolPromise;
-        //console.log('Variable Pay ID in model.js:', VariablePayId);
-
-        // Fetch the approval record
         const approvalResult = await pool.request()
             .input('VariablePayId', sql.Int, VariablePayId)
             .query(`
@@ -307,18 +304,14 @@ async function approvalAdminVariablePay(VariablePayId) {
                 ApprovedAdminDate = GETDATE()
             WHERE VariablePayId = @VariablePayId
         `);
-
-        // Update VariablePayAdminApprovals
-        // await pool.request()
-        //     .input('ApprovalID', sql.Int, ApprovalID)
-        //     .query(`
-        //         UPDATE [VariablePayAdminApprovals]
-        //         SET ApprovalStatusPay = 'Approved',
-        //             ApprovedAdminDate = GETDATE()
-        //         WHERE ApprovalID = @ApprovalID
-        //     `);
-
-        //console.log('Variable Pay approved successfully.');
+        await pool.request()
+.input('VariablePayId', sql.Int, approvalData.VariablePayId)
+.query(`
+    UPDATE [VariablePayAdminApprovals]
+    SET ApprovalStatusPay = 'Approved',
+        ApprovedAdminDate = GETDATE()
+    WHERE VariablePayId = @VariablePayId
+`);
         return { success: true, message: 'Variable Pay approved successfully.' };
     } catch (error) {
         console.error('Error approving Variable Pay:', error);
@@ -330,9 +323,6 @@ async function approvalAdminVariablePay(VariablePayId) {
 async function rejectAdminVariablePay(VariablePayId, Remarks) {
     try {
         const pool = await poolPromise;
-        //console.log('Rejecting wages with VariablePayId:', VariablePayId, 'and Remarks:', Remarks);
-
-        // Fetch the approval record
         const approvalResult = await pool.request()
             .input('VariablePayId', sql.Int, VariablePayId)
             .query(`
@@ -361,26 +351,140 @@ async function rejectAdminVariablePay(VariablePayId, Remarks) {
                     RejectAdminDate = GETDATE()
                 WHERE VariablePayId = @VariablePayId
             `);
+await request.input('VariablePayId', sql.Int, approvalData.VariablePayId)
+.input('Remarks', sql.NVarChar, Remarks || null)
+.query(`
+    UPDATE [VariablePayAdminApprovals]
+    SET ApprovalStatusPay = 'Rejected',
+        RejectAdminDate = GETDATE(),
+        Remarks = @Remarks
+    WHERE VariablePayId = @VariablePayId
+`);
 
-        // Update VariablePayAdminApprovals
-        // await pool.request()
-        //     .input('VariablePayId', sql.Int, VariablePayId)
-        //     .input('Remarks', sql.NVarChar, Remarks || null)
-        //     .query(`
-        //         UPDATE [VariablePayAdminApprovals]
-        //         SET ApprovalStatusPay = 'Rejected',
-        //             RejectAdminDate = GETDATE(),
-        //             Remarks = @Remarks
-        //         WHERE VariablePayId = @VariablePayId
-        //     `);
-
-        //console.log('Variable Pay rejected successfully.');
         return { success: true, message: 'Variable Pay rejected successfully.' };
     } catch (error) {
         console.error('Error rejecting Variable Pay:', error);
         throw new Error('Error rejecting Variable Pay.');
     }
 }
+
+
+// async function approvalAdminVariablePay(VariablePayId) {
+//     try {
+//         const pool = await poolPromise;
+
+//         // Fetch the approval record
+//         const approvalResult = await pool.request()
+//             .input('VariablePayId', sql.Int, VariablePayId)
+//             .query(`
+//                 SELECT * FROM [VariablePay]
+//                 WHERE VariablePayId = @VariablePayId
+//             `);
+
+//         if (approvalResult.recordset.length === 0) {
+//             throw new Error('Approval record not found.');
+//         }
+
+//         const approvalData = approvalResult.recordset[0];
+
+//         // Start transaction
+//         const transaction = pool.transaction();
+//         await transaction.begin();
+
+//         const request = transaction.request();
+
+//         // Approve in VariablePay
+//         await request.input('VariablePayId', sql.Int, approvalData.VariablePayId)
+//             .input('isApprovalDoneAdmin', sql.Bit, 1)
+//             .input('IsApproved', sql.Bit, 1)
+//             .query(`
+//                 UPDATE [VariablePay]
+//                 SET ApprovalStatusPay = 'Approved',
+//                     isApprovalDoneAdmin = @isApprovalDoneAdmin,
+//                     IsApproved = @IsApproved,
+//                     ApprovedAdminDate = GETDATE()
+//                 WHERE VariablePayId = @VariablePayId
+//             `);
+
+//         // Approve in VariablePayAdminApprovals
+//         await request.input('VariablePayId', sql.Int, approvalData.VariablePayId)
+//             .query(`
+//                 UPDATE [VariablePayAdminApprovals]
+//                 SET ApprovalStatusPay = 'Approved',
+//                     ApprovedAdminDate = GETDATE()
+//                 WHERE VariablePayId = @VariablePayId
+//             `);
+
+//         // Commit transaction
+//         await transaction.commit();
+
+//         return { success: true, message: 'Variable Pay approved successfully.' };
+//     } catch (error) {
+//         console.error('Error approving Variable Pay:', error);
+//         throw new Error('Error approving Variable Pay.');
+//     }
+// }
+
+
+// async function rejectAdminVariablePay(VariablePayId, Remarks) {
+//     try {
+//         const pool = await poolPromise;
+
+//         // Fetch the approval record
+//         const approvalResult = await pool.request()
+//             .input('VariablePayId', sql.Int, VariablePayId)
+//             .query(`
+//                 SELECT * FROM [VariablePay]
+//                 WHERE VariablePayId = @VariablePayId
+//             `);
+
+//         if (approvalResult.recordset.length === 0) {
+//             throw new Error('Approval record not found.');
+//         }
+
+//         const approvalData = approvalResult.recordset[0];
+
+//         // Start transaction
+//         const transaction = pool.transaction();
+//         await transaction.begin();
+
+//         const request = transaction.request();
+
+//         // Reject in VariablePay
+//         await request.input('VariablePayId', sql.Int, approvalData.VariablePayId)
+//             .input('Remarks', sql.NVarChar, Remarks || null)
+//             .input('isApprovalReject', sql.Bit, 1)
+//             .input('IsRejected', sql.Bit, 1)
+//             .query(`
+//                 UPDATE [VariablePay]
+//                 SET ApprovalStatusPay = 'Rejected',
+//                     Remarks = @Remarks,
+//                     isApprovalReject = @isApprovalReject,
+//                     IsRejected = @IsRejected,
+//                     RejectAdminDate = GETDATE()
+//                 WHERE VariablePayId = @VariablePayId
+//             `);
+
+//         // Reject in VariablePayAdminApprovals
+//         await request.input('VariablePayId', sql.Int, approvalData.VariablePayId)
+//             .input('Remarks', sql.NVarChar, Remarks || null)
+//             .query(`
+//                 UPDATE [VariablePayAdminApprovals]
+//                 SET ApprovalStatusPay = 'Rejected',
+//                     RejectAdminDate = GETDATE(),
+//                     Remarks = @Remarks
+//                 WHERE VariablePayId = @VariablePayId
+//             `);
+
+//         // Commit transaction
+//         await transaction.commit();
+
+//         return { success: true, message: 'Variable Pay rejected successfully.' };
+//     } catch (error) {
+//         console.error('Error rejecting Variable Pay:', error);
+//         throw new Error('Error rejecting Variable Pay.');
+//     }
+// }
 
 
 
@@ -506,20 +610,131 @@ const getRemarksOptions = (payStructure) => {
     }
 };
 
+// async function insertVariablePayData(row) {
+//     const pool = await poolPromise;
+
+//     // Normalize PayStructure
+//     if (typeof row.PayStructure === 'string') {
+//         row.PayStructure = row.PayStructure.trim().toLowerCase();
+//         // Capitalize first letter, lower the rest
+//         row.PayStructure = row.PayStructure.charAt(0).toUpperCase() + row.PayStructure.slice(1);
+//     }
+
+//     // Log the normalized PayStructure
+//     //console.log(`Processing LabourID: ${row.LabourID}, PayStructure: "${row.PayStructure}"`);
+
+//     // Validate PayStructure (case-insensitive)
+//     const validPayStructures = ['Advance', 'Debit', 'Incentive'];
+//     if (!row.PayStructure || !validPayStructures.includes(row.PayStructure)) {
+//         throw new Error(`Invalid PayStructure value: ${row.PayStructure}`);
+//     }
+
+//     // Initialize flags
+//     let AdvancePay = 0, DebitPay = 0, IncentivePay = 0;
+//     let variablePayRemark = null;
+
+//     // Additional validation and flag setting based on PayStructure
+//     if (row.PayStructure === 'Advance') {
+//         // Set Advance flag
+//         AdvancePay = 1;
+
+//         // Validate VariablePayRemark
+//         const remarks = getRemarksOptions('advance');
+//         if (!row.VariablePayRemark || !remarks.includes(row.VariablePayRemark)) {
+//             throw new Error(`Invalid VariablePayRemark for Advance. Allowed values: ${remarks.join(', ')}`);
+//         }
+//         variablePayRemark = row.VariablePayRemark;
+//     } else if (row.PayStructure === 'Debit') {
+//         // Set Debit flag
+//         DebitPay = 1;
+
+//         // Validate VariablePayRemark
+//         const remarks = getRemarksOptions('debit');
+//         if (!row.VariablePayRemark || !remarks.includes(row.VariablePayRemark)) {
+//             throw new Error(`Invalid VariablePayRemark for Debit. Allowed values: ${remarks.join(', ')}`);
+//         }
+//         variablePayRemark = row.VariablePayRemark;
+//     } else if (row.PayStructure === 'Incentive') {
+//         // Set Incentive flag
+//         IncentivePay = 1;
+
+//         // Validate WeeklyOff
+//         if (row.WeeklyOff == null || isNaN(parseInt(row.WeeklyOff, 10))) {
+//             throw new Error(`Invalid WeeklyOff value: ${row.WeeklyOff}`);
+//         }
+
+//         // Validate VariablePayRemark
+//         const remarks = getRemarksOptions('incentive');
+//         if (!row.VariablePayRemark || !remarks.includes(row.VariablePayRemark)) {
+//             throw new Error(`Invalid VariablePayRemark for Incentive. Allowed values: ${remarks.join(', ')}`);
+//         }
+//         variablePayRemark = row.VariablePayRemark;
+//     }
+
+//     // Fetch labour details from labourOnboarding table
+//     const onboardingData = await pool.request()
+//         .input('LabourID', sql.NVarChar, row.LabourID || '')
+//         .query(`
+//             SELECT 
+//                 LabourID,
+//                 name,
+//                 projectName,
+//                 companyName,
+//                 businessUnit,
+//                 departmentName,
+//                 id
+//             FROM [dbo].[labourOnboarding]
+//             WHERE LabourID = @LabourID
+//         `);
+
+//     if (onboardingData.recordset.length === 0) {
+//         throw new Error(`LabourID ${row.LabourID} not found in labourOnboarding table`);
+//     }
+
+//     const labourDetails = onboardingData.recordset[0]; 
+
+//     const ApprovalStatusPay = 'AdminPending';
+
+//     // Insert data into the database
+//     await pool
+//         .request()
+//         .input('userId', sql.Int, labourDetails.id || 0)
+//         .input('LabourID', sql.VarChar, row.LabourID)
+//         .input('payAddedBy', sql.VarChar, row.wagesEditedBy || 'System') // Optional
+//         .input('name', sql.VarChar, labourDetails.name || '') // Ensure default value if undefined
+//         .input('projectName', sql.Int, labourDetails.projectName || 0) // Ensure default value if undefined
+//         .input('companyName', sql.VarChar, labourDetails.companyName || '') 
+//         .input('businessUnit', sql.VarChar, labourDetails.businessUnit || '') // Ensure default value if undefined
+//         .input('departmentName', sql.VarChar, labourDetails.departmentName || '') // Ensure default value if undefined
+//         .input('PayStructure', sql.VarChar, row.PayStructure)
+//         .input('AdvancePay', sql.Bit, AdvancePay)
+//         .input('DebitPay', sql.Bit, DebitPay)
+//         .input('IncentivePay', sql.Bit, IncentivePay)
+//         .input('VariablepayAmount', sql.Decimal(18, 2), row.VariablePayAmount || 0.00)
+//         .input('variablePayRemark', sql.NVarChar(255), variablePayRemark)
+//         .input('EffectiveDate', sql.Date, new Date())
+//         .input('CreatedAt', sql.DateTime, new Date())
+//         .input('ApprovalStatusPay', sql.NVarChar(50), ApprovalStatusPay)
+//         .input('isApprovalSendAdmin', sql.Bit, 1)
+//         .input('ImportedViaExcel', sql.Bit, 1)
+//         .query(`
+//             INSERT INTO [dbo].[VariablePay]
+//             (userId, LabourID, payAddedBy, name, projectName, companyName, businessUnit, departmentName, PayStructure, AdvancePay, DebitPay, IncentivePay, VariablepayAmount, variablePayRemark, EffectiveDate, CreatedAt, ApprovalStatusPay, isApprovalSendAdmin, ImportedViaExcel)
+//             VALUES (@userId, @LabourID, @payAddedBy, @name, @projectName, @companyName, @businessUnit, @departmentName, @PayStructure, @AdvancePay, @DebitPay, @IncentivePay, @VariablepayAmount, @variablePayRemark, @EffectiveDate, @CreatedAt, @ApprovalStatusPay, @isApprovalSendAdmin, @ImportedViaExcel)
+//         `);
+// }
+
+
 async function insertVariablePayData(row) {
     const pool = await poolPromise;
 
     // Normalize PayStructure
     if (typeof row.PayStructure === 'string') {
         row.PayStructure = row.PayStructure.trim().toLowerCase();
-        // Capitalize first letter, lower the rest
-        row.PayStructure = row.PayStructure.charAt(0).toUpperCase() + row.PayStructure.slice(1);
+        row.PayStructure = row.PayStructure.charAt(0).toUpperCase() + row.PayStructure.slice(1); // Capitalize first letter
     }
 
-    // Log the normalized PayStructure
-    //console.log(`Processing LabourID: ${row.LabourID}, PayStructure: "${row.PayStructure}"`);
-
-    // Validate PayStructure (case-insensitive)
+    // Validate PayStructure
     const validPayStructures = ['Advance', 'Debit', 'Incentive'];
     if (!row.PayStructure || !validPayStructures.includes(row.PayStructure)) {
         throw new Error(`Invalid PayStructure value: ${row.PayStructure}`);
@@ -529,37 +744,26 @@ async function insertVariablePayData(row) {
     let AdvancePay = 0, DebitPay = 0, IncentivePay = 0;
     let variablePayRemark = null;
 
-    // Additional validation and flag setting based on PayStructure
+    // Set flag and validate remarks based on PayStructure
     if (row.PayStructure === 'Advance') {
-        // Set Advance flag
         AdvancePay = 1;
-
-        // Validate VariablePayRemark
         const remarks = getRemarksOptions('advance');
         if (!row.VariablePayRemark || !remarks.includes(row.VariablePayRemark)) {
             throw new Error(`Invalid VariablePayRemark for Advance. Allowed values: ${remarks.join(', ')}`);
         }
         variablePayRemark = row.VariablePayRemark;
     } else if (row.PayStructure === 'Debit') {
-        // Set Debit flag
         DebitPay = 1;
-
-        // Validate VariablePayRemark
         const remarks = getRemarksOptions('debit');
         if (!row.VariablePayRemark || !remarks.includes(row.VariablePayRemark)) {
             throw new Error(`Invalid VariablePayRemark for Debit. Allowed values: ${remarks.join(', ')}`);
         }
         variablePayRemark = row.VariablePayRemark;
     } else if (row.PayStructure === 'Incentive') {
-        // Set Incentive flag
         IncentivePay = 1;
-
-        // Validate WeeklyOff
         if (row.WeeklyOff == null || isNaN(parseInt(row.WeeklyOff, 10))) {
             throw new Error(`Invalid WeeklyOff value: ${row.WeeklyOff}`);
         }
-
-        // Validate VariablePayRemark
         const remarks = getRemarksOptions('incentive');
         if (!row.VariablePayRemark || !remarks.includes(row.VariablePayRemark)) {
             throw new Error(`Invalid VariablePayRemark for Incentive. Allowed values: ${remarks.join(', ')}`);
@@ -572,13 +776,7 @@ async function insertVariablePayData(row) {
         .input('LabourID', sql.NVarChar, row.LabourID || '')
         .query(`
             SELECT 
-                LabourID,
-                name,
-                projectName,
-                companyName,
-                businessUnit,
-                departmentName,
-                id
+                LabourID, name, projectName, companyName, businessUnit, departmentName, id
             FROM [dbo].[labourOnboarding]
             WHERE LabourID = @LabourID
         `);
@@ -587,38 +785,68 @@ async function insertVariablePayData(row) {
         throw new Error(`LabourID ${row.LabourID} not found in labourOnboarding table`);
     }
 
-    const labourDetails = onboardingData.recordset[0]; 
-
+    const labourDetails = onboardingData.recordset[0];
     const ApprovalStatusPay = 'AdminPending';
 
-    // Insert data into the database
-    await pool
-        .request()
-        .input('userId', sql.Int, labourDetails.id || 0)
-        .input('LabourID', sql.VarChar, row.LabourID)
-        .input('payAddedBy', sql.VarChar, row.wagesEditedBy || 'System') // Optional
-        .input('name', sql.VarChar, labourDetails.name || '') // Ensure default value if undefined
-        .input('projectName', sql.Int, labourDetails.projectName || 0) // Ensure default value if undefined
-        .input('companyName', sql.VarChar, labourDetails.companyName || '') 
-        .input('businessUnit', sql.VarChar, labourDetails.businessUnit || '') // Ensure default value if undefined
-        .input('departmentName', sql.VarChar, labourDetails.departmentName || '') // Ensure default value if undefined
-        .input('PayStructure', sql.VarChar, row.PayStructure)
-        .input('AdvancePay', sql.Bit, AdvancePay)
-        .input('DebitPay', sql.Bit, DebitPay)
-        .input('IncentivePay', sql.Bit, IncentivePay)
-        .input('VariablepayAmount', sql.Decimal(18, 2), row.VariablePayAmount || 0.00)
-        .input('variablePayRemark', sql.NVarChar(255), variablePayRemark)
-        .input('EffectiveDate', sql.Date, new Date())
-        .input('CreatedAt', sql.DateTime, new Date())
-        .input('ApprovalStatusPay', sql.NVarChar(50), ApprovalStatusPay)
-        .input('isApprovalSendAdmin', sql.Bit, 1)
-        .input('ImportedViaExcel', sql.Bit, 1)
-        .query(`
-            INSERT INTO [dbo].[VariablePay]
-            (userId, LabourID, payAddedBy, name, projectName, companyName, businessUnit, departmentName, PayStructure, AdvancePay, DebitPay, IncentivePay, VariablepayAmount, variablePayRemark, EffectiveDate, CreatedAt, ApprovalStatusPay, isApprovalSendAdmin, ImportedViaExcel)
-            VALUES (@userId, @LabourID, @payAddedBy, @name, @projectName, @companyName, @businessUnit, @departmentName, @PayStructure, @AdvancePay, @DebitPay, @IncentivePay, @VariablepayAmount, @variablePayRemark, @EffectiveDate, @CreatedAt, @ApprovalStatusPay, @isApprovalSendAdmin, @ImportedViaExcel)
-        `);
+    // Insert into VariablePay table
+    const request = pool.request();
+    request.input('userId', sql.Int, labourDetails.id || 0);
+    request.input('LabourID', sql.VarChar, row.LabourID);
+    request.input('payAddedBy', sql.VarChar, row.wagesEditedBy || 'System');
+    request.input('name', sql.VarChar, labourDetails.name || '');
+    request.input('projectName', sql.Int, labourDetails.projectName || 0);
+    request.input('companyName', sql.VarChar, labourDetails.companyName || '');
+    request.input('businessUnit', sql.VarChar, labourDetails.businessUnit || '');
+    request.input('departmentName', sql.VarChar, labourDetails.departmentName || '');
+    request.input('PayStructure', sql.VarChar, row.PayStructure);
+    request.input('AdvancePay', sql.Bit, AdvancePay);
+    request.input('DebitPay', sql.Bit, DebitPay);
+    request.input('IncentivePay', sql.Bit, IncentivePay);
+    request.input('VariablepayAmount', sql.Decimal(18, 2), row.VariablePayAmount || 0.00);
+    request.input('variablePayRemark', sql.NVarChar(255), variablePayRemark);
+    request.input('EffectiveDate', sql.Date, new Date());
+    request.input('CreatedAt', sql.DateTime, new Date());
+    request.input('ApprovalStatusPay', sql.NVarChar(50), ApprovalStatusPay);
+    request.input('isApprovalSendAdmin', sql.Bit, 1);
+    request.input('ImportedViaExcel', sql.Bit, 1);
+
+    const insertResult = await request.query(`
+        INSERT INTO [dbo].[VariablePay]
+        (userId, LabourID, payAddedBy, name, projectName, companyName, businessUnit, departmentName, PayStructure, AdvancePay, DebitPay, IncentivePay, VariablepayAmount, variablePayRemark, EffectiveDate, CreatedAt, ApprovalStatusPay, isApprovalSendAdmin, ImportedViaExcel)
+        OUTPUT INSERTED.VariablePayId
+        VALUES (@userId, @LabourID, @payAddedBy, @name, @projectName, @companyName, @businessUnit, @departmentName, @PayStructure, @AdvancePay, @DebitPay, @IncentivePay, @VariablepayAmount, @variablePayRemark, @EffectiveDate, @CreatedAt, @ApprovalStatusPay, @isApprovalSendAdmin, @ImportedViaExcel)
+    `);
+
+    if (!insertResult.recordset || insertResult.recordset.length === 0) {
+        throw new Error('Failed to insert VariablePay.');
+    }
+
+    // 🟢 Use the inserted VariablePayId
+    const variablePayId = insertResult.recordset[0].VariablePayId;
+
+    // Update the VariablePay table to mark it as pending
+    await request.input('VariablePayId', sql.Int, variablePayId).query(`
+        UPDATE [VariablePay]
+        SET ApprovalStatusPay = 'AdminPending',
+            EditDate = GETDATE()
+        WHERE VariablePayId = @VariablePayId
+    `);
+
+    // Insert into VariablePayAdminApprovals table
+    await request.query(`
+        INSERT INTO [VariablePayAdminApprovals] (
+            VariablePayId, LabourID, payAddedBy, VariablepayAmount, variablePayRemark, EffectiveDate,
+             PayStructure, ApprovalStatusPay, CreatedAt, userId, name
+        )
+        VALUES (
+            @VariablePayId, @LabourID, @payAddedBy, @VariablepayAmount, @variablePayRemark, @EffectiveDate,
+             @PayStructure, 'Pending', GETDATE(), @userId, @name
+        )
+    `);
+
+    return { success: true, message: 'Variable Pay inserted and sent for approval.', VariablePayId: variablePayId };
 }
+
 
 
 
