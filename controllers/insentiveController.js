@@ -390,9 +390,6 @@ const exportVariablePayexcelSheet = async (req, res) => {
         const headers = [
             'LabourID',
             'PayStructure',
-            'AdvancePay',
-            'DebitPay',
-            'IncentivePay',
             'VariablePayAmount',
             'VariablePayRemark',
             'EffectiveDate',
