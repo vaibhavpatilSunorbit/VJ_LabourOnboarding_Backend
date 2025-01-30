@@ -558,12 +558,7 @@ async function generateMonthlyPayroll(req, res) {
                 message: "Month and Year are required to generate payroll."
             });
         }
-
-        // Generate the payroll
         const salaries = await labourModel.generateMonthlyPayroll(month, year);
-
-        // If you want to store the result in a table, you could do so inside the model or here
-        // For this example, we just return the calculated salaries
         return res.status(200).json({
             message: "Payroll generated successfully.",
             data: salaries
@@ -575,7 +570,7 @@ async function generateMonthlyPayroll(req, res) {
             error: error.message
         });
     }
-}
+};
 
 /**
  * (Optional) Generate payroll for a single labour.
@@ -798,6 +793,69 @@ async function getOvertimeMonthlyAPI(req, res) {
 /**
  * Fetch salary generation data for all eligible labours
  */
+
+async function getSalaryGenerationDataAPIAllLabours(req, res) {
+    try {
+        const { month, year } = req.query;
+
+        if (!month || !year) {
+            return res.status(400).json({ message: 'Month and year are required.' });
+        }
+
+        // Fetch eligible labours
+        const eligibleLabours = await labourModel.getEligibleLabours(parseInt(month), parseInt(year));
+
+        const salaryData = await Promise.all(
+            eligibleLabours.map(async (labour) => {
+                const labourId = labour.labourId;
+                
+                // Calculate full salary details using calculateSalaryForLabour function
+                const salaryDetails = await labourModel.calculateSalaryForLabour(labourId, parseInt(month), parseInt(year)) || {};
+                if (salaryDetails.message) {
+                    console.warn(`Warning: No salary details for labour ID: ${labourId} - ${salaryDetails.message}`);
+                }
+                return {
+                    ...labour,
+                    month: parseInt(month),
+                    year: parseInt(year),
+                    ...salaryDetails,
+                    // wageType: salaryDetails.wageType || "-",
+                    // dailyWageRate: salaryDetails.dailyWageRate || 0,
+                    // fixedMonthlyWage: salaryDetails.fixedMonthlyWage || 0,
+                    // presentDays: salaryDetails.presentDays || 0,
+                    // absentDays: salaryDetails.absentDays || 0,
+                    // halfDays: salaryDetails.halfDays || 0,
+                    // missPunchDays: salaryDetails.missPunchDays || 0,
+                    // cappedOvertime: salaryDetails.cappedOvertime || 0,
+                    // basicSalary: salaryDetails.basicSalary || 0,
+                    // overtimePay: salaryDetails.overtimePay || 0,
+                    // weeklyOffPay: salaryDetails.weeklyOffPay || 0,
+                    // bonuses: salaryDetails.bonuses || 0,
+                    // totalDeductions: salaryDetails.totalDeductions || 0,
+                    // grossPay: salaryDetails.grossPay || 0,
+                    // netPay: salaryDetails.netPay || 0,
+                    // netPayDescription: salaryDetails.netPayDescription || "-",
+                    // advance: salaryDetails.advance || 0,
+                    // advanceRemarks: salaryDetails.advanceRemarks || "-",
+                    // debit: salaryDetails.debit || 0,
+                    // debitRemarks: salaryDetails.debitRemarks || "-",
+                    // incentive: salaryDetails.incentive || 0,
+                    // incentiveRemarks: salaryDetails.incentiveRemarks || "-",
+                };
+            })
+        );
+
+        return res.status(200).json(salaryData);
+    } catch (error) {
+        console.error('Error fetching salary generation data:', error);
+        return res.status(500).json({ message: 'Error fetching salary generation data.', error: error.message });
+    }
+};
+
+
+
+
+
 async function getSalaryGenerationDataAPI(req, res) {
     try {
         const { month, year } = req.query;
@@ -815,14 +873,8 @@ async function getSalaryGenerationDataAPI(req, res) {
 
                 // Fetch attendance summary
                 const attendance = await labourModel.getAttendanceSummaryForLabour(labourId, parseInt(month), parseInt(year));
-
-                // Fetch wage info
                 const wages = await labourModel.getWageInfoForLabour(labourId, parseInt(month), parseInt(year));
-
-                // Fetch variable pay
                 const variablePay = await labourModel.getVariablePayForLabour(labourId, parseInt(month), parseInt(year));
-
-                // Fetch total overtime
                 const totalOvertime = await labourModel.calculateTotalOvertime(labourId, parseInt(month), parseInt(year));
 
                 return {
@@ -848,7 +900,7 @@ async function getSalaryGenerationDataAPI(req, res) {
         console.error('Error fetching salary generation data:', error);
         return res.status(500).json({ message: 'Error fetching salary generation data.', error: error.message });
     }
-}
+};
 
 
 
@@ -877,6 +929,7 @@ module.exports = {
     generateMonthlyPayrollAPI,
     getMonthlySalariesAPI,
     getOvertimeMonthlyAPI,
+    getSalaryGenerationDataAPIAllLabours,
     getSalaryGenerationDataAPI
 
 }

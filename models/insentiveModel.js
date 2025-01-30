@@ -880,6 +880,111 @@ async function getVariablePayForLabour(labourId, month, year) {
  * Get the wage info for a labour (daily wage or monthly wage).
  * If no wage info, we skip that labour for salary generation.
  */
+// async function getWageInfoForLabour(labourId, month, year) {
+//     try {
+//         const pool = await poolPromise;
+
+//         // Fetch all wage entries for the labour within the desired month and year
+//         const result = await pool.request()
+//             .input('labourId', sql.NVarChar, labourId)
+//             .input('month', sql.Int, month)
+//             .input('year', sql.Int, year)
+//             .query(`
+//               SELECT
+//                 WageID,
+//                 FromDate,
+//                 ApprovalDate,
+//                 EffectiveDate,
+//                 PayStructure,
+//                 DailyWages,
+//                 PerHourWages,
+//                 MonthlyWages,
+//                 YearlyWages,
+//                 WeeklyOff,
+//                 FixedMonthlyWages
+//               FROM [dbo].[LabourMonthlyWages]
+//               WHERE
+//                   LabourID = @labourId
+//                   AND isApprovalDoneAdmin = 1
+//                   AND (MONTH(FromDate) <= @month AND YEAR(FromDate) <= @year)
+//                   AND (MONTH(ApprovalDate) <= @month AND YEAR(ApprovalDate) <= @year)
+//               ORDER BY FromDate DESC, ApprovalDate DESC;  
+//             `);
+
+//         if (!result.recordset.length) {
+//             return null; // No wages found for this labour
+//         }
+
+//         // Iterate through the wage records to calculate the applicable wage for the specified month
+//         let applicableWage = null;
+
+//         for (const wage of result.recordset) {
+//             const fromDate = new Date(wage.FromDate);
+//             const approvalDate = new Date(wage.ApprovalDate);
+
+//             // Check if this wage entry is valid for the given month/year
+//             if (
+//                 (fromDate.getFullYear() < year || (fromDate.getFullYear() === year && fromDate.getMonth() + 1 <= month)) &&
+//                 (approvalDate.getFullYear() < year || (approvalDate.getFullYear() === year && approvalDate.getMonth() + 1 <= month))
+//             ) {
+//                 // If a previous wage entry exists and overlaps with the current month, consider it
+//                 if (!applicableWage || fromDate > new Date(applicableWage.FromDate)) {
+//                     applicableWage = wage;
+//                 }
+
+//                 // If the `EffectiveDate` exists and is within the month, use it for calculations
+//                 const effectiveDate = wage.EffectiveDate ? new Date(wage.EffectiveDate) : null;
+//                 if (effectiveDate && effectiveDate.getFullYear() === year && effectiveDate.getMonth() + 1 === month) {
+//                     applicableWage = wage;
+//                 }
+//             }
+//         }
+
+//         if (!applicableWage) {
+//             return null; // No applicable wage entry found
+//         }
+
+//         // Calculate the daily or monthly wage for the specific dates
+//         const daysInMonth = new Date(year, month, 0).getDate();
+//         const fromDate = new Date(applicableWage.FromDate);
+//         const effectiveDate = applicableWage.EffectiveDate ? new Date(applicableWage.EffectiveDate) : null;
+
+//         let daysApplicable = daysInMonth;
+
+//         if (fromDate.getFullYear() === year && fromDate.getMonth() + 1 === month) {
+//             daysApplicable -= fromDate.getDate() - 1;
+//         }
+
+//         if (effectiveDate && effectiveDate.getFullYear() === year && effectiveDate.getMonth() + 1 === month) {
+//             daysApplicable = daysInMonth - (effectiveDate.getDate() - 1);
+//         }
+
+//         // Calculate wages based on applicable days
+//         let calculatedWages = {
+//             dailyWages: 0,
+//             monthlyWages: 0
+//         };
+
+//         if (applicableWage.PayStructure.toLowerCase().includes('daily')) {
+//             calculatedWages.dailyWages = applicableWage.DailyWages * daysApplicable;
+//         } else if (applicableWage.FixedMonthlyWages) {
+//             calculatedWages.monthlyWages = (applicableWage.FixedMonthlyWages / daysInMonth) * daysApplicable;
+//         } else {
+//             calculatedWages.monthlyWages = (applicableWage.MonthlyWages / daysInMonth) * daysApplicable;
+//         }
+
+//         // Return the applicable wage information along with calculated wages
+//         return {
+//             ...applicableWage,
+//             daysApplicable,
+//             calculatedWages
+//         };
+//     } catch (error) {
+//         console.error('Error in getWageInfoForLabour:', error);
+//         throw error;
+//     }
+// }
+
 async function getWageInfoForLabour(labourId, month, year) {
     try {
         const pool = await poolPromise;
@@ -906,36 +1011,30 @@ async function getWageInfoForLabour(labourId, month, year) {
               WHERE
                   LabourID = @labourId
                   AND isApprovalDoneAdmin = 1
-                  AND (MONTH(FromDate) <= @month AND YEAR(FromDate) <= @year)
-                  AND (MONTH(ApprovalDate) <= @month AND YEAR(ApprovalDate) <= @year)
-              ORDER BY FromDate DESC, ApprovalDate DESC;  
+                  AND (YEAR(FromDate) < @year OR (YEAR(FromDate) = @year AND MONTH(FromDate) <= @month))
+                  AND (YEAR(ApprovalDate) < @year OR (YEAR(ApprovalDate) = @year AND MONTH(ApprovalDate) <= @month))
+              ORDER BY FromDate DESC, ApprovalDate DESC;
             `);
 
         if (!result.recordset.length) {
             return null; // No wages found for this labour
         }
 
-        // Iterate through the wage records to calculate the applicable wage for the specified month
         let applicableWage = null;
+        let previousWage = null;
 
         for (const wage of result.recordset) {
             const fromDate = new Date(wage.FromDate);
             const approvalDate = new Date(wage.ApprovalDate);
 
-            // Check if this wage entry is valid for the given month/year
             if (
                 (fromDate.getFullYear() < year || (fromDate.getFullYear() === year && fromDate.getMonth() + 1 <= month)) &&
                 (approvalDate.getFullYear() < year || (approvalDate.getFullYear() === year && approvalDate.getMonth() + 1 <= month))
             ) {
-                // If a previous wage entry exists and overlaps with the current month, consider it
-                if (!applicableWage || fromDate > new Date(applicableWage.FromDate)) {
+                if (!applicableWage) {
                     applicableWage = wage;
-                }
-
-                // If the `EffectiveDate` exists and is within the month, use it for calculations
-                const effectiveDate = wage.EffectiveDate ? new Date(wage.EffectiveDate) : null;
-                if (effectiveDate && effectiveDate.getFullYear() === year && effectiveDate.getMonth() + 1 === month) {
-                    applicableWage = wage;
+                } else if (!previousWage) {
+                    previousWage = wage; // Store the previous wage
                 }
             }
         }
@@ -944,47 +1043,61 @@ async function getWageInfoForLabour(labourId, month, year) {
             return null; // No applicable wage entry found
         }
 
-        // Calculate the daily or monthly wage for the specific dates
         const daysInMonth = new Date(year, month, 0).getDate();
         const fromDate = new Date(applicableWage.FromDate);
         const effectiveDate = applicableWage.EffectiveDate ? new Date(applicableWage.EffectiveDate) : null;
 
-        let daysApplicable = daysInMonth;
+        let previousDaysApplicable = 0;
+        let currentDaysApplicable = daysInMonth;
 
         if (fromDate.getFullYear() === year && fromDate.getMonth() + 1 === month) {
-            daysApplicable -= fromDate.getDate() - 1;
+            previousDaysApplicable = fromDate.getDate() - 1;
+            currentDaysApplicable = daysInMonth - previousDaysApplicable;
         }
 
         if (effectiveDate && effectiveDate.getFullYear() === year && effectiveDate.getMonth() + 1 === month) {
-            daysApplicable = daysInMonth - (effectiveDate.getDate() - 1);
+            previousDaysApplicable = effectiveDate.getDate() - 1;
+            currentDaysApplicable = daysInMonth - previousDaysApplicable;
         }
 
-        // Calculate wages based on applicable days
         let calculatedWages = {
-            dailyWages: 0,
-            monthlyWages: 0
+            previousWageAmount: 0,
+            currentWageAmount: 0,
+            totalWageAmount: 0
         };
 
-        if (applicableWage.PayStructure.toLowerCase().includes('daily')) {
-            calculatedWages.dailyWages = applicableWage.DailyWages * daysApplicable;
-        } else if (applicableWage.FixedMonthlyWages) {
-            calculatedWages.monthlyWages = (applicableWage.FixedMonthlyWages / daysInMonth) * daysApplicable;
-        } else {
-            calculatedWages.monthlyWages = (applicableWage.MonthlyWages / daysInMonth) * daysApplicable;
+        if (previousWage) {
+            if (previousWage.PayStructure.toLowerCase().includes('daily')) {
+                calculatedWages.previousWageAmount = previousWage.DailyWages * previousDaysApplicable;
+            } else if (previousWage.FixedMonthlyWages) {
+                calculatedWages.previousWageAmount = (previousWage.FixedMonthlyWages / daysInMonth) * previousDaysApplicable;
+            } else {
+                calculatedWages.previousWageAmount = (previousWage.MonthlyWages / daysInMonth) * previousDaysApplicable;
+            }
         }
 
-        // Return the applicable wage information along with calculated wages
+        if (applicableWage.PayStructure.toLowerCase().includes('daily')) {
+            calculatedWages.currentWageAmount = applicableWage.DailyWages * currentDaysApplicable;
+        } else if (applicableWage.FixedMonthlyWages) {
+            calculatedWages.currentWageAmount = (applicableWage.FixedMonthlyWages / daysInMonth) * currentDaysApplicable;
+        } else {
+            calculatedWages.currentWageAmount = (applicableWage.MonthlyWages / daysInMonth) * currentDaysApplicable;
+        }
+
+        calculatedWages.totalWageAmount = calculatedWages.previousWageAmount + calculatedWages.currentWageAmount;
+
         return {
             ...applicableWage,
-            daysApplicable,
+            previousWage,
+            previousDaysApplicable,
+            currentDaysApplicable,
             calculatedWages
         };
     } catch (error) {
         console.error('Error in getWageInfoForLabour:', error);
         throw error;
     }
-}
-
+};
 
 
 /**
@@ -1320,140 +1433,160 @@ if (!result.recordset || result.recordset.length === 0) {
 //     }
 // };
 
-
-
 async function calculateSalaryForLabour(labourId, month, year) {
     try {
-        // A) Attendance
-        const attendance = (await getAttendanceSummaryForLabour(labourId, month, year)) || {};
+        // 1️⃣ **Fetch Attendance Summary**
+        const attendance = await getAttendanceSummaryForLabour(labourId, month, year);
 
-        // B) Wages
-        const wages = (await getWageInfoForLabour(labourId, month, year)) || {};
+        // 2️⃣ **Fetch Wage Info**
+        const wages = await getWageInfoForLabour(labourId, month, year);
 
-        // C) Variable Pay
-        const variablePay = (await getVariablePayForLabour(labourId, month, year)) || {};
+        // 3️⃣ **Fetch Variable Pay**
+        const variablePay = await getVariablePayForLabour(labourId, month, year);
 
-        if (!wages || Object.keys(wages).length === 0) {
-            // Means no approved wages for this labour
-            return { message: "No wage information found for this labour." };
+        // 4️⃣ **Calculate Total Overtime**
+        const cappedOvertime = await calculateTotalOvertime(labourId, month, year);
+
+        if (!wages) {
+            return { message: `No approved wages for labour ID: ${labourId}` };
         }
 
-        // --- Destructure attendance ---
+        // 🟢 **Extract Attendance Data**
         const {
             presentDays = 0,
             absentDays = 0,
-            halfDays = 0
+            halfDays = 0,
+            missPunchDays = 0,
+            normalOvertimeCount = 0,
+            holidayOvertimeCount = 0
         } = attendance;
 
-        // --- Destructure wages ---
-        const wageType = wages.PayStructure || '';
+        // 🟢 **Extract Wage Data**
+        const wageType = wages.PayStructure || "-";
         const dailyWageRate = wages.DailyWages || 0;
         const monthlySalary = wages.MonthlyWages || 0;
         const weeklyOffDays = wages.WeeklyOff || 0;
         const fixedMonthlyWage = wages.FixedMonthlyWages || 0;
 
-        // --- Destructure variable pay ---
+        const previousWage = wages.previousWage;
+        const previousDaysApplicable = wages.previousDaysApplicable || 0;
+        const currentDaysApplicable = wages.currentDaysApplicable || 0;
+
+        // 🟢 **Extract Variable Pay**
         const {
             advance = 0,
-            advanceRemarks = '',
+            advanceRemarks = "-",
             debit = 0,
-            debitRemarks = '',
+            debitRemarks = "-",
             incentive = 0,
-            incentiveRemarks = ''
+            incentiveRemarks = "-"
         } = variablePay;
 
-        // --- Calculate Total Overtime ---
-        const cappedOvertime = await calculateTotalOvertime(labourId, month, year);
-
-        // 1) Basic Salary & Overtime Pay
+        // ✅ **Calculate Basic Salary**
         let basicSalary = 0;
+        let totalOvertimeDays = normalOvertimeCount + holidayOvertimeCount;
         let overtimePay = 0;
-        let totalAttendanceDeductions = 0;
 
         if (wageType.toLowerCase().includes('daily')) {
+            // Daily wages
             basicSalary = dailyWageRate * presentDays;
-            overtimePay = cappedOvertime * (dailyWageRate / 8) * 1.5; // OT rate: 1.5x hourly rate
+            overtimePay = totalOvertimeDays * dailyWageRate * 1.5; // OT rate = 1.5x
         } else {
+            // Monthly wages
             const baseMonthly = fixedMonthlyWage || monthlySalary;
             basicSalary = baseMonthly;
 
             const dailyRate = baseMonthly / 30;
             const absentDaysDeduction = absentDays * dailyRate;
             const halfDaysDeduction = halfDays * (dailyRate / 2);
-            totalAttendanceDeductions = absentDaysDeduction + halfDaysDeduction;
+            overtimePay = totalOvertimeDays * dailyRate * 1.5;
 
-            overtimePay = cappedOvertime * (dailyRate / 8) * 1.5;
+            var totalAttendanceDeductions = absentDaysDeduction + halfDaysDeduction;
         }
 
-        // 2) Weekly Off Pay Calculation
-        let weeklyOffPay = 0;
-        if (weeklyOffDays > 0) {
-            if (presentDays > 15) {
-                weeklyOffPay = weeklyOffDays * dailyWageRate;
+        // ✅ **Previous Wage Calculation**
+        let previousWageAmount = 0;
+        if (previousWage) {
+            if (previousWage.PayStructure.toLowerCase().includes('daily')) {
+                previousWageAmount = previousWage.DailyWages * previousDaysApplicable;
             } else {
-                weeklyOffPay = weeklyOffDays * dailyWageRate * 0.5; // Half pay
+                const previousBase = previousWage.FixedMonthlyWages || previousWage.MonthlyWages;
+                previousWageAmount = (previousBase / 30) * previousDaysApplicable;
             }
         }
 
-        // 3) Deductions
-        let totalDeductions = 0;
-        totalDeductions += totalAttendanceDeductions;
+        // ✅ **Weekly Off Calculation**
+        let weeklyOffPay = 0;
+        if (weeklyOffDays > 0) {
+            if (presentDays > 15) {
+                if (wageType.toLowerCase().includes('daily')) {
+                    weeklyOffPay = weeklyOffDays * dailyWageRate;
+                } else {
+                    const dailyRate = (fixedMonthlyWage || monthlySalary) / 30;
+                    weeklyOffPay = weeklyOffDays * dailyRate;
+                }
+            } else {
+                if (wageType.toLowerCase().includes('fixed monthly')) {
+                    weeklyOffPay = weeklyOffDays * dailyWageRate * 0.5;
+                } else {
+                    const dailyRate = (fixedMonthlyWage || monthlySalary) / 30;
+                    weeklyOffPay = weeklyOffDays * dailyRate * 0.5;
+                }
+            }
+        }
+
+        // ✅ **Calculate Deductions**
+        let totalDeductions = totalAttendanceDeductions || 0;
         totalDeductions += advance;
         totalDeductions += debit;
 
-        // 4) Bonuses/Incentives
-        let bonuses = 0;
-        bonuses += incentive;
+        // ✅ **Calculate Bonuses/Incentives**
+        let bonuses = incentive || 0;
 
-        // 5) Gross Pay
-        const grossPay = basicSalary + overtimePay + weeklyOffPay + bonuses;
+        // ✅ **Calculate Gross Pay**
+        const grossPay = basicSalary + overtimePay + weeklyOffPay + bonuses + previousWageAmount;
 
-        // 6) Net Pay (Allow negative salary)
-        const netPay = grossPay - totalDeductions;
-
-        // Create a description for net pay if it is negative
-        let netPayDescription = "Net Pay";
+        // ✅ **Calculate Net Pay**
+        let netPay = grossPay - totalDeductions;
         if (netPay < 0) {
-            netPayDescription = "Negative Salary (Amount owed by labour)";
+            netPay = 0; // Prevent negative salary
         }
 
-        // 7) Final Response Object
+        // ✅ **Return Final Salary Data**
         return {
             labourId,
             month,
             year,
             wageType,
-            dailyWageRate,
-            fixedMonthlyWage,
+            dailyWageRate: dailyWageRate.toFixed(2),
+            fixedMonthlyWage: fixedMonthlyWage.toFixed(2),
             presentDays,
             absentDays,
             halfDays,
-            cappedOvertime,
-            basicSalary,
-            overtimePay,
-            weeklyOffPay,
-            bonuses,
-            totalDeductions,
-            grossPay,
-            netPay,
-            netPayDescription, // Add a description for clarity
-
-            // Variable Pay Info
-            variablePay: {
-                advance,
-                advanceRemarks,
-                debit,
-                debitRemarks,
-                incentive,
-                incentiveRemarks
-            }
+            missPunchDays,
+            normalOvertimeCount,
+            holidayOvertimeCount,
+            cappedOvertime: cappedOvertime.toFixed(2),
+            basicSalary: basicSalary.toFixed(2),
+            previousWageAmount: previousWageAmount.toFixed(2),
+            overtimePay: overtimePay.toFixed(2),
+            weeklyOffPay: weeklyOffPay.toFixed(2),
+            bonuses: bonuses.toFixed(2),
+            totalDeductions: totalDeductions.toFixed(2),
+            grossPay: grossPay.toFixed(2),
+            netPay: netPay.toFixed(2),
+            advance: advance.toFixed(2),
+            advanceRemarks,
+            debit: debit.toFixed(2),
+            debitRemarks,
+            incentive: incentive.toFixed(2),
+            incentiveRemarks
         };
     } catch (error) {
-        console.error('Error in calculateSalaryForLabour:', error);
+        console.error("Error in calculateSalaryForLabour:", error);
         throw error;
     }
-}
-
+};
 
 
 
@@ -1473,7 +1606,7 @@ async function generateMonthlyPayroll(month, year) {
             const salaryDetail = await calculateSalaryForLabour(labour.labourId, month, year);
 
             if (salaryDetail) {
-                // 1) Push into the array (for returning if needed)
+                const variablePay = salaryDetail.variablePay || {};
                 finalSalaries.push(salaryDetail);
 
                 // 2) Insert into [MonthlySalaryGeneration] table
@@ -1494,9 +1627,9 @@ async function generateMonthlyPayroll(month, year) {
                     .input('netPay', sql.Decimal(18,2), salaryDetail.netPay)
 
                     // Variable Pay remarks
-                    .input('advanceRemarks', sql.NVarChar, salaryDetail.variablePay.advanceRemarks || '')
-                    .input('debitRemarks',   sql.NVarChar, salaryDetail.variablePay.debitRemarks   || '')
-                    .input('incentiveRemarks', sql.NVarChar, salaryDetail.variablePay.incentiveRemarks || '')
+                    .input('advanceRemarks', sql.NVarChar, variablePay.advanceRemarks || '')
+                    .input('debitRemarks',   sql.NVarChar, variablePay.debitRemarks   || '')
+                    .input('incentiveRemarks', sql.NVarChar, variablePay.incentiveRemarks || '')
 
                     .query(`
                         INSERT INTO [dbo].[MonthlySalaryGeneration] 

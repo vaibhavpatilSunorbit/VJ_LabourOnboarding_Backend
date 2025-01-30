@@ -3980,10 +3980,14 @@ const addWageApproval = async (req, res) => {
 
 const exportWagesexcelSheet = async (req, res) => {
     try {
-        const { projectName, month } = req.query;
+        let { projectName, month } = req.query;
 
         if (!month) {
             return res.status(400).json({ message: 'Missing required parameter: month' });
+        }
+
+        if (!projectName || projectName.trim() === "") {
+            projectName = "all";  // ✅ Ensure "all" is used instead of an empty string
         }
 
         const startDate = `${month}-01`;
@@ -3991,10 +3995,12 @@ const exportWagesexcelSheet = async (req, res) => {
             .toISOString()
             .split('T')[0];
 
+        console.log(`Fetching wages for projectName: ${projectName}, startDate: ${startDate}, endDate: ${endDate}`);
+
         // Fetch wages data
         const wagesData = await labourModel.getWagesByDateRange(projectName, startDate, endDate);
 
-        if (wagesData.length === 0) {
+        if (!wagesData || wagesData.length === 0) {
             return res.status(404).json({ message: 'No data found for the selected criteria.' });
         }
 
@@ -4004,16 +4010,13 @@ const exportWagesexcelSheet = async (req, res) => {
         xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
 
         // Generate Excel file as buffer
-        const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-
-        // Set headers and send response
         const fileName = projectName === "all"
             ? `Approved_Labours_${month}.xlsx`
             : `Wages_${projectName}_${month}.xlsx`;
 
         res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.send(buffer);
+        res.send(xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
     } catch (error) {
         console.error('Error exporting Wages:', error);
         res.status(500).json({ message: 'Error exporting Wages data.' });
