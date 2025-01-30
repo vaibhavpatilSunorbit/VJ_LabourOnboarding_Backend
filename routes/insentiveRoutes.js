@@ -31,6 +31,7 @@ router.post('/generateMonthlyPayroll/:labourId', insentiveController.generateMon
 /** 7)*/   router.get('/payroll/monthlySalaries', insentiveController.getMonthlySalariesAPI);
 /** 8)*/   router.get('/payroll/:labourId/getOvertimeMonthly', insentiveController.getOvertimeMonthlyAPI);
 /** 6)*/   router.post('/payroll/generateMonthlySalaryGeneration', insentiveController.generateMonthlyPayrollAPI);
+/** 9)*/   router.get('/payroll/salaryGenerationDataAllLabours', insentiveController.getSalaryGenerationDataAPIAllLabours);
 /** 9)*/   router.get('/payroll/salaryGenerationData', insentiveController.getSalaryGenerationDataAPI);
 
 

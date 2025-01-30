@@ -3504,7 +3504,7 @@ const addWageApproval = async (approval) => {
 async function getWagesByDateRange(projectName, startDate, endDate) {
     const pool = await poolPromise;
 
-    const query = `
+    let query = `
     WITH LatestWages AS (
         SELECT 
             onboarding.LabourID,
@@ -3527,12 +3527,20 @@ async function getWagesByDateRange(projectName, startDate, endDate) {
             [dbo].[LabourMonthlyWages] AS wages
         ON 
             onboarding.LabourID = wages.LabourID
-            ${projectName !== "all" ? "AND wages.ProjectName = @projectName" : ""}
         WHERE 
             onboarding.status = 'Approved'
-            ${projectName !== "all" ? "AND onboarding.projectName = @projectName" : ""}
-            ${startDate && endDate ? "AND wages.CreatedAt BETWEEN @startDate AND @endDate" : ""}
-    )
+    `;
+
+    // ✅ Dynamically include filtering conditions only if projectName is not "all"
+    if (projectName !== "all") {
+        query += ` AND wages.ProjectName = @projectName AND onboarding.projectName = @projectName`;
+    }
+
+    if (startDate && endDate) {
+        query += ` AND wages.CreatedAt BETWEEN @startDate AND @endDate`;
+    }
+
+    query += `)
     SELECT 
         LabourID,
         name,
@@ -3548,19 +3556,22 @@ async function getWagesByDateRange(projectName, startDate, endDate) {
         EffectiveDate,
         CreatedAt
     FROM LatestWages
-    WHERE RowNum = 1
-`;
+    WHERE RowNum = 1`;
 
-const request = pool.request();
-if (projectName !== "all") request.input('projectName', sql.VarChar, projectName);
-if (startDate && endDate) {
-    request.input('startDate', sql.Date, startDate);
-    request.input('endDate', sql.Date, endDate);
-}
+    const request = pool.request();
+
+    if (projectName !== "all") request.input('projectName', sql.VarChar, projectName);
+    if (startDate && endDate) {
+        request.input('startDate', sql.Date, startDate);
+        request.input('endDate', sql.Date, endDate);
+    }
+
+    console.log("Executing SQL Query:", query);  // ✅ Debugging Log
 
     const result = await request.query(query);
     return result.recordset;
-}
+};
+
 
 
 
@@ -3577,6 +3588,32 @@ async function insertWagesData(row) {
             throw new Error(`Invalid From_Date value: ${row.From_Date}`);
         }
     }
+
+     // Handle EffectiveDate
+     let effectiveDate = null;
+     if (row.EffectiveDate) {
+         if (typeof row.EffectiveDate === "number") {
+             // Excel stores dates as numbers (serial date format)
+             const excelDate = new Date((row.EffectiveDate - 25569) * 86400 * 1000); // Convert to JS Date
+             effectiveDate = excelDate.toISOString().split('T')[0]; // Convert to YYYY-MM-DD
+         } else if (typeof row.EffectiveDate === "string") {
+             // Handle DD-MM-YYYY format
+             const parts = row.EffectiveDate.split('-');
+             if (parts.length === 3) {
+                 const [day, month, year] = parts.map((part) => parseInt(part, 10));
+                 if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                     effectiveDate = new Date(year, month - 1, day).toISOString().split('T')[0]; // YYYY-MM-DD
+                 } else {
+                     throw new Error(`Invalid EffectiveDate format: ${row.EffectiveDate}`);
+                 }
+             } else {
+                 throw new Error(`Invalid EffectiveDate format: ${row.EffectiveDate}`);
+             }
+         } else {
+             throw new Error(`Unexpected EffectiveDate type: ${typeof row.EffectiveDate}`);
+         }
+     }
+    
 
     // Validate PayStructure
     const validPayStructures = ['DAILY WAGES', 'FIXED MONTHLY WAGES'];
@@ -3664,12 +3701,13 @@ async function insertWagesData(row) {
         .input('YearlyWages', sql.Decimal, yearlyWages)
         .input('FixedMonthlyWages', sql.Decimal, fixedMonthlyWages) // New column for Fixed Monthly Wages
         .input('WeeklyOff', sql.Int, parseInt(row.WeeklyOff, 10) || null)
-        .input('EffectiveDate', sql.Date, row.EffectiveDate || null)
+        .input('EffectiveDate', sql.Date, effectiveDate)
         .input('CreatedAt', sql.DateTime, new Date())
+        .input('isApprovalSendAdmin', sql.Bit, 1)
         .query(`
             INSERT INTO [dbo].[LabourMonthlyWages] 
-            (LabourID, WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, EffectiveDate, CreatedAt)
-            VALUES (@LabourID, @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @FixedMonthlyWages, @WeeklyOff, @EffectiveDate, @CreatedAt)
+            (LabourID, WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, EffectiveDate, CreatedAt, isApprovalSendAdmin)
+            VALUES (@LabourID, @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @FixedMonthlyWages, @WeeklyOff, @EffectiveDate, @CreatedAt, @isApprovalSendAdmin)
         `);
 };
 
