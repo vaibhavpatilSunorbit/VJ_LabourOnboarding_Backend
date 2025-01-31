@@ -808,8 +808,8 @@ async function getSalaryGenerationDataAPIAllLabours(req, res) {
                 
                 // Calculate full salary details using calculateSalaryForLabour function
                 const salaryDetails = await labourModel.calculateSalaryForLabour(labourId, parseInt(month), parseInt(year)) || {};
-                if (salaryDetails.message) {
-                    console.warn(`Warning: No salary details for labour ID: ${labourId} - ${salaryDetails.message}`);
+                if (!salaryDetails || salaryDetails.message) {
+                    return null;
                 }
                 return {
                     ...labour,
@@ -842,12 +842,15 @@ async function getSalaryGenerationDataAPIAllLabours(req, res) {
             })
         );
 
-        return res.status(200).json(salaryData);
+        // Remove null values (labours without approved wages)
+        const filteredSalaryData = salaryData.filter((labour) => labour !== null);
+
+        return res.status(200).json(filteredSalaryData);
     } catch (error) {
         console.error('Error fetching salary generation data:', error);
         return res.status(500).json({ message: 'Error fetching salary generation data.', error: error.message });
     }
-};
+}
 
 
 
