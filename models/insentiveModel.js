@@ -352,7 +352,7 @@ async function rejectAdminVariablePay(VariablePayId, Remarks) {
                 WHERE VariablePayId = @VariablePayId
             `);
 await request.input('VariablePayId', sql.Int, approvalData.VariablePayId)
-.input('Remarks', sql.NVarChar, Remarks || null)
+request.input('Remarks', sql.NVarChar, Remarks || null)
 .query(`
     UPDATE [VariablePayAdminApprovals]
     SET ApprovalStatusPay = 'Rejected',

@@ -1949,7 +1949,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                     SUM(CASE WHEN Status = 'HD' THEN 1 ELSE 0 END) AS HalfDays,
                     SUM(CASE WHEN Status = 'A' THEN 1 ELSE 0 END) AS AbsentDays,
                     SUM(CASE WHEN Status = 'MP' THEN 1 ELSE 0 END) AS MissPunchDays,
-                    SUM(Overtime) AS TotalOvertimeHours
+                    SUM(Overtime) AS TotalOvertimeHours,
                     SUM(OvertimeManually) AS TotalOvertimeHoursManually
                 FROM LabourAttendanceDetails
                 WHERE LabourId = @LabourId
@@ -2351,10 +2351,10 @@ async function approveAttendance(id) {
         // Extract only the date part of the Date field
         const formattedDate = approvalData.Date.toISOString().split('T')[0];
 
-        //console.log('Approval Data:', {
-        //     ...approvalData,
-        //     Date: formattedDate,
-        // });
+        console.log('Approval Data:', {
+            ...approvalData,
+            Date: formattedDate,
+        });
 
         // Call upsertAttendance to handle insertion or update of LabourAttendanceDetails
         await upsertAttendance({
@@ -2391,7 +2391,7 @@ async function approveAttendance(id) {
                 WHERE LabourId = @labourId AND Date = @date
             `);
 
-        //console.log('Attendance approved and updated successfully.');
+        console.log('Attendance approved and updated successfully.');
         return { success: true, message: 'Attendance approved successfully.' };
     } catch (error) {
         console.error('Error approving attendance:', error);

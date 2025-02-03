@@ -3542,7 +3542,7 @@ async function upsertAttendance(req, res) {
 
             if (timesUpdated >= 3) {
                 await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName);
-                return res.status(200).json({ message: 'Attendance sent for admin approval.' });
+                return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
             }
 
         // Call the model to perform upsert
@@ -3567,7 +3567,7 @@ async function upsertAttendance(req, res) {
 
 async function approveAttendanceController(req, res) {
     const { id } = req.query;
-//console.log('id',id)
+console.log('id',id)
     if (!id) {
         return res.status(400).json({ message: 'id is required.' });
     }
