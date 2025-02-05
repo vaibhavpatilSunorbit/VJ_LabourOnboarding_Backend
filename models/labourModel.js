@@ -2742,6 +2742,147 @@ async function fetchAttendanceDetails(labourId, month, year, attendance) {
 //     }
 // }
 
+/**
+ * ---------------------------------------
+ * HELPER FUNCTIONS
+ * ---------------------------------------
+ */
+
+/**
+ * Formats a given time string to "HH:MM:SS" format.
+ * Returns "-" if the time is invalid.
+ */
+function formatTimeToHoursMinutes(timeString) {
+    try {
+        const date = new Date(timeString);
+        if (isNaN(date.getTime())) return "-";
+        const hours = date.getUTCHours().toString().padStart(2, "0");
+        const minutes = date.getUTCMinutes().toString().padStart(2, "0");
+        const seconds = date.getUTCSeconds().toString().padStart(2, "0");
+        return `${hours}:${minutes}:${seconds}`;
+    } catch (error) {
+        return "-";
+    }
+}
+
+/**
+ * Calculates hours worked between two punch times on a given date.
+ */
+function calculateHoursWorked(punchDate, firstPunch, lastPunch) {
+    try {
+        const punchDateStr = punchDate.toISOString().split('T')[0]; // e.g. "2025-02-01"
+        const punchInTime  = new Date(`${punchDateStr}T${firstPunch.toISOString().split('T')[1]}`);
+        const punchOutTime = new Date(`${punchDateStr}T${lastPunch.toISOString().split('T')[1]}`);
+
+        const totalHours = (punchOutTime - punchInTime) / (1000 * 60 * 60); // milliseconds -> hours
+
+        if (isNaN(totalHours) || totalHours < 0) {
+            console.warn(`Invalid totalHours. Setting to 0. 
+                punchDate=${punchDate}, firstPunch=${firstPunch}, lastPunch=${lastPunch}`);
+            return 0;
+        }
+
+        return parseFloat(totalHours.toFixed(2));  // 2 decimal places
+    } catch (error) {
+        console.error(`Error in calculateHoursWorked: ${error.message}`);
+        return 0;
+    }
+}
+
+/** 
+ * Determines shift hours based on workingHours string.
+ */
+function getShiftHours(workingHours) {
+    return workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+}
+
+/**
+ * Determines half-day threshold based on shift hours.
+ */
+function getHalfDayHours(shiftHours) {
+    return shiftHours === 9 ? 4.5 : 4;
+}
+
+/**
+ * Calculates the difference in minutes between two punch times.
+ */
+function calculateTimeDifferenceInMinutes(firstPunchTime, lastPunchTime) {
+    const diffMs = lastPunchTime - firstPunchTime;
+    return diffMs / (1000 * 60); // ms -> minutes
+}
+
+/**
+ * Determines the attendance status (P, HD, A, MP) based on punches and shift parameters.
+ */
+function determineStatus(punches, shiftHours, halfDayHours, workingHours) {
+    let status = 'A';
+    let misPunch = false;
+    let consideredLastPunch = null;
+    let totalHours = 0;
+
+    if (!punches || punches.length === 0) {
+        // No punches: absent
+        return { status, firstPunch: null, lastPunch: null, misPunch, totalHours };
+    }
+
+    // Sort punches by ascending time
+    punches.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+
+    const firstPunch = punches[0];
+    const lastPunch  = punches[punches.length - 1];
+
+    const firstPunchTime = new Date(firstPunch.punch_time);
+    const lastPunchTime  = new Date(lastPunch.punch_time);
+
+    const gapMinutes = calculateTimeDifferenceInMinutes(firstPunchTime, lastPunchTime);
+
+    if (gapMinutes < 15) {
+        // If total gap is less than 15 mins, treat as mis-punch
+        misPunch = true;
+    } else {
+        consideredLastPunch = lastPunch;
+    }
+
+    if (misPunch) {
+        status = 'MP';
+    } else {
+        // Calculate total hours
+        if (consideredLastPunch) {
+            const firstPunchDate = new Date(firstPunch.punch_date);
+            totalHours = calculateHoursWorked(firstPunchDate, firstPunchTime, lastPunchTime);
+        }
+
+        // Define thresholds
+        const pThreshold  = workingHours === 'FLEXI SHIFT - 9 HRS' ? 4.5 : 4;
+        const hdThreshold = 2;     // Always 2 for half day
+        const aThreshold  = 0.25;  // 15 minutes
+
+        if (totalHours > pThreshold) {
+            status = 'P';
+        } else if (totalHours > hdThreshold && totalHours <= pThreshold) {
+            status = 'HD';
+        } else if (totalHours > aThreshold && totalHours <= hdThreshold) {
+            status = 'A';
+        } else {
+            status = 'MP';
+        }
+    }
+
+    return {
+        status,
+        firstPunch,
+        lastPunch: consideredLastPunch,
+        misPunch,
+        totalHours,
+    };
+}
+
+/**
+ * -----------------------------------------------------
+ * The main upsertAttendance function with integrated 
+ * monthly logic.
+ * -----------------------------------------------------
+ */
 async function upsertAttendance({
     labourId,
     date,
@@ -2753,169 +2894,306 @@ async function upsertAttendance({
     onboardName,
 }) {
     let totalHours = 0;
-    let status = 'A'; // Default: Absent
+    let status     = 'A'; // default
     let calculatedOvertime = 0;
 
-    const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
-    const halfDayHours = shiftHours === 9 ? 4.5 : 4;
+    const shiftHours   = getShiftHours(workingHours);
+    const halfDayHours = getHalfDayHours(shiftHours);
 
     try {
         const pool = await poolPromise;
 
-        // Check if the date is a holiday
+        // 1. Check if the date is a holiday:
         const holidayCheckResult = await pool.request()
             .input('date', sql.Date, date)
             .query(`
-                SELECT HolidayDate 
+                SELECT [HolidayDate]
                 FROM [dbo].[HolidayDate]
-                WHERE HolidayDate = @date
+                WHERE [HolidayDate] = @date
             `);
 
         if (holidayCheckResult.recordset.length > 0) {
             throw new Error('The date is a holiday. You cannot modify punch times or overtime.');
         }
 
-        // Fetch existing attendance details
+        // 2. Fetch existing attendance for (labour & date) from LabourAttendanceDetails
         const attendanceResult = await pool.request()
             .input('labourId', sql.NVarChar, labourId)
-            .input('date', sql.Date, date)
+            .input('date',     sql.Date, date)
             .query(`
-                SELECT TimesUpdate, SentForApproval, ApprovalStatus, FirstPunch, LastPunch
+                SELECT 
+                    [TimesUpdate],
+                    [SentForApproval],
+                    [ApprovalStatus],
+                    [FirstPunch],
+                    [LastPunch]
                 FROM [dbo].[LabourAttendanceDetails]
-                WHERE LabourId = @labourId AND Date = @date
+                WHERE [LabourId] = @labourId AND [Date] = @date
             `);
 
-        let timesUpdate = 0;
-        let sentForApproval = false;
-        let approvalStatus = null;
-        let existingFirstPunch = null;
+        let timesUpdate       = 0;
+        let sentForApproval   = false;
+        let approvalStatus    = null;
+        let existingFirstPunch= null;
         let existingLastPunch = null;
 
         if (attendanceResult.recordset.length > 0) {
             const record = attendanceResult.recordset[0];
-            timesUpdate = record.TimesUpdate || 0;
-            sentForApproval = record.SentForApproval;
-            approvalStatus = record.ApprovalStatus;
+            timesUpdate        = record.TimesUpdate || 0;
+            sentForApproval    = record.SentForApproval;
+            approvalStatus     = record.ApprovalStatus;
             existingFirstPunch = record.FirstPunch;
-            existingLastPunch = record.LastPunch;
+            existingLastPunch  = record.LastPunch;
 
-            // Prevent modification if approval is pending
+            // If the attendance is pending admin approval and not yet updated, prevent modification
             if (approvalStatus === 'Pending' && !sentForApproval) {
                 throw new Error('Attendance is pending admin approval and cannot be modified.');
             }
         }
 
-        // Determine final values for FirstPunch and LastPunch
+        // 3. Determine final values for firstPunch & lastPunch
         const firstPunch = firstPunchManually || existingFirstPunch;
-        const lastPunch = lastPunchManually || existingLastPunch;
+        const lastPunch  = lastPunchManually  || existingLastPunch;
 
-        // Calculate TotalHours and Status
+        // 4. If we have both punches, compute total hours & status
         if (firstPunch && lastPunch) {
             const firstPunchTime = new Date(`${date}T${firstPunch}`);
-            const lastPunchTime = new Date(`${date}T${lastPunch}`);
+            const lastPunchTime  = new Date(`${date}T${lastPunch}`);
 
-            totalHours = (lastPunchTime - firstPunchTime) / (1000 * 60 * 60); // Convert to hours
-
+            totalHours = (lastPunchTime - firstPunchTime) / (1000 * 60 * 60); 
             if (totalHours >= shiftHours) {
-                status = 'P'; // Present
-                calculatedOvertime = totalHours > shiftHours ? totalHours - shiftHours : 0;
+                status = 'P';
+                calculatedOvertime = totalHours > shiftHours ? (totalHours - shiftHours) : 0;
             } else if (totalHours >= halfDayHours) {
-                status = 'HD'; // Half Day
+                status = 'HD';
             } else if (totalHours > 0) {
-                status = 'MP'; // Miss Punch
+                status = 'MP';
             }
-        } else if (overtimeManually) {
-            status = 'P'; // Mark as Present
+        }
+        // 5. If only overtime is provided, we assume "P" and use that for total overtime
+        else if (overtimeManually) {
+            status             = 'P';
             calculatedOvertime = parseFloat(overtimeManually);
         }
 
-        // Round values
-        totalHours = parseFloat(totalHours.toFixed(2));
+        // Round to 2 decimals
+        totalHours         = parseFloat(totalHours.toFixed(2));
         calculatedOvertime = parseFloat(calculatedOvertime.toFixed(2));
 
-        // Update or Insert record
-        const query = `
-            MERGE INTO [LabourAttendanceDetails] AS Target
+        // 6. Upsert record in LabourAttendanceDetails for this single date
+        const mergeQuery = `
+            MERGE INTO [dbo].[LabourAttendanceDetails] AS [Target]
             USING (
                 SELECT 
-                    @labourId AS LabourId, 
-                    @date AS Date, 
-                    @firstPunch AS FirstPunch, 
-                    @lastPunch AS LastPunch, 
-                    @totalHours AS TotalHours, 
-                    @calculatedOvertime AS Overtime, 
-                    @status AS Status,
-                    @overtimeManually AS OvertimeManually,
-                    @remarkManually AS RemarkManually,
-                    @onboardName AS OnboardName,
-                    GETDATE() AS LastUpdatedDate
-            ) AS Source
-            ON Target.LabourId = Source.LabourId AND Target.Date = Source.Date
+                    @labourId          AS [LabourId], 
+                    @date              AS [Date], 
+                    @firstPunch        AS [FirstPunch], 
+                    @lastPunch         AS [LastPunch], 
+                    @totalHours        AS [TotalHours], 
+                    @calculatedOvertime AS [Overtime], 
+                    @status            AS [Status],
+                    @overtimeManually  AS [OvertimeManually],
+                    @remarkManually    AS [RemarkManually],
+                    @onboardName       AS [OnboardName],
+                    GETDATE()          AS [LastUpdatedDate]
+            ) AS [Source]
+            ON [Target].[LabourId] = [Source].[LabourId]
+               AND [Target].[Date] = [Source].[Date]
+            
             WHEN MATCHED THEN 
                 UPDATE SET 
-                    FirstPunch = COALESCE(@firstPunch, Target.FirstPunch),
-                    LastPunch = COALESCE(@lastPunch, Target.LastPunch),
-                    FirstPunchManually = COALESCE(@firstPunch, Target.FirstPunchManually),
-                    LastPunchManually = COALESCE(@lastPunch, Target.LastPunchManually),
-                    TotalHours = @totalHours,
-                    Overtime = @calculatedOvertime,
-                    Status = @status,
-                    OvertimeManually = COALESCE(@overtimeManually, Target.OvertimeManually),
-                    RemarkManually = COALESCE(@remarkManually, Target.RemarkManually),
-                    OnboardName = COALESCE(@onboardName, Target.OnboardName),
-                    LastUpdatedDate = GETDATE(),
-                    TimesUpdate = ISNULL(Target.TimesUpdate, 0) + 1
+                    [FirstPunch]         = COALESCE([Source].[FirstPunch], [Target].[FirstPunch]),
+                    [LastPunch]          = COALESCE([Source].[LastPunch], [Target].[LastPunch]),
+                    [FirstPunchManually] = COALESCE([Source].[FirstPunch], [Target].[FirstPunchManually]),
+                    [LastPunchManually]  = COALESCE([Source].[LastPunch], [Target].[LastPunchManually]),
+                    [TotalHours]         = [Source].[TotalHours],
+                    [Overtime]           = [Source].[Overtime],
+                    [Status]             = [Source].[Status],
+                    [OvertimeManually]   = COALESCE([Source].[OvertimeManually], [Target].[OvertimeManually]),
+                    [RemarkManually]     = COALESCE([Source].[RemarkManually], [Target].[RemarkManually]),
+                    [OnboardName]        = COALESCE([Source].[OnboardName], [Target].[OnboardName]),
+                    [LastUpdatedDate]    = GETDATE(),
+                    [TimesUpdate]        = ISNULL([Target].[TimesUpdate], 0) + 1
+            
             WHEN NOT MATCHED THEN 
                 INSERT (
-                    LabourId, 
-                    Date, 
-                    FirstPunch, 
-                    LastPunch, 
-                    FirstPunchManually, 
-                    LastPunchManually, 
-                    TotalHours, 
-                    Overtime, 
-                    Status, 
-                    OvertimeManually,
-                    RemarkManually, 
-                    OnboardName, 
-                    LastUpdatedDate, 
-                    TimesUpdate
+                    [LabourId], 
+                    [Date], 
+                    [FirstPunch], 
+                    [LastPunch], 
+                    [FirstPunchManually], 
+                    [LastPunchManually], 
+                    [TotalHours], 
+                    [Overtime], 
+                    [Status], 
+                    [OvertimeManually],
+                    [RemarkManually], 
+                    [OnboardName], 
+                    [LastUpdatedDate], 
+                    [TimesUpdate]
                 )
                 VALUES (
-                    @labourId, 
-                    @date, 
-                    @firstPunch, 
-                    @lastPunch, 
-                    @firstPunch, 
-                    @lastPunch, 
-                    @totalHours, 
-                    @calculatedOvertime, 
-                    @status, 
-                    @overtimeManually,
-                    @remarkManually, 
-                    @onboardName, 
-                    GETDATE(), 
+                    [Source].[LabourId],
+                    [Source].[Date],
+                    [Source].[FirstPunch],
+                    [Source].[LastPunch],
+                    [Source].[FirstPunch],
+                    [Source].[LastPunch],
+                    [Source].[TotalHours],
+                    [Source].[Overtime],
+                    [Source].[Status],
+                    [Source].[OvertimeManually],
+                    [Source].[RemarkManually],
+                    [Source].[OnboardName],
+                    GETDATE(),
                     1
                 );
         `;
 
-        // Execute the query
         await pool.request()
-            .input('labourId', sql.NVarChar, labourId)
-            .input('date', sql.Date, date)
-            .input('firstPunch', sql.VarChar, firstPunch)
-            .input('lastPunch', sql.VarChar, lastPunch)
-            .input('totalHours', sql.Float, totalHours)
-            .input('calculatedOvertime', sql.Float, calculatedOvertime)
-            .input('status', sql.VarChar, status)
-            .input('overtimeManually', sql.Float, overtimeManually)
-            .input('remarkManually', sql.VarChar, remarkManually)
-            .input('onboardName', sql.NVarChar, onboardName)
-            .query(query);
+            .input('labourId',           sql.NVarChar, labourId)
+            .input('date',               sql.Date,     date)
+            .input('firstPunch',         sql.VarChar,  firstPunch)
+            .input('lastPunch',          sql.VarChar,  lastPunch)
+            .input('totalHours',         sql.Float,    totalHours)
+            .input('calculatedOvertime', sql.Float,    calculatedOvertime)
+            .input('status',             sql.VarChar,  status)
+            .input('overtimeManually',   sql.Float,    overtimeManually)
+            .input('remarkManually',     sql.VarChar,  remarkManually)
+            .input('onboardName',        sql.NVarChar, onboardName)
+            .query(mergeQuery);
 
-            await insertOrUpdateLabourAttendanceSummary(labourId, date);
-        //console.log('Upsert successful');
+        /**
+         * -------------------------------------------
+         * RE-CALCULATE the entire month for this 
+         * labour (similar to your controller logic).
+         * -------------------------------------------
+         */
+        const [yearStr, monthStr] = date.split('-'); // e.g. "2025-02-15" -> ["2025","02","15"]
+        const parsedYear  = parseInt(yearStr, 10);
+        const parsedMonth = parseInt(monthStr, 10);
+        const daysInMonth = new Date(parsedYear, parsedMonth, 0).getDate();
+
+        // 6a. Fetch all "punches" from LabourAttendanceDetails for this labour for the month
+        const labourAttendanceResult = await pool.request()
+            .input('labourId', sql.NVarChar, labourId)
+            .input('year',     sql.Int,      parsedYear)
+            .input('month',    sql.Int,      parsedMonth)
+            .query(`
+                SELECT
+                    [LabourId],
+                    [Date]       AS [punch_date],
+                    [FirstPunch] AS [punch_time] 
+                FROM [dbo].[LabourAttendanceDetails]
+                WHERE [LabourId] = @labourId
+                  AND YEAR([Date]) = @year
+                  AND MONTH([Date]) = @month
+                ORDER BY [Date]
+            `);
+
+        const labourAttendance = labourAttendanceResult.recordset || [];
+
+        // Possibly get the labour's projectName
+        const projectResult = await pool.request()
+            .input('labourId', sql.NVarChar, labourId)
+            .query(`
+                SELECT [projectName] 
+                FROM [dbo].[LabourAttendanceDetails]
+                WHERE [labourId] = @labourId
+            `);
+
+        let projectName = null;
+        if (projectResult.recordset.length > 0) {
+            projectName = parseInt(projectResult.recordset[0].projectName, 10) || null;
+        }
+
+        // Initialize counters
+        let presentDays      = 0;
+        let halfDays         = 0;
+        let missPunchDays    = 0;
+        let absentDays       = 0;
+        let totalOvertimeHrs = 0.0;
+        let monthlyAttendance= [];
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            // e.g. "2025-02-01", "2025-02-02", ...
+            const dayStr  = String(day).padStart(2, '0');
+            const fullDate= `${yearStr}-${monthStr}-${dayStr}`;
+
+            // Filter the "punches" from labourAttendance that match this date
+            const punchesForDay = labourAttendance.filter((att) => {
+                const attDate    = new Date(att.punch_date);
+                const attDateStr = attDate.toISOString().split('T')[0];
+                return attDateStr === fullDate;
+            });
+
+            // Use the same logic from `determineStatus`
+            const { status, firstPunch, lastPunch, misPunch, totalHours } =
+                determineStatus(punchesForDay, shiftHours, halfDayHours, workingHours);
+
+            // Overtime if > shiftHours
+            let overtime = 0;
+            if (status === 'P' && totalHours > shiftHours) {
+                overtime = parseFloat((totalHours - shiftHours).toFixed(2));
+            }
+
+            // Update counters
+            switch (status) {
+                case 'P':
+                    presentDays++;
+                    break;
+                case 'HD':
+                    halfDays++;
+                    break;
+                case 'MP':
+                    missPunchDays++;
+                    break;
+                case 'A':
+                default:
+                    absentDays++;
+                    break;
+            }
+
+            totalOvertimeHrs += overtime;
+
+            // Prepare dayAttendance object
+            monthlyAttendance.push({
+                labourId,
+                projectName,
+                date: fullDate,
+                firstPunch:  firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
+                lastPunch:   lastPunch  ? formatTimeToHoursMinutes(lastPunch.punch_time)  : null,
+                // If you have attendance_id or device_id columns, add them here
+                totalHours:  totalHours.toFixed(2),
+                overtime:    overtime.toFixed(1),
+                status,
+                misPunch,
+                creationDate: new Date(),
+            });
+        }
+
+        // 6b. Insert summary (like your original code)
+        const summary = {
+            labourId,
+            projectName,
+            totalDays: daysInMonth,
+            presentDays,
+            halfDays,
+            missPunchDays,
+            absentDays,
+            totalOvertimeHours: parseFloat(totalOvertimeHrs.toFixed(1)),
+            shift: workingHours,
+            creationDate: new Date(),
+            selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`, 
+        };
+
+        await insertIntoLabourAttendanceSummary(summary);
+
+        // 6c. Insert daily records (like your original code).
+        for (const dayAttendance of monthlyAttendance) {
+            await insertIntoLabourAttendanceDetails(dayAttendance);
+        }
+
     } catch (error) {
         console.error('Error performing upsert:', error);
         if (error.statusCode) {
@@ -2927,6 +3205,194 @@ async function upsertAttendance({
         }
     }
 };
+
+
+
+// async function upsertAttendance({
+//     labourId,
+//     date,
+//     firstPunchManually,
+//     lastPunchManually,
+//     overtimeManually,
+//     remarkManually,
+//     workingHours,
+//     onboardName,
+// }) {
+//     let totalHours = 0;
+//     let status = 'A'; // Default: Absent
+//     let calculatedOvertime = 0;
+
+//     const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+//     const halfDayHours = shiftHours === 9 ? 4.5 : 4;
+
+//     try {
+//         const pool = await poolPromise;
+
+//         // Check if the date is a holiday
+//         const holidayCheckResult = await pool.request()
+//             .input('date', sql.Date, date)
+//             .query(`
+//                 SELECT HolidayDate 
+//                 FROM [dbo].[HolidayDate]
+//                 WHERE HolidayDate = @date
+//             `);
+
+//         if (holidayCheckResult.recordset.length > 0) {
+//             throw new Error('The date is a holiday. You cannot modify punch times or overtime.');
+//         }
+
+//         // Fetch existing attendance details
+//         const attendanceResult = await pool.request()
+//             .input('labourId', sql.NVarChar, labourId)
+//             .input('date', sql.Date, date)
+//             .query(`
+//                 SELECT TimesUpdate, SentForApproval, ApprovalStatus, FirstPunch, LastPunch
+//                 FROM [dbo].[LabourAttendanceDetails]
+//                 WHERE LabourId = @labourId AND Date = @date
+//             `);
+
+//         let timesUpdate = 0;
+//         let sentForApproval = false;
+//         let approvalStatus = null;
+//         let existingFirstPunch = null;
+//         let existingLastPunch = null;
+
+//         if (attendanceResult.recordset.length > 0) {
+//             const record = attendanceResult.recordset[0];
+//             timesUpdate = record.TimesUpdate || 0;
+//             sentForApproval = record.SentForApproval;
+//             approvalStatus = record.ApprovalStatus;
+//             existingFirstPunch = record.FirstPunch;
+//             existingLastPunch = record.LastPunch;
+
+//             // Prevent modification if approval is pending
+//             if (approvalStatus === 'Pending' && !sentForApproval) {
+//                 throw new Error('Attendance is pending admin approval and cannot be modified.');
+//             }
+//         }
+
+//         // Determine final values for FirstPunch and LastPunch
+//         const firstPunch = firstPunchManually || existingFirstPunch;
+//         const lastPunch = lastPunchManually || existingLastPunch;
+
+//         // Calculate TotalHours and Status
+//         if (firstPunch && lastPunch) {
+//             const firstPunchTime = new Date(`${date}T${firstPunch}`);
+//             const lastPunchTime = new Date(`${date}T${lastPunch}`);
+
+//             totalHours = (lastPunchTime - firstPunchTime) / (1000 * 60 * 60); // Convert to hours
+
+//             if (totalHours >= shiftHours) {
+//                 status = 'P'; // Present
+//                 calculatedOvertime = totalHours > shiftHours ? totalHours - shiftHours : 0;
+//             } else if (totalHours >= halfDayHours) {
+//                 status = 'HD'; // Half Day
+//             } else if (totalHours > 0) {
+//                 status = 'MP'; // Miss Punch
+//             }
+//         } else if (overtimeManually) {
+//             status = 'P'; // Mark as Present
+//             calculatedOvertime = parseFloat(overtimeManually);
+//         }
+
+//         // Round values
+//         totalHours = parseFloat(totalHours.toFixed(2));
+//         calculatedOvertime = parseFloat(calculatedOvertime.toFixed(2));
+
+//         // Update or Insert record
+//         const query = `
+//             MERGE INTO [LabourAttendanceDetails] AS Target
+//             USING (
+//                 SELECT 
+//                     @labourId AS LabourId, 
+//                     @date AS Date, 
+//                     @firstPunch AS FirstPunch, 
+//                     @lastPunch AS LastPunch, 
+//                     @totalHours AS TotalHours, 
+//                     @calculatedOvertime AS Overtime, 
+//                     @status AS Status,
+//                     @overtimeManually AS OvertimeManually,
+//                     @remarkManually AS RemarkManually,
+//                     @onboardName AS OnboardName,
+//                     GETDATE() AS LastUpdatedDate
+//             ) AS Source
+//             ON Target.LabourId = Source.LabourId AND Target.Date = Source.Date
+//             WHEN MATCHED THEN 
+//                 UPDATE SET 
+//                     FirstPunch = COALESCE(@firstPunch, Target.FirstPunch),
+//                     LastPunch = COALESCE(@lastPunch, Target.LastPunch),
+//                     FirstPunchManually = COALESCE(@firstPunch, Target.FirstPunchManually),
+//                     LastPunchManually = COALESCE(@lastPunch, Target.LastPunchManually),
+//                     TotalHours = @totalHours,
+//                     Overtime = @calculatedOvertime,
+//                     Status = @status,
+//                     OvertimeManually = COALESCE(@overtimeManually, Target.OvertimeManually),
+//                     RemarkManually = COALESCE(@remarkManually, Target.RemarkManually),
+//                     OnboardName = COALESCE(@onboardName, Target.OnboardName),
+//                     LastUpdatedDate = GETDATE(),
+//                     TimesUpdate = ISNULL(Target.TimesUpdate, 0) + 1
+//             WHEN NOT MATCHED THEN 
+//                 INSERT (
+//                     LabourId, 
+//                     Date, 
+//                     FirstPunch, 
+//                     LastPunch, 
+//                     FirstPunchManually, 
+//                     LastPunchManually, 
+//                     TotalHours, 
+//                     Overtime, 
+//                     Status, 
+//                     OvertimeManually,
+//                     RemarkManually, 
+//                     OnboardName, 
+//                     LastUpdatedDate, 
+//                     TimesUpdate
+//                 )
+//                 VALUES (
+//                     @labourId, 
+//                     @date, 
+//                     @firstPunch, 
+//                     @lastPunch, 
+//                     @firstPunch, 
+//                     @lastPunch, 
+//                     @totalHours, 
+//                     @calculatedOvertime, 
+//                     @status, 
+//                     @overtimeManually,
+//                     @remarkManually, 
+//                     @onboardName, 
+//                     GETDATE(), 
+//                     1
+//                 );
+//         `;
+
+//         // Execute the query
+//         await pool.request()
+//             .input('labourId', sql.NVarChar, labourId)
+//             .input('date', sql.Date, date)
+//             .input('firstPunch', sql.VarChar, firstPunch)
+//             .input('lastPunch', sql.VarChar, lastPunch)
+//             .input('totalHours', sql.Float, totalHours)
+//             .input('calculatedOvertime', sql.Float, calculatedOvertime)
+//             .input('status', sql.VarChar, status)
+//             .input('overtimeManually', sql.Float, overtimeManually)
+//             .input('remarkManually', sql.VarChar, remarkManually)
+//             .input('onboardName', sql.NVarChar, onboardName)
+//             .query(query);
+
+//             await insertOrUpdateLabourAttendanceSummary(labourId, date);
+//         //console.log('Upsert successful');
+//     } catch (error) {
+//         console.error('Error performing upsert:', error);
+//         if (error.statusCode) {
+//             throw error;
+//         } else {
+//             const serverError = new Error('Error updating attendance. Please try again later.');
+//             serverError.statusCode = 500;
+//             throw serverError;
+//         }
+//     }
+// };
 
 
 async function LabourAttendanceApprovalModel() {
