@@ -3507,6 +3507,7 @@ async function upsertAttendance(req, res) {
         remarkManually,
         workingHours,
         onboardName,
+        AttendanceStatus,
     } = req.body;
     //console.log('req.body the upsertAttendance', req.body)
 
@@ -3540,10 +3541,15 @@ async function upsertAttendance(req, res) {
 
             const timesUpdated = await labourModel.getTimesUpdateForMonth(labourId, date);
 
-            if (timesUpdated >= 3) {
+            if (AttendanceStatus !== "MP") {
                 await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName);
                 return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
-            }
+            };
+
+            if (AttendanceStatus === "MP" && timesUpdated >= 3) {
+                await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName);
+                return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
+            };
 
         // Call the model to perform upsert
         await labourModel.upsertAttendance({
