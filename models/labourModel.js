@@ -1998,7 +1998,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                     WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
                 `);
 
-            //console.log(`Updated summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
+            console.log(`Updated summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
         } else {
             // Insert new record
             await pool
@@ -2023,7 +2023,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                     )
                 `);
 
-            //console.log(`Inserted summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
+            console.log(`Inserted summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
         }
     } catch (err) {
         console.error('Error in insertOrUpdateLabourAttendanceSummary:', err);

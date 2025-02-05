@@ -1772,16 +1772,16 @@ async function runDailyAttendanceCron() {
     yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
 
-    //console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
-    //console.log(`Processing Attendance for Date: ${formattedYesterday}`);
+    console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
+    console.log(`Processing Attendance for Date: ${formattedYesterday}`);
 
     cronLogger.info(`Running cron job for Attendance Date: ${formattedYesterday}`);
 
     try {
         // Call the function to process attendance
-        //console.log('Calling processLaboursAttendance function...');
+        console.log('Calling processLaboursAttendance function...');
         await processLaboursAttendance(formattedYesterday);
-        //console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
+        console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
      // Update attendance summary for all approved laborers
      const approvedLabours = await labourModel.getAllApprovedLabours();
      for (let labour of approvedLabours) {
@@ -1789,7 +1789,7 @@ async function runDailyAttendanceCron() {
          await labourModel.insertOrUpdateLabourAttendanceSummary(labourId, formattedYesterday);
      }
 
-     //console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
+     console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
      cronLogger.info(`Cron job completed successfully for Date: ${formattedYesterday}`);
  } catch (error) {
      console.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
@@ -2631,6 +2631,7 @@ async function processLaboursAttendance(date) {
 
             // Insert into LabourAttendanceDetails
             for (let dayAttendance of dailyAttendance) {
+                // console.log(`Inserting Attendance for ${labourId} on ${dayAttendance.date}:`, dayAttendance);
                 await labourModel.insertIntoLabourAttendanceDetails(dayAttendance);
             }
 
@@ -2648,7 +2649,7 @@ async function processLaboursAttendance(date) {
                 creationDate: new Date(),
                 selectedMonth: attendanceDate.toISOString().substring(0, 7), // e.g., "2024-11"
             };
-
+//  console.log(`Summary for LabourId ${labourId}:`, summary);
             await labourModel.insertIntoLabourAttendanceSummary(summary);
         }
 
@@ -2748,7 +2749,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('43 17 * * *', async () => {
+cron.schedule('47 11 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
