@@ -998,7 +998,7 @@ async function getAllLabours() {
         console.error("Error in getAllLabours:", error);
         throw error;
     }
-}
+};
 
 
 async function approveLabour(id, nextID) {
@@ -2892,6 +2892,7 @@ async function upsertAttendance({
     remarkManually,
     workingHours,
     onboardName,
+    markWeeklyOff
 }) {
     let totalHours = 0;
     let status     = 'A'; // default
@@ -2951,12 +2952,16 @@ async function upsertAttendance({
             }
         }
 
-        // 3. Determine final values for firstPunch & lastPunch
-        const firstPunch = firstPunchManually || existingFirstPunch;
-        const lastPunch  = lastPunchManually  || existingLastPunch;
+        // const firstPunch = firstPunchManually || existingFirstPunch;
+        // const lastPunch  = lastPunchManually  || existingLastPunch;
+        const firstPunch = markWeeklyOff ? '00:00:00' : firstPunchManually || existingFirstPunch;
+        const lastPunch = markWeeklyOff ? '00:00:00' : lastPunchManually || existingLastPunch;
 
+        if (markWeeklyOff) {
+            status = 'WO'; // Weekly Off
+        } 
         // 4. If we have both punches, compute total hours & status
-        if (firstPunch && lastPunch) {
+        else if (firstPunch && lastPunch) {
             const firstPunchTime = new Date(`${date}T${firstPunch}`);
             const lastPunchTime  = new Date(`${date}T${lastPunch}`);
 
@@ -3188,7 +3193,7 @@ async function upsertAttendance({
         };
 
         await insertIntoLabourAttendanceSummary(summary);
-
+        await insertOrUpdateLabourAttendanceSummary(labourId, date);
         // 6c. Insert daily records (like your original code).
         for (const dayAttendance of monthlyAttendance) {
             await insertIntoLabourAttendanceDetails(dayAttendance);
@@ -3833,7 +3838,7 @@ async function markWagesForApproval(
         console.error('Error marking wages for approval:', error.message || error);
         throw new Error(error.message || 'Error marking wages for approval.');
     }
-}
+};
 
 
 
@@ -4203,40 +4208,90 @@ async function insertWagesData(row) {
 
 
 
-const getWagesAndLabourOnboardingJoin = async () => {
+// const getWagesAndLabourOnboardingJoin = async () => {
+//     const pool = await poolPromise;
+
+//     const result = await pool.request().query(`
+//         SELECT 
+//             onboarding.LabourID,
+//             onboarding.name,
+//             onboarding.businessUnit,
+//             onboarding.departmentName,
+//             onboarding.From_Date,
+//             onboarding.projectName,
+//             onboarding.department,
+//             wages.WagesEditedBy,
+//             wages.PayStructure,
+//             wages.DailyWages,
+//             wages.PerHourWages,
+//             wages.MonthlyWages,
+//             wages.YearlyWages,
+//             wages.WeeklyOff,
+//             wages.CreatedAt,
+//             wages.FixedMonthlyWages,
+//             wages.EffectiveDate
+//         FROM
+//             [dbo].[labourOnboarding] AS onboarding
+//         LEFT JOIN
+//             [dbo].[LabourMonthlyWages] AS wages
+//         ON
+//             onboarding.LabourID = wages.LabourID
+//         WHERE
+//             onboarding.status = 'Approved'
+//             ORDER BY
+//     onboarding.LabourID;
+//     `);
+
+//     return result.recordset;
+// };
+
+const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
     const pool = await poolPromise;
-
-    const result = await pool.request().query(`
-        SELECT 
-            onboarding.LabourID,
-            onboarding.name,
-            onboarding.businessUnit,
-            onboarding.departmentName,
-            onboarding.From_Date,
-            wages.WagesEditedBy,
-            wages.PayStructure,
-            wages.DailyWages,
-            wages.PerHourWages,
-            wages.MonthlyWages,
-            wages.YearlyWages,
-            wages.WeeklyOff,
-            wages.CreatedAt,
-            wages.FixedMonthlyWages,
-            wages.EffectiveDate
-        FROM
-            [dbo].[labourOnboarding] AS onboarding
-        LEFT JOIN
-            [dbo].[LabourMonthlyWages] AS wages
-        ON
-            onboarding.LabourID = wages.LabourID
-        WHERE
-            onboarding.status = 'Approved'
-            ORDER BY
-    onboarding.LabourID;
-    `);
-
+  
+    // Build the base query with aliasing
+    let query = `
+      SELECT 
+        onboarding.LabourID,
+        onboarding.name,
+        onboarding.businessUnit,
+        onboarding.departmentName,
+        onboarding.From_Date,
+        onboarding.projectName AS ProjectID,
+        onboarding.department AS DepartmentID,
+        wages.WagesEditedBy,
+        wages.PayStructure,
+        wages.DailyWages,
+        wages.PerHourWages,
+        wages.MonthlyWages,
+        wages.YearlyWages,
+        wages.WeeklyOff,
+        wages.CreatedAt,
+        wages.FixedMonthlyWages,
+        wages.EffectiveDate
+      FROM
+        [dbo].[labourOnboarding] AS onboarding
+      LEFT JOIN
+        [dbo].[LabourMonthlyWages] AS wages
+      ON
+        onboarding.LabourID = wages.LabourID
+      WHERE
+        onboarding.status = 'Approved'
+    `;
+  
+    // Append additional filters if provided from the frontend
+    if (filters.ProjectID) {
+      // Note: Ensure that the value of filters.ProjectID is safe or use a parameterized query.
+      query += ` AND onboarding.projectName = ${filters.ProjectID}`;
+    }
+    if (filters.DepartmentID) {
+      query += ` AND onboarding.department = ${filters.DepartmentID}`;
+    }
+  
+    query += ` ORDER BY onboarding.LabourID;`;
+  
+    const result = await pool.request().query(query);
     return result.recordset;
-};
+  };
 
 
 // Function to search FromWages records

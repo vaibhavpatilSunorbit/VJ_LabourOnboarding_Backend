@@ -1272,13 +1272,38 @@ const getAdminSiteTransferApproval = async (req, res) => {
 
 const siteTransferRequestforAdmin = async (req, res) => {
   try {
-      const { userId, LabourID, name, currentSite, transferSite, currentSiteName, transferSiteName, transferDate, siteTransferBy } = req.body;
+    // 1) Grab the `labours` array from the request body
+    const { labours } = req.body;
 
+    // 2) If no labours array or empty, return an error
+    if (!labours || !Array.isArray(labours) || labours.length === 0) {
+      return res.status(400).json({ message: "No labours provided." });
+    }
+
+    // Get a pooled connection
+    const pool = await poolPromise;
+
+    // 3) Loop over each labour object
+    for (const labour of labours) {
+      const {
+        userId,
+        LabourID,
+        name,
+        currentSite,
+        transferSite,
+        currentSiteName,
+        transferSiteName,
+        transferDate,
+        siteTransferBy,
+      } = labour;
+
+      // 4) Check required fields per labour
+      //    (adjust as needed, e.g., if userId is also required, add that check)
       if (!LabourID || !currentSite || !transferSite) {
-          return res.status(400).json({ message: "All fields are required." });
+        return res.status(400).json({
+          message: "All fields are required (LabourID, currentSite, transferSite).",
+        });
       }
-
-      const pool = await poolPromise;
       await pool.request()
           .input("userId", sql.Int, userId || null)
           .input("LabourID", sql.NVarChar(50), LabourID)
@@ -1294,13 +1319,17 @@ const siteTransferRequestforAdmin = async (req, res) => {
               (userId, LabourID, name, currentSite, transferSite, currentSiteName, transferSiteName, siteTransferBy, transferDate, adminStatus, isAdminApproval, isAdminReject)
               VALUES (@userId, @LabourID, @name, @currentSite, @transferSite, @currentSiteName, @transferSiteName, @siteTransferBy, @transferDate, 'Pending', 0, 0)
           `);
-
-      res.status(201).json({ message: "Transfer request submitted successfully." });
-  } catch (error) {
-      console.error("Error adding transfer request:", error);
-      res.status(500).json({ message: "Failed to add transfer request.", error: error.message });
-  }
-};
+          }
+          return res
+          .status(201)
+          .json({ message: "Transfer request submitted successfully." });
+      } catch (error) {
+        console.error("Error adding transfer request:", error);
+        return res
+          .status(500)
+          .json({ message: "Failed to add transfer request.", error: error.message });
+      }
+    };
 
 
 
