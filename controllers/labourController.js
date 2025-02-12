@@ -3879,7 +3879,7 @@ const markWagesForApprovalController = async (req, res) => {
     try {
         const payload = req.body;
         const { wageId, labourId, dailyWages, perHourWages, monthlyWages, yearlyWages, effectiveDate, fixedMonthlyWages, weeklyOff, payStructure, wagesEditedBy, remarks } = payload;
-//console.log('payload for wages new 55',payload)
+console.log('payload for wages new 55',payload)
         if (!wageId || !labourId || !payStructure) {
             return res.status(400).json({ message: 'Wage ID, Labour ID, and Pay Structure are required' });
         }
@@ -4096,17 +4096,27 @@ const importWages = async (req, res) => {
 };
 
 
+// const getWagesAndLabourOnboardingJoincontroller = async (req, res) => {
+//     try {
+//         const joinWagesLabour = await labourModel.getWagesAndLabourOnboardingJoin();
+//         res.status(200).json(joinWagesLabour);
+//     } catch (error) {
+//         console.error('Error fetching data:', error);
+//         res.status(500).json({ message: 'Error fetching data', error });
+//     }
+// };
+
 const getWagesAndLabourOnboardingJoincontroller = async (req, res) => {
     try {
-        const joinWagesLabour = await labourModel.getWagesAndLabourOnboardingJoin();
-        res.status(200).json(joinWagesLabour);
+      // Get filters from query parameters (e.g., ?ProjectID=...&DepartmentID=...)
+      const filters = req.query;
+      const joinWagesLabour = await labourModel.getWagesAndLabourOnboardingJoin(filters);
+      res.status(200).json(joinWagesLabour);
     } catch (error) {
-        console.error('Error fetching data:', error);
-        res.status(500).json({ message: 'Error fetching data', error });
+      console.error('Error fetching data:', error);
+      res.status(500).json({ message: 'Error fetching data', error });
     }
-};
-
-
+  };
 
 async function searchLaboursFromWages(req, res) {
     const { q } = req.query;

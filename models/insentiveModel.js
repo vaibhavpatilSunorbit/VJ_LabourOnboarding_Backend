@@ -3,6 +3,38 @@ const {sql, poolPromise } = require('../config/dbConfig');
 const { poolPromise3 } = require('../config/dbConfig3');
 
 
+async function getAllLabours(filters = {}) {
+    const pool = await poolPromise;
+    let query = "SELECT * FROM labourOnboarding";
+    let conditions = [];
+  
+    if (filters.ProjectID) {
+      conditions.push("projectName = @projectID");
+    }
+    if (filters.DepartmentID) {
+      conditions.push("department = @departmentID");
+    }
+  
+    if (conditions.length > 0) {
+      query += " WHERE " + conditions.join(" AND ");
+    }
+  
+    query += " ORDER BY LabourID;";
+  
+    const request = pool.request();
+    if (filters.ProjectID) {
+      request.input("projectID", filters.ProjectID);
+    }
+    if (filters.DepartmentID) {
+      request.input("departmentID", filters.DepartmentID);
+    }
+  
+    const result = await request.query(query);
+    return result.recordset;
+  }
+  
+
+
 async function registerData(labourData) {
     try {
         const pool = await poolPromise;
@@ -72,25 +104,98 @@ async function searchFromVariablePay(query) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
-            .query('SELECT * FROM VariablePay WHERE name LIKE @query OR companyName LIKE @query OR LabourID LIKE @query OR departmentName LIKE @query OR payAddedBy LIKE @query OR PayStructure LIKE @query');
+            .query('SELECT * FROM VariablePay WHERE name LIKE @query OR companyName LIKE @query OR LabourID LIKE @query OR departmentName LIKE @query OR payAddedBy LIKE @query OR PayStructure LIKE @query OR businessUnit LIKE @query OR variablePayRemark LIKE @query');
         return result.recordset;
     } catch (error) {
         throw error;
     }
-}
+};
 
-const getVariablePayAndLabourOnboardingJoin = async () => {
+async function searchFromAttendanceApproval(query) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('query', sql.NVarChar, `%${query}%`)
+            .query('SELECT * FROM LabourAttendanceApproval WHERE LabourId LIKE @query OR Date LIKE @query OR OnboardName LIKE @query');
+        return result.recordset;
+    } catch (error) {
+        throw error;
+    }
+};
+
+async function searchFromWagesApproval(query) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('query', sql.NVarChar, `%${query}%`)
+            .query('SELECT * FROM WagesAdminApprovals WHERE LabourID LIKE @query OR DailyWages LIKE @query OR WagesEditedBy LIKE @query OR MonthlyWages LIKE @query OR FixedMonthlyWages LIKE @query OR WeeklyOff LIKE @query OR PayStructure LIKE @query OR EffectiveDate LIKE @query');
+        return result.recordset;
+    } catch (error) {
+        throw error;
+    }
+};
+
+async function searchFromSiteTransferApproval(query) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('query', sql.NVarChar, `%${query}%`)
+            .query('SELECT * FROM AdminSiteTransferApproval WHERE LabourID LIKE @query OR name LIKE @query OR currentSiteName LIKE @query OR transferSiteName LIKE @query OR siteTransferBy LIKE @query OR rejectionReason LIKE @query OR transferDate LIKE @query');
+        return result.recordset;
+    } catch (error) {
+        throw error;
+    }
+};
+
+// const getVariablePayAndLabourOnboardingJoin = async () => {
+//     const pool = await poolPromise;
+
+//     const result = await pool.request().query(`
+//         SELECT 
+//             onboarding.id,
+//             onboarding.LabourID,
+//             onboarding.name,
+//             onboarding.businessUnit,
+//             onboarding.projectName,
+//             onboarding.departmentName,
+//             onboarding.department,
+//             variablepay.payAddedBy,
+//             variablepay.PayStructure,
+//             variablepay.AdvancePay,
+//             variablepay.DebitPay,
+//             variablepay.IncentivePay,
+//             variablepay.VariablepayAmount,
+//             variablepay.ApprovalStatusPay,
+//             variablepay.CreatedAt,
+//             variablepay.variablePayRemark,
+//             variablepay.EffectiveDate,
+//             variablepay.userId
+//         FROM 
+//             [labourOnboarding] AS onboarding
+//         LEFT JOIN 
+//             [VariablePay] AS variablepay
+//         ON 
+//             onboarding.LabourID = variablepay.LabourID
+//         WHERE 
+//             onboarding.status = 'Approved'
+//             ORDER BY LabourID
+//     `);
+
+//     return result.recordset;
+// };
+
+const getVariablePayAndLabourOnboardingJoin = async (filters = {}) => {
     const pool = await poolPromise;
 
-    const result = await pool.request().query(`
+   let query = `
         SELECT 
             onboarding.id,
             onboarding.LabourID,
             onboarding.name,
             onboarding.businessUnit,
-            onboarding.projectName,
             onboarding.departmentName,
-            onboarding.department,
+            onboarding.projectName AS ProjectID,
+        onboarding.department AS DepartmentID,
             variablepay.payAddedBy,
             variablepay.PayStructure,
             variablepay.AdvancePay,
@@ -110,13 +215,22 @@ const getVariablePayAndLabourOnboardingJoin = async () => {
             onboarding.LabourID = variablepay.LabourID
         WHERE 
             onboarding.status = 'Approved'
-            ORDER BY LabourID
-    `);
-
+           `;
+  
+    // Append additional filters if provided from the frontend
+    if (filters.ProjectID) {
+      // Note: Ensure that the value of filters.ProjectID is safe or use a parameterized query.
+      query += ` AND onboarding.projectName = ${filters.ProjectID}`;
+    }
+    if (filters.DepartmentID) {
+      query += ` AND onboarding.department = ${filters.DepartmentID}`;
+    }
+  
+    query += ` ORDER BY onboarding.LabourID;`;
+  
+    const result = await pool.request().query(query);
     return result.recordset;
-};
-
-
+  };
 
 
 const checkExistingVariablePay = async (LabourID) => {
@@ -1104,10 +1218,150 @@ async function getVariablePayForLabour(labourId, month, year) {
     }
 };
 
-/**
- * Get the wage info for a labour (daily wage or monthly wage).
- * If no wage info, we skip that labour for salary generation.
- */
+async function getWageInfoForLabour(labourId, month, year) {
+    try {
+      const pool = await poolPromise;
+  
+      // 1) Last day of the target month (e.g. 2025-01-31 if month=1, year=2025)
+      const lastDayOfMonth = new Date(year, month, 0);
+  
+      // 2) Fetch all wages that:
+      //    - Are approved (isApprovalDoneAdmin = 1)
+      //    - Have an EffectiveDate on or before lastDayOfMonth
+      //    - Have an ApprovalDate on or before lastDayOfMonth
+      const result = await pool.request()
+        .input('labourId', sql.NVarChar, labourId)
+        .input('monthEnd', sql.DateTime, lastDayOfMonth)
+        .query(`
+          SELECT
+            WageID,
+            FromDate,
+            ApprovalDate,
+            EffectiveDate,
+            PayStructure,
+            DailyWages,
+            PerHourWages,
+            MonthlyWages,
+            YearlyWages,
+            WeeklyOff,
+            FixedMonthlyWages
+          FROM [dbo].[LabourMonthlyWages]
+          WHERE
+            LabourID = @labourId
+            AND isApprovalDoneAdmin = 1
+            AND EffectiveDate <= @monthEnd
+          ORDER BY
+            EffectiveDate DESC,
+            ApprovalDate DESC
+        `);
+  
+      // No records => null
+      if (result.recordset.length === 0) {
+        return null;
+      }
+  
+      // The first wage in the list is the newest for that month
+      const [currentWage, ...others] = result.recordset;
+  
+      // The second wage is our "previous" wage, if available
+      let previousWage = null;
+      if (others.length > 0) {
+        previousWage = others[0];
+      }
+  
+      // 3) Calculate partial-month logic
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const effectiveDate = new Date(currentWage.EffectiveDate);
+  
+      // By default, assume the entire month uses current wage
+      let previousDaysApplicable = 0;
+      let currentDaysApplicable = daysInMonth;
+  
+      // If EffectiveDate is in the same month/year, split the month
+      if (
+        effectiveDate.getFullYear() === year &&
+        (effectiveDate.getMonth() + 1) === month
+      ) {
+        // E.g. if EffectiveDate = 2025-01-09 => days 1–8 are previous wage
+        previousDaysApplicable = effectiveDate.getDate() - 1; 
+        currentDaysApplicable  = daysInMonth - previousDaysApplicable;
+      }
+  
+      // 4) Calculate actual wages
+      const calculatedWages = {
+        previousWageAmount: 0,
+        currentWageAmount: 0,
+        totalWageAmount: 0
+      };
+  
+      // If we have a valid previous wage + partial days, calculate old portion
+      if (previousWage && previousDaysApplicable > 0) {
+        calculatedWages.previousWageAmount = calculatePartialWage(
+          previousWage,
+          previousDaysApplicable,
+          daysInMonth
+        );
+      }
+      // If no previous wage but partial days exist, you can decide if those days are "0" or reuse the current wage
+      else if (!previousWage && previousDaysApplicable > 0) {
+        calculatedWages.previousWageAmount = 0; 
+      }
+  
+      // Calculate the portion for the current wage
+      calculatedWages.currentWageAmount = calculatePartialWage(
+        currentWage,
+        currentDaysApplicable,
+        daysInMonth
+      );
+  
+      // Sum up
+      calculatedWages.totalWageAmount =
+        calculatedWages.previousWageAmount + calculatedWages.currentWageAmount;
+  
+      // 5) Return the wage info + calculations
+      return {
+        ...currentWage,
+        previousWage,
+        previousDaysApplicable,
+        currentDaysApplicable,
+        calculatedWages
+      };
+    } catch (error) {
+      console.error('Error in getWageInfoForLabour:', error);
+      throw error;
+    }
+  }
+  
+  
+  // ====================================
+  // Helper for partial wages
+  // ====================================
+  function calculatePartialWage(wageRecord, daysApplicable, daysInMonth) {
+    if (!wageRecord) return 0;
+  
+    // 1) DAILY WAGES
+    if (
+      wageRecord.PayStructure &&
+      wageRecord.PayStructure.toLowerCase().includes('daily')
+    ) {
+      return (wageRecord.DailyWages || 0) * daysApplicable;
+    }
+  
+    // 2) FIXED MONTHLY
+    if (wageRecord.FixedMonthlyWages) {
+      return (wageRecord.FixedMonthlyWages / daysInMonth) * daysApplicable;
+    }
+  
+    // 3) REGULAR MONTHLY
+    if (wageRecord.MonthlyWages) {
+      return (wageRecord.MonthlyWages / daysInMonth) * daysApplicable;
+    }
+  
+    // 4) ELSE 0
+    return 0;
+  }
+  
+
 // async function getWageInfoForLabour(labourId, month, year) {
 //     try {
 //         const pool = await poolPromise;
@@ -1134,36 +1388,30 @@ async function getVariablePayForLabour(labourId, month, year) {
 //               WHERE
 //                   LabourID = @labourId
 //                   AND isApprovalDoneAdmin = 1
-//                   AND (MONTH(FromDate) <= @month AND YEAR(FromDate) <= @year)
-//                   AND (MONTH(ApprovalDate) <= @month AND YEAR(ApprovalDate) <= @year)
-//               ORDER BY FromDate DESC, ApprovalDate DESC;  
+//                   AND (YEAR(FromDate) < @year OR (YEAR(FromDate) = @year AND MONTH(FromDate) <= @month))
+//                   AND (YEAR(ApprovalDate) < @year OR (YEAR(ApprovalDate) = @year AND MONTH(ApprovalDate) <= @month))
+//               ORDER BY FromDate DESC, ApprovalDate DESC;
 //             `);
 
 //         if (!result.recordset.length) {
 //             return null; // No wages found for this labour
 //         }
 
-//         // Iterate through the wage records to calculate the applicable wage for the specified month
 //         let applicableWage = null;
+//         let previousWage = null;
 
 //         for (const wage of result.recordset) {
 //             const fromDate = new Date(wage.FromDate);
 //             const approvalDate = new Date(wage.ApprovalDate);
 
-//             // Check if this wage entry is valid for the given month/year
 //             if (
 //                 (fromDate.getFullYear() < year || (fromDate.getFullYear() === year && fromDate.getMonth() + 1 <= month)) &&
 //                 (approvalDate.getFullYear() < year || (approvalDate.getFullYear() === year && approvalDate.getMonth() + 1 <= month))
 //             ) {
-//                 // If a previous wage entry exists and overlaps with the current month, consider it
-//                 if (!applicableWage || fromDate > new Date(applicableWage.FromDate)) {
+//                 if (!applicableWage) {
 //                     applicableWage = wage;
-//                 }
-
-//                 // If the `EffectiveDate` exists and is within the month, use it for calculations
-//                 const effectiveDate = wage.EffectiveDate ? new Date(wage.EffectiveDate) : null;
-//                 if (effectiveDate && effectiveDate.getFullYear() === year && effectiveDate.getMonth() + 1 === month) {
-//                     applicableWage = wage;
+//                 } else if (!previousWage) {
+//                     previousWage = wage; // Store the previous wage
 //                 }
 //             }
 //         }
@@ -1172,160 +1420,61 @@ async function getVariablePayForLabour(labourId, month, year) {
 //             return null; // No applicable wage entry found
 //         }
 
-//         // Calculate the daily or monthly wage for the specific dates
 //         const daysInMonth = new Date(year, month, 0).getDate();
 //         const fromDate = new Date(applicableWage.FromDate);
 //         const effectiveDate = applicableWage.EffectiveDate ? new Date(applicableWage.EffectiveDate) : null;
 
-//         let daysApplicable = daysInMonth;
+//         let previousDaysApplicable = 0;
+//         let currentDaysApplicable = daysInMonth;
 
 //         if (fromDate.getFullYear() === year && fromDate.getMonth() + 1 === month) {
-//             daysApplicable -= fromDate.getDate() - 1;
+//             previousDaysApplicable = fromDate.getDate() - 1;
+//             currentDaysApplicable = daysInMonth - previousDaysApplicable;
 //         }
 
 //         if (effectiveDate && effectiveDate.getFullYear() === year && effectiveDate.getMonth() + 1 === month) {
-//             daysApplicable = daysInMonth - (effectiveDate.getDate() - 1);
+//             previousDaysApplicable = effectiveDate.getDate() - 1;
+//             currentDaysApplicable = daysInMonth - previousDaysApplicable;
 //         }
 
-//         // Calculate wages based on applicable days
 //         let calculatedWages = {
-//             dailyWages: 0,
-//             monthlyWages: 0
+//             previousWageAmount: 0,
+//             currentWageAmount: 0,
+//             totalWageAmount: 0
 //         };
 
-//         if (applicableWage.PayStructure.toLowerCase().includes('daily')) {
-//             calculatedWages.dailyWages = applicableWage.DailyWages * daysApplicable;
-//         } else if (applicableWage.FixedMonthlyWages) {
-//             calculatedWages.monthlyWages = (applicableWage.FixedMonthlyWages / daysInMonth) * daysApplicable;
-//         } else {
-//             calculatedWages.monthlyWages = (applicableWage.MonthlyWages / daysInMonth) * daysApplicable;
+//         if (previousWage) {
+//             if (previousWage.PayStructure.toLowerCase().includes('daily')) {
+//                 calculatedWages.previousWageAmount = previousWage.DailyWages * previousDaysApplicable;
+//             } else if (previousWage.FixedMonthlyWages) {
+//                 calculatedWages.previousWageAmount = (previousWage.FixedMonthlyWages / daysInMonth) * previousDaysApplicable;
+//             } else {
+//                 calculatedWages.previousWageAmount = (previousWage.MonthlyWages / daysInMonth) * previousDaysApplicable;
+//             }
 //         }
 
-//         // Return the applicable wage information along with calculated wages
+//         if (applicableWage.PayStructure.toLowerCase().includes('daily')) {
+//             calculatedWages.currentWageAmount = applicableWage.DailyWages * currentDaysApplicable;
+//         } else if (applicableWage.FixedMonthlyWages) {
+//             calculatedWages.currentWageAmount = (applicableWage.FixedMonthlyWages / daysInMonth) * currentDaysApplicable;
+//         } else {
+//             calculatedWages.currentWageAmount = (applicableWage.MonthlyWages / daysInMonth) * currentDaysApplicable;
+//         }
+
+//         calculatedWages.totalWageAmount = calculatedWages.previousWageAmount + calculatedWages.currentWageAmount;
+
 //         return {
 //             ...applicableWage,
-//             daysApplicable,
+//             previousWage,
+//             previousDaysApplicable,
+//             currentDaysApplicable,
 //             calculatedWages
 //         };
 //     } catch (error) {
 //         console.error('Error in getWageInfoForLabour:', error);
 //         throw error;
 //     }
-// }
-
-async function getWageInfoForLabour(labourId, month, year) {
-    try {
-        const pool = await poolPromise;
-
-        // Fetch all wage entries for the labour within the desired month and year
-        const result = await pool.request()
-            .input('labourId', sql.NVarChar, labourId)
-            .input('month', sql.Int, month)
-            .input('year', sql.Int, year)
-            .query(`
-              SELECT
-                WageID,
-                FromDate,
-                ApprovalDate,
-                EffectiveDate,
-                PayStructure,
-                DailyWages,
-                PerHourWages,
-                MonthlyWages,
-                YearlyWages,
-                WeeklyOff,
-                FixedMonthlyWages
-              FROM [dbo].[LabourMonthlyWages]
-              WHERE
-                  LabourID = @labourId
-                  AND isApprovalDoneAdmin = 1
-                  AND (YEAR(FromDate) < @year OR (YEAR(FromDate) = @year AND MONTH(FromDate) <= @month))
-                  AND (YEAR(ApprovalDate) < @year OR (YEAR(ApprovalDate) = @year AND MONTH(ApprovalDate) <= @month))
-              ORDER BY FromDate DESC, ApprovalDate DESC;
-            `);
-
-        if (!result.recordset.length) {
-            return null; // No wages found for this labour
-        }
-
-        let applicableWage = null;
-        let previousWage = null;
-
-        for (const wage of result.recordset) {
-            const fromDate = new Date(wage.FromDate);
-            const approvalDate = new Date(wage.ApprovalDate);
-
-            if (
-                (fromDate.getFullYear() < year || (fromDate.getFullYear() === year && fromDate.getMonth() + 1 <= month)) &&
-                (approvalDate.getFullYear() < year || (approvalDate.getFullYear() === year && approvalDate.getMonth() + 1 <= month))
-            ) {
-                if (!applicableWage) {
-                    applicableWage = wage;
-                } else if (!previousWage) {
-                    previousWage = wage; // Store the previous wage
-                }
-            }
-        }
-
-        if (!applicableWage) {
-            return null; // No applicable wage entry found
-        }
-
-        const daysInMonth = new Date(year, month, 0).getDate();
-        const fromDate = new Date(applicableWage.FromDate);
-        const effectiveDate = applicableWage.EffectiveDate ? new Date(applicableWage.EffectiveDate) : null;
-
-        let previousDaysApplicable = 0;
-        let currentDaysApplicable = daysInMonth;
-
-        if (fromDate.getFullYear() === year && fromDate.getMonth() + 1 === month) {
-            previousDaysApplicable = fromDate.getDate() - 1;
-            currentDaysApplicable = daysInMonth - previousDaysApplicable;
-        }
-
-        if (effectiveDate && effectiveDate.getFullYear() === year && effectiveDate.getMonth() + 1 === month) {
-            previousDaysApplicable = effectiveDate.getDate() - 1;
-            currentDaysApplicable = daysInMonth - previousDaysApplicable;
-        }
-
-        let calculatedWages = {
-            previousWageAmount: 0,
-            currentWageAmount: 0,
-            totalWageAmount: 0
-        };
-
-        if (previousWage) {
-            if (previousWage.PayStructure.toLowerCase().includes('daily')) {
-                calculatedWages.previousWageAmount = previousWage.DailyWages * previousDaysApplicable;
-            } else if (previousWage.FixedMonthlyWages) {
-                calculatedWages.previousWageAmount = (previousWage.FixedMonthlyWages / daysInMonth) * previousDaysApplicable;
-            } else {
-                calculatedWages.previousWageAmount = (previousWage.MonthlyWages / daysInMonth) * previousDaysApplicable;
-            }
-        }
-
-        if (applicableWage.PayStructure.toLowerCase().includes('daily')) {
-            calculatedWages.currentWageAmount = applicableWage.DailyWages * currentDaysApplicable;
-        } else if (applicableWage.FixedMonthlyWages) {
-            calculatedWages.currentWageAmount = (applicableWage.FixedMonthlyWages / daysInMonth) * currentDaysApplicable;
-        } else {
-            calculatedWages.currentWageAmount = (applicableWage.MonthlyWages / daysInMonth) * currentDaysApplicable;
-        }
-
-        calculatedWages.totalWageAmount = calculatedWages.previousWageAmount + calculatedWages.currentWageAmount;
-
-        return {
-            ...applicableWage,
-            previousWage,
-            previousDaysApplicable,
-            currentDaysApplicable,
-            calculatedWages
-        };
-    } catch (error) {
-        console.error('Error in getWageInfoForLabour:', error);
-        throw error;
-    }
-};
+// };
 
 
 /**
@@ -1333,108 +1482,106 @@ async function getWageInfoForLabour(labourId, month, year) {
  * - They must have at least 1 present/half day (i.e. not absent full month).
  * - They must have wages added in [LabourMonthlyWages].
  */
-async function getEligibleLabours(month, year) {
+async function getEligibleLabours(month, year, idsArray) {
     try {
         const pool = await poolPromise;
+        const request = pool.request();
+        request.input('month', sql.Int, month);
+        request.input('year', sql.Int, year);
+
+        // Add the idsArray to the query if provided
+        if (idsArray && idsArray.length > 0) {
+            request.input('labourIds', sql.VarChar, idsArray.join(','));
+        }
+
+        const query = `
+            WITH AttendanceCTE AS (
+                SELECT 
+                    LabourId,
+                    SUM(
+                        CASE 
+                            WHEN [Status] IN ('P', 'HD', 'H', 'MP', 'O') 
+                            THEN 1 
+                            ELSE 0
+                        END
+                    ) AS AttendanceCount
+                FROM [dbo].[LabourAttendanceDetails]
+                WHERE 
+                    MONTH([Date]) = @month
+                    AND YEAR([Date]) = @year
+                GROUP BY LabourId
+            )
+            SELECT 
+                onboarding.id,
+                onboarding.LabourID AS LabourId,
+                onboarding.name,
+                onboarding.businessUnit,
+                onboarding.projectName,
+                onboarding.departmentName,
+                onboarding.department,
+                AttendanceCTE.AttendanceCount
+            FROM 
+                AttendanceCTE
+            INNER JOIN 
+                [labourOnboarding] AS onboarding
+            ON 
+                AttendanceCTE.LabourId = onboarding.LabourID
+            WHERE 
+                onboarding.status = 'Approved'
+                AND AttendanceCTE.AttendanceCount > 0
+                ${(idsArray && idsArray.length > 0) ? "AND onboarding.LabourID IN (SELECT value FROM STRING_SPLIT(@labourIds, ','))" : ""}
+            ORDER BY 
+                onboarding.LabourID;
+        `;
+
+        const result = await request.query(query);
+
+// ------------------------------------------------------------------------------   START   ---------------------------------------------------------------------------------------------        
         // Just an example. Adjust to your table and columns:
-        const result = await pool.request()
-            .input('month', sql.Int, month)
-            .input('year', sql.Int, year)
+        // const result = await pool.request()
+        //     .input('month', sql.Int, month)
+        //     .input('year', sql.Int, year)  
 
-            // .query(`
-        //         WITH AttendanceCTE AS (
-        //             SELECT 
-        //                 LabourId,
-        //                 SUM(
-        //                     CASE 
-        //                         WHEN [Status] IN ('P','HD','H','MP','O') 
-        //                         THEN 1 
-        //                         ELSE 0
-        //                     END
-        //                 ) AS AttendanceCount
-        //             FROM [dbo].[LabourAttendanceDetails]
-        //             WHERE 
-        //                 MONTH([Date]) = @month
-        //                 AND YEAR([Date])  = @year
-        //             GROUP BY LabourId
-        //         )
-        //         SELECT A.LabourId
-        //         FROM AttendanceCTE A
-        //              INNER JOIN [dbo].[LabourMonthlyWages] W
-        //                      ON A.LabourId = W.LabourID
-        //         WHERE A.AttendanceCount > 0
-        //           AND W.isApprovalDoneAdmin = 1
-        //         GROUP BY A.LabourId
-        //     ORDER BY 
-        // A.LabourId;
-            // `);
-
-// ----------------------------------  THIS FOR ANOTHER QUERY FOR LabourAttendanceSummary TABLE ---------------------------------------
-
-//             .query(`
-//                 WITH AttendanceCTE AS (
+// .query(`
+//     WITH AttendanceCTE AS (
+//         SELECT 
+//             LabourId,
+//             SUM(
+//                 CASE 
+//                     WHEN [Status] IN ('P', 'HD', 'H', 'MP', 'O') 
+//                     THEN 1 
+//                     ELSE 0
+//                 END
+//             ) AS AttendanceCount
+//         FROM [dbo].[LabourAttendanceDetails]
+//         WHERE 
+//             MONTH([Date]) = @month
+//             AND YEAR([Date]) = @year
+//         GROUP BY LabourId
+//     )
 //     SELECT 
-//         LabourID
-//     FROM [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceSummary]
+//         onboarding.id,
+//         onboarding.LabourID AS LabourId,
+//         onboarding.name,
+//         onboarding.businessUnit,
+//         onboarding.projectName,
+//         onboarding.departmentName,
+//         onboarding.department,
+//         AttendanceCTE.AttendanceCount
+//     FROM 
+//         AttendanceCTE
+//     INNER JOIN 
+//         [labourOnboarding] AS onboarding
+//     ON 
+//         AttendanceCTE.LabourId = onboarding.LabourID
 //     WHERE 
-//         SelectedMonth = '2024-11'  -- e.g., "YYYY-MM" format
-//         AND PresentDays >= 1
-// )
-// SELECT 
-//     A.LabourId
-// FROM 
-//     AttendanceCTE A
-//     INNER JOIN [LabourOnboardingForm_TEST].[dbo].[LabourMonthlyWages] W 
-//         ON A.LabourId = W.LabourID
-// WHERE 
-//     W.isApprovalDoneAdmin = 1
-// GROUP BY 
-//     A.LabourId;
-// ORDER BY 
-// A.LabourId;
-//             `);
+//         onboarding.status = 'Approved'
+//         AND AttendanceCTE.AttendanceCount > 0
+//     ORDER BY 
+//         onboarding.LabourID;
+// `);
 
-// ------------------------------------------------------------------------------   END AND START   ---------------------------------------------------------------------------------------------
-
-.query(`
-    WITH AttendanceCTE AS (
-        SELECT 
-            LabourId,
-            SUM(
-                CASE 
-                    WHEN [Status] IN ('P', 'HD', 'H', 'MP', 'O') 
-                    THEN 1 
-                    ELSE 0
-                END
-            ) AS AttendanceCount
-        FROM [dbo].[LabourAttendanceDetails]
-        WHERE 
-            MONTH([Date]) = @month
-            AND YEAR([Date]) = @year
-        GROUP BY LabourId
-    )
-    SELECT 
-        onboarding.id,
-        onboarding.LabourID AS LabourId,
-        onboarding.name,
-        onboarding.businessUnit,
-        onboarding.projectName,
-        onboarding.departmentName,
-        onboarding.department,
-        AttendanceCTE.AttendanceCount
-    FROM 
-        AttendanceCTE
-    INNER JOIN 
-        [labourOnboarding] AS onboarding
-    ON 
-        AttendanceCTE.LabourId = onboarding.LabourID
-    WHERE 
-        onboarding.status = 'Approved'
-        AND AttendanceCTE.AttendanceCount > 0
-    ORDER BY 
-        onboarding.LabourID;
-`);
-
+// ------------------------------------------------------------------------------   END    ---------------------------------------------------------------------------------------------
 // Map results to an array of labour details
 const labourDetails = result.recordset.map(row => ({
 id: row.id,
@@ -1889,12 +2036,78 @@ async function generateMonthlyPayroll(month, year) {
 
 
 
+async function saveFinalizeSalaryData(salaryData) {
+    const pool = await poolPromise; // Ensure poolPromise is correctly initialized and points to your SQL pool.
+    let transaction;
 
+    try {
+        transaction = new sql.Transaction(pool); // Assign the transaction to a variable declared outside try block
+        await transaction.begin();
+
+        const request = new sql.Request(transaction);
+        const table = new sql.Table('FinalizedSalaryPay');
+        
+        // Define columns exactly as per your database schema
+        table.columns.add('labourId', sql.Int);
+        table.columns.add('month', sql.Int);
+        table.columns.add('year', sql.Int);
+        table.columns.add('wageType', sql.NVarChar(50));
+        table.columns.add('dailyWageRate', sql.Decimal(18, 2));
+        table.columns.add('fixedMonthlyWage', sql.Decimal(18, 2));
+        table.columns.add('presentDays', sql.Int);
+        table.columns.add('absentDays', sql.Int);
+        table.columns.add('halfDays', sql.Int);
+        table.columns.add('missPunchDays', sql.Int);
+        table.columns.add('normalOvertimeCount', sql.Int);
+        table.columns.add('holidayOvertimeCount', sql.Int);
+        table.columns.add('cappedOvertime', sql.Decimal(18, 2));
+        table.columns.add('basicSalary', sql.Decimal(18, 2));
+        table.columns.add('previousWageAmount', sql.Decimal(18, 2));
+        table.columns.add('overtimePay', sql.Decimal(18, 2));
+        table.columns.add('weeklyOffPay', sql.Decimal(18, 2));
+        table.columns.add('bonuses', sql.Decimal(18, 2));
+        table.columns.add('totalDeductions', sql.Decimal(18, 2));
+        table.columns.add('grossPay', sql.Decimal(18, 2));
+        table.columns.add('netPay', sql.Decimal(18, 2));
+        table.columns.add('advance', sql.Decimal(18, 2));
+        table.columns.add('advanceRemarks', sql.NVarChar(255));
+        table.columns.add('debit', sql.Decimal(18, 2));
+        table.columns.add('debitRemarks', sql.NVarChar(255));
+        table.columns.add('incentive', sql.Decimal(18, 2));
+        table.columns.add('incentiveRemarks', sql.NVarChar(255));
+
+        // Populate the table with rows
+        salaryData.forEach(item => {
+            table.rows.add(
+                item.labourId, item.month, item.year, item.wageType, item.dailyWageRate, item.fixedMonthlyWage,
+                item.presentDays, item.absentDays, item.halfDays, item.missPunchDays, item.normalOvertimeCount,
+                item.holidayOvertimeCount, item.cappedOvertime, item.basicSalary, item.previousWageAmount,
+                item.overtimePay, item.weeklyOffPay, item.bonuses, item.totalDeductions, item.grossPay,
+                item.netPay, item.advance, item.advanceRemarks, item.debit, item.debitRemarks, item.incentive,
+                item.incentiveRemarks
+            );
+        });
+
+        await request.bulk(table); // Perform the bulk insert
+        await transaction.commit(); // Commit transaction
+        return { message: "Data saved successfully!" };
+    } catch (error) {
+        if (transaction) {
+            await transaction.rollback(); // Rollback transaction if error
+        }
+        console.error("Error in saveFinalizeSalaryData:", error);
+        throw error;
+    }
+}
 
 
 module.exports = {
+    getAllLabours,
     registerData,
     searchFromVariablePay,
+    searchFromAttendanceApproval,
+    searchFromWagesApproval,
+    searchFromSiteTransferApproval,
     checkExistingVariablePay,
     upsertLabourVariablePay,
     getVariablePayAndLabourOnboardingJoin,
@@ -1912,5 +2125,6 @@ module.exports = {
     getEligibleLabours,
     calculateSalaryForLabour,
     generateMonthlyPayroll,
-    calculateTotalOvertime
+    calculateTotalOvertime,
+    saveFinalizeSalaryData
 }

@@ -6,7 +6,11 @@ const upload = multer({ dest: 'uploads/' });
 
 
 router.post('/insentive', insentiveController.createRecord);
+router.get('/getAllLabours', insentiveController.getAllLabours);
 router.get('/searchLaboursFromVariablePay', insentiveController.searchLaboursFromVariablePay);  
+router.get('/searchLaboursFromAttendanceApproval', insentiveController.searchLaboursFromAttendanceApproval);  
+router.get('/searchLaboursFromWagesApproval', insentiveController.searchLaboursFromWagesApproval);  
+router.get('/searchFromSiteTransferApproval', insentiveController.searchFromSiteTransferApproval);  
 router.get('/getVariablePayAndLabourOnboardingJoin', insentiveController.getVariablePayAndLabourOnboardingJoincontroller);  
 router.post('/upsertVariablePay', insentiveController.upsertLabourVariablePay);
 router.get('/checkExistingVariablePay', insentiveController.checkExistingVariablePayController);
@@ -33,6 +37,7 @@ router.post('/generateMonthlyPayroll/:labourId', insentiveController.generateMon
 /** 6)*/   router.post('/payroll/generateMonthlySalaryGeneration', insentiveController.generateMonthlyPayrollAPI);
 /** 9)*/   router.get('/payroll/salaryGenerationDataAllLabours', insentiveController.getSalaryGenerationDataAPIAllLabours);
 /** 9)*/   router.get('/payroll/salaryGenerationData', insentiveController.getSalaryGenerationDataAPI);
+router.post('/payroll/saveFinalPayrollData', insentiveController.saveFinalizePayrollData);
 
 
 

@@ -15,6 +15,16 @@ const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx'); 
 
 
+async function getAllLabours(req, res) {
+    try {
+        const filters = req.query;
+        const labours = await labourModel.getAllLabours(filters);
+        res.json(labours);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+}
+
 async function createRecord(req, res) {
     try {
         const {
@@ -181,12 +191,48 @@ async function searchLaboursFromVariablePay(req, res) {
         console.error(error);
         return res.status(500).json({ error: 'Internal server error' });
     }
-}
+};
 
+async function searchLaboursFromAttendanceApproval(req, res) {
+    const { q } = req.query;
+
+    try {
+        const results = await labourModel.searchFromAttendanceApproval(q);
+        return res.json(results);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+async function searchLaboursFromWagesApproval(req, res) {
+    const { q } = req.query;
+
+    try {
+        const results = await labourModel.searchFromWagesApproval(q);
+        return res.json(results);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
+async function searchFromSiteTransferApproval(req, res) {
+    const { q } = req.query;
+
+    try {
+        const results = await labourModel.searchFromSiteTransferApproval(q);
+        return res.json(results);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+};
 
 const getVariablePayAndLabourOnboardingJoincontroller = async (req, res) => {
     try {
-        const joinWagesLabour = await labourModel.getVariablePayAndLabourOnboardingJoin();
+        const filters = req.query;
+        const joinWagesLabour = await labourModel.getVariablePayAndLabourOnboardingJoin(filters);
         res.status(200).json(joinWagesLabour);
     } catch (error) {
         console.error('Error fetching data:', error);
@@ -793,14 +839,15 @@ async function getOvertimeMonthlyAPI(req, res) {
 
 async function getSalaryGenerationDataAPIAllLabours(req, res) {
     try {
-        const { month, year } = req.query;
-
+        const { month, year, labourIds } = req.query;
+console.log('req.query for slarygeneration',req.query)
         if (!month || !year) {
             return res.status(400).json({ message: 'Month and year are required.' });
         }
 
+        const idsArray = labourIds ? labourIds.split(',').map(id => id.trim()) : undefined;
         // Fetch eligible labours
-        const eligibleLabours = await labourModel.getEligibleLabours(parseInt(month), parseInt(year));
+        const eligibleLabours = await labourModel.getEligibleLabours(parseInt(month), parseInt(year), idsArray);
 
         const salaryData = await Promise.all(
             eligibleLabours.map(async (labour) => {
@@ -850,9 +897,22 @@ async function getSalaryGenerationDataAPIAllLabours(req, res) {
         console.error('Error fetching salary generation data:', error);
         return res.status(500).json({ message: 'Error fetching salary generation data.', error: error.message });
     }
+};
+
+
+async function saveFinalizePayrollData(req, res) {
+    try {
+        const salaryData = req.body;  // Expecting an array of salary data objects
+        if (!Array.isArray(salaryData) || salaryData.length === 0) {
+            return res.status(400).json({ message: "Invalid salary data provided." });
+        }
+        const results = await labourModel.saveFinalizeSalaryData(salaryData);
+        res.status(201).json({ message: "Salary data saved successfully!", results });
+    } catch (error) {
+        console.error('Error saving salary data:', error);
+        res.status(500).json({ message: 'Failed to save salary data.', error: error.message });
+    }
 }
-
-
 
 
 
@@ -906,8 +966,12 @@ async function getSalaryGenerationDataAPI(req, res) {
 
 
 module.exports = {
+    getAllLabours,
     createRecord,
     searchLaboursFromVariablePay,
+    searchLaboursFromWagesApproval,
+    searchLaboursFromAttendanceApproval,
+    searchFromSiteTransferApproval,
     upsertLabourVariablePay,
     getVariablePayAndLabourOnboardingJoincontroller,
     checkExistingVariablePayController,
@@ -930,6 +994,7 @@ module.exports = {
     getMonthlySalariesAPI,
     getOvertimeMonthlyAPI,
     getSalaryGenerationDataAPIAllLabours,
-    getSalaryGenerationDataAPI
+    getSalaryGenerationDataAPI,
+    saveFinalizePayrollData
 
 }
