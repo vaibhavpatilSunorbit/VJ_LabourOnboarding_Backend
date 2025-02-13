@@ -963,7 +963,44 @@ async function getSalaryGenerationDataAPI(req, res) {
 };
 
 
-
+async function deletePayrollController(req, res) {
+    try {
+      // 📝 You can decide how to pass parameters:
+      // Option A: via query params: req.query.month, req.query.year, etc.
+      // Option B: via body: req.body.month, req.body.year, etc.
+      // Option C: via URL params: req.params.month, req.params.year, etc.
+  
+      // Example: We'll assume the user passes them in the request body
+      const { month, year, labourIds } = req.body;
+  
+      // Simple validation
+      if (!month || !year) {
+        return res.status(400).json({
+          success: false,
+          message: 'month and year are required.'
+        });
+      }
+  
+      // labourIds is optional; default to []
+      const ids = labourIds && Array.isArray(labourIds) ? labourIds : [];
+  
+      // Call model function
+      const result = await labourModel.deleteMonthlyPayrollData(month, year, ids);
+  
+      return res.status(200).json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      console.error('❌ Controller error - deletePayrollController:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error while deleting payroll data.',
+        error: error.message
+      });
+    }
+  }
+  
 
 module.exports = {
     getAllLabours,
@@ -995,6 +1032,7 @@ module.exports = {
     getOvertimeMonthlyAPI,
     getSalaryGenerationDataAPIAllLabours,
     getSalaryGenerationDataAPI,
-    saveFinalizePayrollData
+    saveFinalizePayrollData,
+    deletePayrollController
 
 }
