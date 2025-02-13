@@ -1,7 +1,8 @@
 const { poolPromise2 } = require('../config/dbConfig2');
 const {sql, poolPromise } = require('../config/dbConfig');  
 const { poolPromise3 } = require('../config/dbConfig3');
-
+const ExcelJS = require('exceljs');
+const fs = require('fs'); 
 
 async function getAllLabours(filters = {}) {
     const pool = await poolPromise;
@@ -1049,6 +1050,51 @@ async function insertVariablePayData(row) {
 // ----------------------------------------------------------    SALARY GENERATION PROCESS START 27-01-25   -----------------------------------------------------
 
 
+// async function getAttendanceSummaryForLabour(labourId, month, year) {
+//     try {
+//         const pool = await poolPromise;
+//         const result = await pool.request()
+//             .input('labourId', sql.NVarChar, labourId)
+//             .input('month', sql.Int, month)
+//             .input('year', sql.Int, year)
+//             .query(`
+//                 SELECT 
+//                     SUM(CASE WHEN att.Status = 'P'  THEN 1 ELSE 0 END) AS presentDays,
+//                     SUM(CASE WHEN att.Status = 'A'  THEN 1 ELSE 0 END) AS absentDays,
+//                     SUM(CASE WHEN att.Status = 'HD' THEN 1 ELSE 0 END) AS halfDays,
+//                     SUM(CASE WHEN att.Status = 'MP' THEN 1 ELSE 0 END) AS missPunchDays,
+                    
+//                     -- Normal overtime count if status = 'O'
+//                     SUM(CASE WHEN att.Status = 'O' THEN 1 ELSE 0 END) AS normalOvertimeCount,
+                    
+//                     -- If it's a holiday (hol.HolidayDate IS NOT NULL) and labour status='P', treat as holiday OT
+//                     SUM(CASE WHEN hol.HolidayDate IS NOT NULL AND att.Status = 'P' THEN 1 ELSE 0 END) AS holidayOvertimeCount
+//                 FROM [dbo].[LabourAttendanceDetails] att
+//                 LEFT JOIN [dbo].[HolidayDate] hol
+//                      ON att.[Date] = hol.HolidayDate
+//                 WHERE 
+//                     att.LabourID = @labourId
+//                     AND MONTH(att.[Date]) = @month
+//                     AND YEAR(att.[Date]) = @year
+//             `);
+
+//         const row = result.recordset[0] || {};
+
+//         return {
+//             presentDays:        row.presentDays        || 0,
+//             absentDays:         row.absentDays         || 0,
+//             halfDays:           row.halfDays           || 0,
+//             missPunchDays:      row.missPunchDays      || 0,
+//             normalOvertimeCount: row.normalOvertimeCount || 0,
+//             holidayOvertimeCount: row.holidayOvertimeCount || 0
+//         };
+//     } catch (error) {
+//         console.error('Error in getAttendanceSummaryForLabour:', error);
+//         throw error;
+//     }
+// };
+
+
 async function getAttendanceSummaryForLabour(labourId, month, year) {
     try {
         const pool = await poolPromise;
@@ -1057,41 +1103,110 @@ async function getAttendanceSummaryForLabour(labourId, month, year) {
             .input('month', sql.Int, month)
             .input('year', sql.Int, year)
             .query(`
+                WITH HolidayOvertime AS (
+                    SELECT 
+                        att.LabourID,
+                        att.Date,
+                        att.TotalHours,
+                        wages.PerHourWages
+                    FROM [dbo].[LabourAttendanceDetails] att
+                    LEFT JOIN [dbo].[HolidayDate] hol
+                        ON att.[Date] = hol.HolidayDate  
+                        AND MONTH(hol.HolidayDate) = @month
+                        AND YEAR(hol.HolidayDate) = @year  -- Ensure only holidays in the selected month
+
+                    LEFT JOIN (
+                        SELECT LabourID, MAX(PerHourWages) AS PerHourWages
+                        FROM [dbo].[LabourMonthlyWages]
+                        WHERE PayStructure = 'DAILY WAGES'
+                        GROUP BY LabourID
+                    ) wages
+                        ON att.LabourID = wages.LabourID  -- Only include workers with DAILY WAGES
+
+                    WHERE att.Status = 'P' -- Only count present days
+                )
                 SELECT 
-                    SUM(CASE WHEN att.Status = 'P'  THEN 1 ELSE 0 END) AS presentDays,
-                    SUM(CASE WHEN att.Status = 'A'  THEN 1 ELSE 0 END) AS absentDays,
-                    SUM(CASE WHEN att.Status = 'HD' THEN 1 ELSE 0 END) AS halfDays,
-                    SUM(CASE WHEN att.Status = 'MP' THEN 1 ELSE 0 END) AS missPunchDays,
+                    -- Count total unique attendance days in the selected month
+                    COUNT(DISTINCT att.[Date]) AS totalDays,  
                     
-                    -- Normal overtime count if status = 'O'
-                    SUM(CASE WHEN att.Status = 'O' THEN 1 ELSE 0 END) AS normalOvertimeCount,
-                    
-                    -- If it's a holiday (hol.HolidayDate IS NOT NULL) and labour status='P', treat as holiday OT
-                    SUM(CASE WHEN hol.HolidayDate IS NOT NULL AND att.Status = 'P' THEN 1 ELSE 0 END) AS holidayOvertimeCount
+                    -- Count distinct days the labour was present
+                    COUNT(DISTINCT CASE WHEN att.Status = 'P' THEN att.[Date] END) AS presentDays,
+
+                    -- Count distinct days the labour was absent
+                    COUNT(DISTINCT CASE WHEN att.Status = 'A' THEN att.[Date] END) AS absentDays,
+
+                    -- Count distinct days the labour had a half-day
+                    COUNT(DISTINCT CASE WHEN att.Status = 'HD' THEN att.[Date] END) AS halfDays,
+
+                    -- Count distinct days the labour had a missed punch
+                    COUNT(DISTINCT CASE WHEN att.Status = 'MP' THEN att.[Date] END) AS missPunchDays,
+
+                    -- Count normal overtime days
+                    COUNT(DISTINCT CASE WHEN att.Status = 'O' THEN att.[Date] END) AS normalOvertimeCount,
+
+                    -- Count how many holidays exist in the selected month
+                    COUNT(DISTINCT hol.HolidayDate) AS totalHolidaysInMonth,
+
+                    -- Sum only the actual TotalHours for holidays where the worker was present
+                    SUM(CASE 
+                        WHEN att.Status = 'P' 
+                             AND hol.HolidayDate IS NOT NULL 
+                             AND att.TotalHours IS NOT NULL
+                        THEN att.TotalHours 
+                        ELSE 0 
+                    END) AS holidayOvertimeHours,
+
+                    -- Correctly calculate holiday overtime wages (only for DAILY WAGES workers)
+                    SUM(CASE 
+                        WHEN att.Status = 'P' 
+                             AND hol.HolidayDate IS NOT NULL 
+                             AND att.TotalHours IS NOT NULL
+                             AND wages.PerHourWages IS NOT NULL
+                        THEN att.TotalHours * wages.PerHourWages 
+                        ELSE 0 
+                    END) AS holidayOvertimeWages
+
                 FROM [dbo].[LabourAttendanceDetails] att
+
+                -- Join with HolidayDate table to ensure correct holiday mapping
                 LEFT JOIN [dbo].[HolidayDate] hol
-                     ON att.[Date] = hol.HolidayDate
+                    ON att.[Date] = hol.HolidayDate  
+                    AND MONTH(hol.HolidayDate) = @month
+                    AND YEAR(hol.HolidayDate) = @year  -- Ensure only holidays in the selected month
+
+                -- Join with LabourMonthlyWages but avoid duplicates
+                LEFT JOIN (
+                    SELECT LabourID, MAX(PerHourWages) AS PerHourWages
+                    FROM [dbo].[LabourMonthlyWages]
+                    WHERE PayStructure = 'DAILY WAGES'
+                    GROUP BY LabourID
+                ) wages
+                    ON att.LabourID = wages.LabourID  -- Only include workers with DAILY WAGES
+
                 WHERE 
                     att.LabourID = @labourId
                     AND MONTH(att.[Date]) = @month
-                    AND YEAR(att.[Date]) = @year
+                    AND YEAR(att.[Date]) = @year;
             `);
 
         const row = result.recordset[0] || {};
 
         return {
-            presentDays:        row.presentDays        || 0,
-            absentDays:         row.absentDays         || 0,
-            halfDays:           row.halfDays           || 0,
-            missPunchDays:      row.missPunchDays      || 0,
-            normalOvertimeCount: row.normalOvertimeCount || 0,
-            holidayOvertimeCount: row.holidayOvertimeCount || 0
+            totalDays:            row.totalDays            || 0,
+            presentDays:          row.presentDays          || 0,
+            absentDays:           row.absentDays           || 0,
+            halfDays:             row.halfDays             || 0,
+            missPunchDays:        row.missPunchDays        || 0,
+            normalOvertimeCount:  row.normalOvertimeCount  || 0,
+            totalHolidaysInMonth: row.totalHolidaysInMonth || 0,
+            holidayOvertimeHours: row.holidayOvertimeHours || 0,
+            holidayOvertimeWages: row.holidayOvertimeWages || 0
         };
     } catch (error) {
         console.error('Error in getAttendanceSummaryForLabour:', error);
         throw error;
     }
-};
+}
 
 /**
  * Get variable pay (advances, deductions, bonus/incentive, etc.) for a labour for a given month/year.
@@ -1660,154 +1775,6 @@ if (!result.recordset || result.recordset.length === 0) {
  * Returns an object with the final breakdown.
  */
 
-// async function calculateSalaryForLabour(labourId, month, year) {
-//     try {
-//         // A) Attendance
-//         const attendance = await getAttendanceSummaryForLabour(labourId, month, year);
-
-//         // B) Wages
-//         const wages = await getWageInfoForLabour(labourId, month, year);
-
-//         // C) Variable Pay
-//         const variablePay = await getVariablePayForLabour(labourId, month, year);
-
-//         if (!wages) {
-//             // Means no approved wages for this labour
-//             return null;
-//         }
-
-//         // --- Destructure attendance ---
-//         const { 
-//             presentDays = 0, 
-//             absentDays = 0, 
-//             halfDays = 0, 
-//             normalOvertimeCount = 0, 
-//             holidayOvertimeCount = 0 
-//         } = attendance;
-
-//         // --- Destructure wages ---
-//         const wageType = wages.PayStructure || '';
-//         const dailyWageRate = wages.DailyWages || 0;
-//         const monthlySalary = wages.MonthlyWages || 0;
-//         const weeklyOffDays = wages.WeeklyOff || 0;
-//         const fixedMonthlyWage = wages.FixedMonthlyWages || 0;
-
-//         // --- Destructure variable pay ---
-//         const {
-//             advance,
-//             advanceRemarks,
-//             debit,
-//             debitRemarks,
-//             incentive,
-//             incentiveRemarks
-//         } = variablePay;
-
-//         // 1) Basic Salary & Overtime
-//         let basicSalary = 0;
-//         let totalOvertimeDays = normalOvertimeCount + holidayOvertimeCount;
-//         let overtimePay = 0;
-
-//         if (wageType.toLowerCase().includes('daily')) {
-//             // Daily wages
-//             basicSalary = dailyWageRate * presentDays;
-//             // OT rate: dailyWageRate * 1.5 (or your custom logic)
-//             overtimePay = totalOvertimeDays * dailyWageRate * 1.5;
-//         } else {
-//             // Monthly wages
-//             const baseMonthly = fixedMonthlyWage || monthlySalary;
-//             basicSalary = baseMonthly;
-
-//             // e.g. 30 days in the month
-//             const dailyRate = baseMonthly / 30;
-
-//             // Absent & Half-day deduction
-//             const absentDaysDeduction = absentDays * dailyRate;
-//             const halfDaysDeduction   = halfDays * (dailyRate / 2);
-
-//             overtimePay = totalOvertimeDays * dailyRate * 1.5;
-
-//             // We'll place these attendance deductions in totalDeductions
-//             var totalAttendanceDeductions = absentDaysDeduction + halfDaysDeduction;
-//         }
-
-//         // 2) WeeklyOff Logic
-//         let weeklyOffPay = 0;
-//         if (weeklyOffDays > 0) {
-//             if (presentDays > 15) {
-//                 // Full pay
-//                 if (wageType.toLowerCase().includes('Daily Wages')) {
-//                     weeklyOffPay = weeklyOffDays * dailyWageRate;
-//                 } else {
-//                     const baseMonthly = fixedMonthlyWage || monthlySalary;
-//                     const dailyRate = baseMonthly / 30;
-//                     weeklyOffPay = weeklyOffDays * dailyRate;
-//                 }
-//             } else {
-//                 // Half pay
-//                 if (wageType.toLowerCase().includes('Fixed Monthly Wages')) {
-//                     weeklyOffPay = weeklyOffDays * dailyWageRate * 0.5;
-//                 } else {
-//                     const baseMonthly = fixedMonthlyWage || monthlySalary;
-//                     const dailyRate = baseMonthly / 30;
-//                     weeklyOffPay = weeklyOffDays * dailyRate * 0.5;
-//                 }
-//             }
-//         }
-
-//         // 3) Deductions
-//         let totalDeductions = 0;
-//         if (typeof totalAttendanceDeductions !== 'undefined') {
-//             totalDeductions += totalAttendanceDeductions;
-//         }
-//         totalDeductions += (advance || 0);
-//         totalDeductions += (debit   || 0);
-
-//         // 4) Bonuses / Incentives
-//         let bonuses = 0;
-//         bonuses += (incentive || 0);
-
-//         // 5) Gross Pay
-//         const grossPay = basicSalary + overtimePay + weeklyOffPay + bonuses;
-
-//         // 6) Net Pay (no PF/ESI/TDS)
-//         let netPay = grossPay - totalDeductions;
-//         // If negative, clamp to 0 if that is your policy
-//         if (netPay < 0) {
-//             netPay = 0;
-//         }
-
-//         // 7) Return final breakdown
-//         return {
-//             labourId,
-//             month,
-//             year,
-//             wageType,
-//             presentDays,
-//             absentDays,
-//             halfDays,
-//             normalOvertimeCount,
-//             holidayOvertimeCount,
-//             basicSalary,
-//             overtimePay,
-//             weeklyOffPay,
-//             bonuses,
-//             totalDeductions,
-//             grossPay,
-//             netPay,
-
-//             // Variable Pay Info
-//             variablePay: {
-//                 advance, advanceRemarks,
-//                 debit,   debitRemarks,
-//                 incentive, incentiveRemarks
-//             }
-//         };
-//     } catch (error) {
-//         console.error('Error in calculateSalaryForLabour:', error);
-//         throw error;
-//     }
-// };
-
 async function calculateSalaryForLabour(labourId, month, year) {
     try {
         // 1️⃣ **Fetch Attendance Summary**
@@ -1816,8 +1783,20 @@ async function calculateSalaryForLabour(labourId, month, year) {
         // 2️⃣ **Fetch Wage Info**
         const wages = await getWageInfoForLabour(labourId, month, year);
 
-        // 3️⃣ **Fetch Variable Pay**
-        const variablePay = await getVariablePayForLabour(labourId, month, year);
+        // 3️⃣ **Fetch Variable Pay (Ensure default values)**
+        let variablePay = await getVariablePayForLabour(labourId, month, year);
+
+        // ✅ If variablePay is undefined, assign default values to prevent errors
+        if (!variablePay) {
+            variablePay = {
+                advance: 0,
+                advanceRemarks: "-",
+                debit: 0,
+                debitRemarks: "-",
+                incentive: 0,
+                incentiveRemarks: "-"
+            };
+        }
 
         // 4️⃣ **Calculate Total Overtime**
         const cappedOvertime = await calculateTotalOvertime(labourId, month, year);
@@ -1833,7 +1812,10 @@ async function calculateSalaryForLabour(labourId, month, year) {
             halfDays = 0,
             missPunchDays = 0,
             normalOvertimeCount = 0,
-            holidayOvertimeCount = 0
+            holidayOvertimeCount = 0,
+            totalHolidaysInMonth = 0,
+            holidayOvertimeHours = 0,
+            holidayOvertimeWages = 0
         } = attendance;
 
         // 🟢 **Extract Wage Data**
@@ -1842,56 +1824,47 @@ async function calculateSalaryForLabour(labourId, month, year) {
         const monthlySalary = wages.MonthlyWages || 0;
         const weeklyOffDays = wages.WeeklyOff || 0;
         const fixedMonthlyWage = wages.FixedMonthlyWages || 0;
+        const perHourWages = wages.PerHourWages || 0;
 
         const previousWage = wages.previousWage;
         const previousDaysApplicable = wages.previousDaysApplicable || 0;
         const currentDaysApplicable = wages.currentDaysApplicable || 0;
 
-        // 🟢 **Extract Variable Pay**
+        // 🟢 **Extract Variable Pay (Now Safe from Errors)**
         const {
-            advance = 0,
-            advanceRemarks = "-",
-            debit = 0,
-            debitRemarks = "-",
-            incentive = 0,
-            incentiveRemarks = "-"
+            advance,
+            advanceRemarks,
+            debit,
+            debitRemarks,
+            incentive,
+            incentiveRemarks
         } = variablePay;
 
         // ✅ **Calculate Basic Salary**
         let basicSalary = 0;
-        let totalOvertimeDays = normalOvertimeCount + holidayOvertimeCount;
         let overtimePay = 0;
+        let weeklyOffPay = 0;
+        let totalOvertimePay = 0;
 
         if (wageType.toLowerCase().includes('daily')) {
-            // Daily wages
             basicSalary = dailyWageRate * presentDays;
-            overtimePay = totalOvertimeDays * dailyWageRate * 1.5; // OT rate = 1.5x
+            totalOvertimePay = cappedOvertime * perHourWages;
         } else {
-            // Monthly wages
             const baseMonthly = fixedMonthlyWage || monthlySalary;
             basicSalary = baseMonthly;
 
             const dailyRate = baseMonthly / 30;
             const absentDaysDeduction = absentDays * dailyRate;
             const halfDaysDeduction = halfDays * (dailyRate / 2);
-            overtimePay = totalOvertimeDays * dailyRate * 1.5;
+            totalOvertimePay = cappedOvertime * dailyRate * 1.5;
 
             var totalAttendanceDeductions = absentDaysDeduction + halfDaysDeduction;
         }
 
-        // ✅ **Previous Wage Calculation**
-        let previousWageAmount = 0;
-        if (previousWage) {
-            if (previousWage.PayStructure.toLowerCase().includes('daily')) {
-                previousWageAmount = previousWage.DailyWages * previousDaysApplicable;
-            } else {
-                const previousBase = previousWage.FixedMonthlyWages || previousWage.MonthlyWages;
-                previousWageAmount = (previousBase / 30) * previousDaysApplicable;
-            }
-        }
+        // ✅ **Holiday Overtime Pay Calculation**
+        let totalHolidayOvertimePay = holidayOvertimeHours * perHourWages;
 
         // ✅ **Weekly Off Calculation**
-        let weeklyOffPay = 0;
         if (weeklyOffDays > 0) {
             if (presentDays > 15) {
                 if (wageType.toLowerCase().includes('daily')) {
@@ -1910,6 +1883,17 @@ async function calculateSalaryForLabour(labourId, month, year) {
             }
         }
 
+        // ✅ **Previous Wage Calculation**
+        let previousWageAmount = 0;
+        if (previousWage) {
+            if (previousWage.PayStructure.toLowerCase().includes('daily')) {
+                previousWageAmount = previousWage.DailyWages * previousDaysApplicable;
+            } else {
+                const previousBase = previousWage.FixedMonthlyWages || previousWage.MonthlyWages;
+                previousWageAmount = (previousBase / 30) * previousDaysApplicable;
+            }
+        }
+
         // ✅ **Calculate Deductions**
         let totalDeductions = totalAttendanceDeductions || 0;
         totalDeductions += advance;
@@ -1919,12 +1903,12 @@ async function calculateSalaryForLabour(labourId, month, year) {
         let bonuses = incentive || 0;
 
         // ✅ **Calculate Gross Pay**
-        const grossPay = basicSalary + overtimePay + weeklyOffPay + bonuses + previousWageAmount;
+        const grossPay = basicSalary + totalOvertimePay + weeklyOffPay + bonuses + previousWageAmount + totalHolidayOvertimePay;
 
         // ✅ **Calculate Net Pay**
         let netPay = grossPay - totalDeductions;
         if (netPay < 0) {
-            netPay = 0; // Prevent negative salary
+            netPay = 0;
         }
 
         // ✅ **Return Final Salary Data**
@@ -1941,10 +1925,13 @@ async function calculateSalaryForLabour(labourId, month, year) {
             missPunchDays,
             normalOvertimeCount,
             holidayOvertimeCount,
+            totalHolidaysInMonth,
             cappedOvertime: cappedOvertime.toFixed(2),
+            holidayOvertimeHours,
+            holidayOvertimeWages,
             basicSalary: basicSalary.toFixed(2),
             previousWageAmount: previousWageAmount.toFixed(2),
-            overtimePay: overtimePay.toFixed(2),
+            overtimePay: totalOvertimePay.toFixed(2),
             weeklyOffPay: weeklyOffPay.toFixed(2),
             bonuses: bonuses.toFixed(2),
             totalDeductions: totalDeductions.toFixed(2),
@@ -1958,10 +1945,167 @@ async function calculateSalaryForLabour(labourId, month, year) {
             incentiveRemarks
         };
     } catch (error) {
-        console.error("Error in calculateSalaryForLabour:", error);
+        console.error(`Failed to process payroll for labourId: ${labourId}`, error);
         throw error;
     }
-};
+}
+
+
+
+// async function calculateSalaryForLabour(labourId, month, year) {
+//     try {
+//         // 1️⃣ **Fetch Attendance Summary**
+//         const attendance = await getAttendanceSummaryForLabour(labourId, month, year);
+
+//         // 2️⃣ **Fetch Wage Info**
+//         const wages = await getWageInfoForLabour(labourId, month, year);
+
+//         // 3️⃣ **Fetch Variable Pay**
+//         const variablePay = await getVariablePayForLabour(labourId, month, year);
+
+//         // 4️⃣ **Calculate Total Overtime**
+//         const cappedOvertime = await calculateTotalOvertime(labourId, month, year);
+
+//         if (!wages) {
+//             return { message: `No approved wages for labour ID: ${labourId}` };
+//         }
+
+//         // 🟢 **Extract Attendance Data**
+//         const {
+//             presentDays = 0,
+//             absentDays = 0,
+//             halfDays = 0,
+//             missPunchDays = 0,
+//             normalOvertimeCount = 0,
+//             holidayOvertimeCount = 0
+//         } = attendance;
+
+//         // 🟢 **Extract Wage Data**
+//         const wageType = wages.PayStructure || "-";
+//         const dailyWageRate = wages.DailyWages || 0;
+//         const monthlySalary = wages.MonthlyWages || 0;
+//         const weeklyOffDays = wages.WeeklyOff || 0;
+//         const fixedMonthlyWage = wages.FixedMonthlyWages || 0;
+
+//         const previousWage = wages.previousWage;
+//         const previousDaysApplicable = wages.previousDaysApplicable || 0;
+//         const currentDaysApplicable = wages.currentDaysApplicable || 0;
+
+//         // 🟢 **Extract Variable Pay**
+//         const {
+//             advance = 0,
+//             advanceRemarks = "-",
+//             debit = 0,
+//             debitRemarks = "-",
+//             incentive = 0,
+//             incentiveRemarks = "-"
+//         } = variablePay;
+
+//         // ✅ **Calculate Basic Salary**
+//         let basicSalary = 0;
+//         let totalOvertimeDays = normalOvertimeCount + holidayOvertimeCount;
+//         let overtimePay = 0;
+
+//         if (wageType.toLowerCase().includes('daily')) {
+//             // Daily wages
+//             basicSalary = dailyWageRate * presentDays;
+//             overtimePay = totalOvertimeDays * dailyWageRate * 1.5; // OT rate = 1.5x
+//         } else {
+//             // Monthly wages
+//             const baseMonthly = fixedMonthlyWage || monthlySalary;
+//             basicSalary = baseMonthly;
+
+//             const dailyRate = baseMonthly / 30;
+//             const absentDaysDeduction = absentDays * dailyRate;
+//             const halfDaysDeduction = halfDays * (dailyRate / 2);
+//             overtimePay = totalOvertimeDays * dailyRate * 1.5;
+
+//             var totalAttendanceDeductions = absentDaysDeduction + halfDaysDeduction;
+//         }
+
+//         // ✅ **Previous Wage Calculation**
+//         let previousWageAmount = 0;
+//         if (previousWage) {
+//             if (previousWage.PayStructure.toLowerCase().includes('daily')) {
+//                 previousWageAmount = previousWage.DailyWages * previousDaysApplicable;
+//             } else {
+//                 const previousBase = previousWage.FixedMonthlyWages || previousWage.MonthlyWages;
+//                 previousWageAmount = (previousBase / 30) * previousDaysApplicable;
+//             }
+//         }
+
+//         // ✅ **Weekly Off Calculation**
+//         let weeklyOffPay = 0;
+//         if (weeklyOffDays > 0) {
+//             if (presentDays > 15) {
+//                 if (wageType.toLowerCase().includes('daily')) {
+//                     weeklyOffPay = weeklyOffDays * dailyWageRate;
+//                 } else {
+//                     const dailyRate = (fixedMonthlyWage || monthlySalary) / 30;
+//                     weeklyOffPay = weeklyOffDays * dailyRate;
+//                 }
+//             } else {
+//                 if (wageType.toLowerCase().includes('fixed monthly')) {
+//                     weeklyOffPay = weeklyOffDays * dailyWageRate * 0.5;
+//                 } else {
+//                     const dailyRate = (fixedMonthlyWage || monthlySalary) / 30;
+//                     weeklyOffPay = weeklyOffDays * dailyRate * 0.5;
+//                 }
+//             }
+//         }
+
+//         // ✅ **Calculate Deductions**
+//         let totalDeductions = totalAttendanceDeductions || 0;
+//         totalDeductions += advance;
+//         totalDeductions += debit;
+
+//         // ✅ **Calculate Bonuses/Incentives**
+//         let bonuses = incentive || 0;
+
+//         // ✅ **Calculate Gross Pay**
+//         const grossPay = basicSalary + overtimePay + weeklyOffPay + bonuses + previousWageAmount;
+
+//         // ✅ **Calculate Net Pay**
+//         let netPay = grossPay - totalDeductions;
+//         if (netPay < 0) {
+//             netPay = 0; // Prevent negative salary
+//         }
+
+//         // ✅ **Return Final Salary Data**
+//         return {
+//             labourId,
+//             month,
+//             year,
+//             wageType,
+//             dailyWageRate: dailyWageRate.toFixed(2),
+//             fixedMonthlyWage: fixedMonthlyWage.toFixed(2),
+//             presentDays,
+//             absentDays,
+//             halfDays,
+//             missPunchDays,
+//             normalOvertimeCount,
+//             holidayOvertimeCount,
+//             cappedOvertime: cappedOvertime.toFixed(2),
+//             basicSalary: basicSalary.toFixed(2),
+//             previousWageAmount: previousWageAmount.toFixed(2),
+//             overtimePay: overtimePay.toFixed(2),
+//             weeklyOffPay: weeklyOffPay.toFixed(2),
+//             bonuses: bonuses.toFixed(2),
+//             totalDeductions: totalDeductions.toFixed(2),
+//             grossPay: grossPay.toFixed(2),
+//             netPay: netPay.toFixed(2),
+//             advance: advance.toFixed(2),
+//             advanceRemarks,
+//             debit: debit.toFixed(2),
+//             debitRemarks,
+//             incentive: incentive.toFixed(2),
+//             incentiveRemarks
+//         };
+//     } catch (error) {
+//         console.error("Error in calculateSalaryForLabour:", error);
+//         throw error;
+//     }
+// };
 
 
 
@@ -1970,69 +2114,364 @@ async function calculateSalaryForLabour(labourId, month, year) {
  * Returns an array of salary objects.
  */
 
+// async function generateMonthlyPayroll(month, year) {
+//     const failedLabourIds = []; // Store failed payroll processing IDs
+//     let finalSalaries = [];
+
+//     console.log(`🚀 Starting monthly payroll generation for ${month}/${year}`);
+//     try {
+//         let eligibleLabours = await getEligibleLabours(month, year);
+
+//         // ✅ **Sort eligible labours before processing**
+//         eligibleLabours = eligibleLabours.sort((a, b) => a.labourId.localeCompare(b.labourId));
+
+//         const pool = await poolPromise;
+
+//         for (const labour of eligibleLabours) {
+//             try {
+//                 console.log(`🔹 Processing payroll for labourId: ${labour.labourId}`);
+                
+//                 const salaryDetail = await calculateSalaryForLabour(labour.labourId, month, year);
+
+//                 // ✅ **Validate salaryDetail before proceeding**
+//                 if (!salaryDetail || !salaryDetail.labourId) {
+//                     console.warn(`⚠️ Skipping labourId: ${labour.labourId} - Invalid salary details.`);
+//                     failedLabourIds.push(labour.labourId);
+//                     continue; // Skip to the next labourId
+//                 }
+
+//                 finalSalaries.push(salaryDetail);
+
+//                 // Helper function to truncate long strings
+//                 const truncateString = (str, num) => (str && str.length > num ? str.slice(0, num) : str || "");
+
+//                 // ✅ **Ensure variablePay exists with default values**
+//                 const variablePay = salaryDetail.variablePay || {
+//                     advance: 0,
+//                     advanceRemarks: "-",
+//                     debit: 0,
+//                     debitRemarks: "-",
+//                     incentive: 0,
+//                     incentiveRemarks: "-"
+//                 };
+
+//                 console.log(`🔹 Preparing to insert payroll details for labourId: ${labour.labourId}`);
+
+//                 // ✅ **Insert into [FinalizedSalaryPay] table**
+//                 await pool.request()
+//                     .input('labourId', sql.NVarChar, salaryDetail.labourId)
+//                     .input('month', sql.Int, month)
+//                     .input('year', sql.Int, year)
+//                     .input('wageType', sql.NVarChar, salaryDetail.wageType)
+//                     .input('dailyWageRate', sql.Decimal(18, 2), salaryDetail.dailyWageRate)
+//                     .input('fixedMonthlyWage', sql.Decimal(18, 2), salaryDetail.fixedMonthlyWage)
+//                     .input('presentDays', sql.Int, salaryDetail.presentDays)
+//                     .input('absentDays', sql.Int, salaryDetail.absentDays)
+//                     .input('halfDays', sql.Int, salaryDetail.halfDays)
+//                     .input('missPunchDays', sql.Int, salaryDetail.missPunchDays)
+//                     .input('normalOvertimeCount', sql.Int, salaryDetail.normalOvertimeCount)
+//                     .input('holidayOvertimeCount', sql.Int, salaryDetail.holidayOvertimeCount)
+//                     .input('cappedOvertime', sql.Decimal(18, 2), salaryDetail.cappedOvertime)
+//                     .input('basicSalary', sql.Decimal(18, 2), salaryDetail.basicSalary)
+//                     .input('previousWageAmount', sql.Decimal(18, 2), salaryDetail.previousWageAmount)
+//                     .input('overtimePay', sql.Decimal(18, 2), salaryDetail.overtimePay)
+//                     .input('weeklyOffPay', sql.Decimal(18, 2), salaryDetail.weeklyOffPay)
+//                     .input('bonuses', sql.Decimal(18, 2), salaryDetail.bonuses)
+//                     .input('totalDeductions', sql.Decimal(18, 2), salaryDetail.totalDeductions)
+//                     .input('grossPay', sql.Decimal(18, 2), salaryDetail.grossPay)
+//                     .input('netPay', sql.Decimal(18, 2), salaryDetail.netPay)
+//                     .input('advance', sql.Decimal(18, 2), variablePay.advance || 0)
+//                     .input('advanceRemarks', sql.NVarChar, truncateString(variablePay.advanceRemarks, 255))
+//                     .input('debit', sql.Decimal(18, 2), variablePay.debit || 0)
+//                     .input('debitRemarks', sql.NVarChar, truncateString(variablePay.debitRemarks, 255))
+//                     .input('incentive', sql.Decimal(18, 2), variablePay.incentive || 0)
+//                     .input('incentiveRemarks', sql.NVarChar, truncateString(variablePay.incentiveRemarks, 255))
+
+//                     .query(`
+//                         INSERT INTO [dbo].[FinalizedSalaryPay] 
+//                         (
+//                             labourId, month, year, WageType, dailyWageRate, fixedMonthlyWage,
+//                             PresentDays, AbsentDays, HalfDays, missPunchDays, normalOvertimeCount, holidayOvertimeCount, cappedOvertime,
+//                             BasicSalary, previousWageAmount, OvertimePay, WeeklyOffPay, Bonuses,
+//                             TotalDeductions, GrossPay, NetPay, advance,
+//                             AdvanceRemarks, debit, DebitRemarks, incentive, IncentiveRemarks
+//                         )
+//                         VALUES
+//                         (
+//                             @labourId, @month, @year, @wageType, @dailyWageRate, @fixedMonthlyWage,
+//                             @presentDays, @absentDays, @halfDays, @missPunchDays, @normalOvertimeCount, @holidayOvertimeCount, @cappedOvertime,
+//                             @basicSalary, @previousWageAmount, @overtimePay, @weeklyOffPay, @bonuses,
+//                             @totalDeductions, @grossPay, @netPay, @advance,
+//                             @advanceRemarks, @debit, @debitRemarks, @incentive, @incentiveRemarks
+//                         );
+//                    `);
+
+//                 console.log(`✅ Successfully inserted payroll details for labourId: ${labour.labourId}`);
+//             } catch (error) {
+//                 console.error(`❌ Failed to process payroll for labourId: ${labour.labourId}`, error);
+//                 failedLabourIds.push(labour.labourId);
+//             }
+//         }
+
+//         // ✅ **If any payrolls failed, generate an Excel report**
+//         if (failedLabourIds.length > 0) {
+//             console.log('⚠️ Generating Excel file for failed payrolls...');
+//             await createExcelFile(failedLabourIds);
+//         }
+
+//         console.log('🎯 Finished generating monthly payroll');
+//         return finalSalaries; // Return successfully computed salaries
+//     } catch (error) {
+//         console.error('❌ Error generating monthly payroll:', error);
+//         throw error;
+//     }
+// }
+
+// // ✅ **Helper function to create an Excel file for failed payrolls**
+// async function createExcelFile(failedLabourIds) {
+//     const workbook = new ExcelJS.Workbook();
+//     const worksheet = workbook.addWorksheet('Failed Labour IDs');
+
+//     worksheet.columns = [{ header: 'Labour ID', key: 'labourId', width: 20 }];
+
+//     failedLabourIds.forEach(id => worksheet.addRow({ labourId: id }));
+
+//     try {
+//         await workbook.xlsx.writeFile('FailedLabourIds.xlsx');
+//         console.log('📂 Excel file created successfully: FailedLabourIds.xlsx');
+//     } catch (err) {
+//         console.error('❌ Failed to write Excel file:', err);
+//     }
+// }
+
+
 async function generateMonthlyPayroll(month, year) {
+    const failedLabourIds = [];         // Will store labourIds we cannot process due to invalid data
+    const alreadyExistLabourIds = [];   // Will store labourIds already existing for this month/year
+    let finalSalaries = [];            // Will store successful salary results
+  
+    console.log(`\n🚀 Starting monthly payroll generation for ${month}/${year}\n`);
     try {
-        const eligibleLabours = await getEligibleLabours(month, year);
-        let finalSalaries = [];
-
-        const pool = await poolPromise;
-
-        for (const labour of eligibleLabours) {
-            const salaryDetail = await calculateSalaryForLabour(labour.labourId, month, year);
-
-            if (salaryDetail) {
-                const variablePay = salaryDetail.variablePay || {};
-                finalSalaries.push(salaryDetail);
-
-                // 2) Insert into [MonthlySalaryGeneration] table
-                await pool.request()
-                    .input('labourId', sql.NVarChar, salaryDetail.labourId)
-                    .input('salaryMonth', sql.Int, month)
-                    .input('salaryYear', sql.Int, year)
-                    .input('wageType', sql.NVarChar, salaryDetail.wageType)
-                    .input('presentDays', sql.Int, salaryDetail.presentDays)
-                    .input('absentDays', sql.Int, salaryDetail.absentDays)
-                    .input('halfDays', sql.Int, salaryDetail.halfDays)
-                    .input('basicSalary', sql.Decimal(18,2), salaryDetail.basicSalary)
-                    .input('overtimePay', sql.Decimal(18,2), salaryDetail.overtimePay)
-                    .input('weeklyOffPay', sql.Decimal(18,2), salaryDetail.weeklyOffPay)
-                    .input('bonuses', sql.Decimal(18,2), salaryDetail.bonuses)
-                    .input('totalDeductions', sql.Decimal(18,2), salaryDetail.totalDeductions)
-                    .input('grossPay', sql.Decimal(18,2), salaryDetail.grossPay)
-                    .input('netPay', sql.Decimal(18,2), salaryDetail.netPay)
-
-                    // Variable Pay remarks
-                    .input('advanceRemarks', sql.NVarChar, variablePay.advanceRemarks || '')
-                    .input('debitRemarks',   sql.NVarChar, variablePay.debitRemarks   || '')
-                    .input('incentiveRemarks', sql.NVarChar, variablePay.incentiveRemarks || '')
-
-                    .query(`
-                        INSERT INTO [dbo].[MonthlySalaryGeneration] 
-                        (
-                            LabourID, SalaryMonth, SalaryYear, WageType,
-                            PresentDays, AbsentDays, HalfDays,
-                            BasicSalary, OvertimePay, WeeklyOffPay, Bonuses,
-                            TotalDeductions, GrossPay, NetPay,
-                            AdvanceRemarks, DebitRemarks, IncentiveRemarks
-                        )
-                        VALUES
-                        (
-                            @labourId, @salaryMonth, @salaryYear, @wageType,
-                            @presentDays, @absentDays, @halfDays,
-                            @basicSalary, @overtimePay, @weeklyOffPay, @bonuses,
-                            @totalDeductions, @grossPay, @netPay,
-                            @advanceRemarks, @debitRemarks, @incentiveRemarks
-                        );
-                    `);
-            }
+      // 1️⃣ Get a list of all eligible labour IDs for this month/year
+      let eligibleLabours = await getEligibleLabours(month, year);
+  
+      // 2️⃣ Sort labour by ID for consistent order
+      eligibleLabours = eligibleLabours.sort((a, b) => a.labourId.localeCompare(b.labourId));
+  
+      // 3️⃣ Acquire DB pool
+      const pool = await poolPromise;
+  
+      for (const labour of eligibleLabours) {
+        try {
+          console.log(`🔹 Processing payroll for labourId: ${labour.labourId}`);
+  
+          // 4️⃣ Check if this labourId, month, year already exist in [FinalizedSalaryPay]
+          const checkResult = await pool.request()
+            .input('labourId', sql.NVarChar, labour.labourId)
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .query(`
+              SELECT labourId 
+              FROM [dbo].[FinalizedSalaryPay] 
+              WHERE labourId = @labourId 
+                AND month = @month 
+                AND year = @year
+            `);
+  
+          if (checkResult.recordset.length > 0) {
+            // Already exists => skip
+            console.warn(`⚠️ Skipping labourId: ${labour.labourId} - Already exists for ${month}/${year}\n`);
+            alreadyExistLabourIds.push(labour.labourId);
+            continue; // Move on to next labour
+          }
+  
+          // 5️⃣ Calculate salary details
+          const salaryDetail = await calculateSalaryForLabour(labour.labourId, month, year);
+  
+          // 6️⃣ Validate salaryDetail
+          if (!salaryDetail || !salaryDetail.labourId) {
+            console.warn(`⚠️ Skipping labourId: ${labour.labourId} - Invalid salary details.\n`);
+            failedLabourIds.push(labour.labourId);
+            continue;
+          }
+  
+          // 7️⃣ Add result to finalSalaries
+          finalSalaries.push(salaryDetail);
+  
+          // Helper to truncate long strings
+          const truncateString = (str, num) =>
+            (str && str.length > num ? str.slice(0, num) : str || "");
+  
+          // Ensure variablePay has defaults
+          const variablePay = salaryDetail.variablePay || {
+            advance: 0,
+            advanceRemarks: "",
+            debit: 0,
+            debitRemarks: "",
+            incentive: 0,
+            incentiveRemarks: ""
+          };
+  
+          console.log(`🔹 Preparing to insert payroll details for labourId: ${labour.labourId}`);
+  
+          // 8️⃣ Insert final salary into [FinalizedSalaryPay]
+          await pool.request()
+            .input('labourId', sql.NVarChar, salaryDetail.labourId)
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .input('wageType', sql.NVarChar, salaryDetail.wageType)
+            .input('dailyWageRate', sql.Decimal(18, 2), salaryDetail.dailyWageRate)
+            .input('fixedMonthlyWage', sql.Decimal(18, 2), salaryDetail.fixedMonthlyWage)
+            .input('presentDays', sql.Int, salaryDetail.presentDays)
+            .input('absentDays', sql.Int, salaryDetail.absentDays)
+            .input('halfDays', sql.Int, salaryDetail.halfDays)
+            .input('missPunchDays', sql.Int, salaryDetail.missPunchDays)
+            .input('normalOvertimeCount', sql.Int, salaryDetail.normalOvertimeCount)
+            .input('holidayOvertimeCount', sql.Int, salaryDetail.holidayOvertimeCount)
+            .input('totalHolidaysInMonth', sql.Int, salaryDetail.totalHolidaysInMonth)
+            .input('holidayOvertimeHours', sql.Decimal(18,2), salaryDetail.holidayOvertimeHours)
+            .input('holidayOvertimeWages', sql.Decimal(18,2), salaryDetail.holidayOvertimeWages)
+            .input('cappedOvertime', sql.Decimal(18, 2), salaryDetail.cappedOvertime)
+            .input('basicSalary', sql.Decimal(18, 2), salaryDetail.basicSalary)
+            .input('previousWageAmount', sql.Decimal(18, 2), salaryDetail.previousWageAmount)
+            .input('overtimePay', sql.Decimal(18, 2), salaryDetail.overtimePay)
+            .input('weeklyOffPay', sql.Decimal(18, 2), salaryDetail.weeklyOffPay)
+            .input('bonuses', sql.Decimal(18, 2), salaryDetail.bonuses)
+            .input('totalDeductions', sql.Decimal(18, 2), salaryDetail.totalDeductions)
+            .input('grossPay', sql.Decimal(18, 2), salaryDetail.grossPay)
+            .input('netPay', sql.Decimal(18, 2), salaryDetail.netPay)
+  
+            // Variable Pay
+            .input('advance', sql.Decimal(18, 2), variablePay.advance)
+            .input('advanceRemarks', sql.NVarChar, truncateString(variablePay.advanceRemarks, 255))
+            .input('debit', sql.Decimal(18, 2), variablePay.debit)
+            .input('debitRemarks', sql.NVarChar, truncateString(variablePay.debitRemarks, 255))
+            .input('incentive', sql.Decimal(18, 2), variablePay.incentive)
+            .input('incentiveRemarks', sql.NVarChar, truncateString(variablePay.incentiveRemarks, 255))
+  
+            .query(`
+              INSERT INTO [dbo].[FinalizedSalaryPay] (
+                  labourId, month, year, WageType, dailyWageRate, fixedMonthlyWage,
+                  PresentDays, AbsentDays, HalfDays, missPunchDays, normalOvertimeCount, holidayOvertimeCount,
+                  totalHolidaysInMonth, holidayOvertimeHours, holidayOvertimeWages, cappedOvertime,
+                  BasicSalary, previousWageAmount, OvertimePay, WeeklyOffPay, Bonuses,
+                  TotalDeductions, GrossPay, NetPay,
+                  advance, AdvanceRemarks, debit, DebitRemarks, incentive, IncentiveRemarks
+              )
+              VALUES (
+                  @labourId, @month, @year, @wageType, @dailyWageRate, @fixedMonthlyWage,
+                  @presentDays, @absentDays, @halfDays, @missPunchDays, @normalOvertimeCount, @holidayOvertimeCount,
+                  @totalHolidaysInMonth, @holidayOvertimeHours, @holidayOvertimeWages, @cappedOvertime,
+                  @basicSalary, @previousWageAmount, @overtimePay, @weeklyOffPay, @bonuses,
+                  @totalDeductions, @grossPay, @netPay,
+                  @advance, @advanceRemarks, @debit, @debitRemarks, @incentive, @incentiveRemarks
+              );
+            `);
+  
+          console.log(`✅ Inserted payroll for labourId: ${labour.labourId}\n`);
+  
+        } catch (error) {
+          console.error(`❌ Failed payroll for labourId: ${labour.labourId}`, error);
+          failedLabourIds.push(labour.labourId);
         }
-
-        return finalSalaries; // In case you want to return the computed data
+      }
+  
+      // 9️⃣ If any were skipped or failed, log them to a JSON file
+      if (failedLabourIds.length > 0 || alreadyExistLabourIds.length > 0) {
+        await createJsonFileForSkippedLabours({
+          month,
+          year,
+          dateGenerated: new Date().toISOString(),
+          alreadyExistLabourIds,
+          failedLabourIds
+        });
+      }
+  
+      console.log('🎯 Finished generating monthly payroll');
+      return finalSalaries;
     } catch (error) {
-        console.error('Error generating monthly payroll:', error);
-        throw error;
+      console.error('❌ Error generating monthly payroll:', error);
+      throw error;
     }
-}
+  }
+  
+  /**
+   * Writes skipped labour IDs to a JSON file for easy review:
+   *  - alreadyExistLabourIds (those that already had payroll for this month/year)
+   *  - failedLabourIds (those that had invalid data or an error)
+   */
+  async function createJsonFileForSkippedLabours(data) {
+    try {
+      fs.writeFileSync('SkippedLabours.json', JSON.stringify(data, null, 2), 'utf8');
+      console.log('📂 JSON file created: SkippedLabours.json\n');
+    } catch (err) {
+      console.error('❌ Failed to write JSON file:', err);
+    }
+  }
+
+
+  async function deleteMonthlyPayrollData(month, year, labourIds = []) {
+    try {
+      const pool = await poolPromise;
+  
+      // If labourIds array is present & not empty, delete only those labourIds
+      if (labourIds.length > 0) {
+        console.log(`\n🔸 Deleting payroll for labourIds [${labourIds.join(', ')}] for month=${month}, year=${year}`);
+  
+        // Build a parameter list for the IN clause, e.g. @lab0, @lab1, ...
+        const labourIdParams = labourIds.map((_, i) => `@lab${i}`).join(', ');
+        const request = pool.request();
+  
+        // Attach each labourId as an input parameter
+        labourIds.forEach((id, i) => {
+          request.input(`lab${i}`, sql.NVarChar, id);
+        });
+  
+        // Also attach month & year
+        request.input('month', sql.Int, month);
+        request.input('year', sql.Int, year);
+  
+        const deleteQuery = `
+          DELETE FROM [dbo].[FinalizedSalaryPay]
+          WHERE month = @month
+            AND year = @year
+            AND labourId IN (${labourIdParams});
+        `;
+  
+        const result = await request.query(deleteQuery);
+        return {
+          success: true,
+          rowsAffected: result.rowsAffected[0],
+          message: `Deleted ${result.rowsAffected[0]} record(s) for labourIds [${labourIds.join(', ')}].`
+        };
+      } 
+      // Otherwise, delete all labourIds for the given month/year
+      else {
+        console.log(`\n🔸 Deleting payroll for ALL labourIds for month=${month}, year=${year}`);
+  
+        const result = await pool.request()
+          .input('month', sql.Int, month)
+          .input('year', sql.Int, year)
+          .query(`
+            DELETE FROM [dbo].[FinalizedSalaryPay]
+            WHERE month = @month
+              AND year = @year
+          `);
+  
+        return {
+          success: true,
+          rowsAffected: result.rowsAffected[0],
+          message: `Deleted ${result.rowsAffected[0]} record(s) for month=${month}, year=${year}.`
+        };
+      }
+    } catch (error) {
+      console.error('❌ Error deleting monthly payroll data:', error);
+      throw error;
+    }
+  }
+
+
+
 
 
 
@@ -2126,5 +2565,6 @@ module.exports = {
     calculateSalaryForLabour,
     generateMonthlyPayroll,
     calculateTotalOvertime,
-    saveFinalizeSalaryData
+    saveFinalizeSalaryData,
+    deleteMonthlyPayrollData
 }

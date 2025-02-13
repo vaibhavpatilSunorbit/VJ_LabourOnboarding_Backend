@@ -38,6 +38,7 @@ router.post('/generateMonthlyPayroll/:labourId', insentiveController.generateMon
 /** 9)*/   router.get('/payroll/salaryGenerationDataAllLabours', insentiveController.getSalaryGenerationDataAPIAllLabours);
 /** 9)*/   router.get('/payroll/salaryGenerationData', insentiveController.getSalaryGenerationDataAPI);
 router.post('/payroll/saveFinalPayrollData', insentiveController.saveFinalizePayrollData);
+router.post('/payroll/deleteFinalPayrollData', insentiveController.deletePayrollController);
 
 
 
