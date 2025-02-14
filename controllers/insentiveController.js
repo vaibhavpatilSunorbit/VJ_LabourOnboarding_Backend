@@ -229,6 +229,18 @@ async function searchFromSiteTransferApproval(req, res) {
     }
 };
 
+async function searchFromViewMonthlyPayroll(req, res) {
+    const { q } = req.query;
+
+    try {
+        const results = await labourModel.searchFromViewMonthlyPayrolls(q);
+        return res.json(results);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+};
+
 const getVariablePayAndLabourOnboardingJoincontroller = async (req, res) => {
     try {
         const filters = req.query;
@@ -989,7 +1001,8 @@ async function deletePayrollController(req, res) {
   
       return res.status(200).json({
         success: true,
-        data: result
+        data: result,
+        deletedRecords: result.rowsAffected,
       });
     } catch (error) {
       console.error('❌ Controller error - deletePayrollController:', error);
@@ -1000,6 +1013,131 @@ async function deletePayrollController(req, res) {
       });
     }
   }
+
+
+  async function getFinalizedSalaryData(req, res) {
+    try {
+        const { month, year } = req.query;
+
+        // Input validation
+        if (!month || isNaN(parseInt(month))) {
+            return res.status(400).json({ message: "Invalid or missing month provided." });
+        }
+        if (!year || isNaN(parseInt(year))) {
+            return res.status(400).json({ message: "Invalid or missing year provided." });
+        }
+
+        const salaries = await labourModel.getFinalizedSalaryData(month, year);
+
+        // Check if data is found
+        if (salaries.length === 0) {
+            return res.status(404).json({ message: "No salary records found for the given month and year.", data: [] });
+        }
+
+        return res.status(200).json({
+            message: "Salary data fetched successfully.",
+            count: salaries.length,
+            data: salaries
+        });
+
+    } catch (error) {
+        console.error("Error in getFinalizedSalaryData Controller:", error);
+        return res.status(500).json({
+            message: "Error fetching salary data.",
+            error: error.message
+        });
+    }
+}
+
+
+  async function getFinalizedSalaryDataByLabourID(req, res) {
+    try {
+        const { labourId, month, year } = req.query;
+
+        // Input validation
+        if (month && isNaN(parseInt(month))) {
+            return res.status(400).json({ message: "Invalid month provided." });
+        }
+        if (year && isNaN(parseInt(year))) {
+            return res.status(400).json({ message: "Invalid year provided." });
+        }
+
+        const salaries = await labourModel.getFinalizedSalaryDataByLabourID({ labourId, month, year });
+
+        // Check if data is found
+        if (salaries.length === 0) {
+            return res.status(404).json({ message: "No salary records found.", data: [] });
+        }
+
+        return res.status(200).json({
+            message: "Salary data fetched successfully.",
+            count: salaries.length,
+            data: salaries
+        });
+
+    } catch (error) {
+        console.error("Error in getFinalizedSalaryData Controller:", error);
+        return res.status(500).json({
+            message: "Error fetching salary data.",
+            error: error.message
+        });
+    }
+}
+
+
+async function exportMonthlyPayrollExcel(req, res) {
+    try {
+        const { month, year, projectName } = req.query;
+
+        if (!month || !year) {
+            return res.status(400).json({ message: "Month and Year are required for exporting data." });
+        }
+
+        // Fetch payroll data from model
+        const payrollData = await labourModel.getMonthlyPayrollData(month, year, projectName);
+
+        if (!payrollData || payrollData.length === 0) {
+            return res.status(404).json({ message: "No payroll data found for the given month and year." });
+        }
+
+        // Define Excel headers
+        const headers = [
+            'LabourID', 'Name', 'Business Unit', 'Department Name',
+            'Wage Type', 'Daily Wage Rate', 'Fixed Monthly Wage', 'Present Days', 'Absent Days', 'Half Days',
+            'Basic Salary', 'Overtime Pay', 'Weekly Off Pay','Total Deductions', 'Gross Pay', 'Net Pay',
+            'Advance', 'Advance Remarks', 'Debit', 'Debit Remarks', 'Incentive', 'Incentive Remarks', 'Month', 'Year'
+        ];
+
+        // Map Data for Excel
+        const excelData = payrollData.map(item => [
+            item.LabourID, item.name, item.businessUnit, item.departmentName,
+            item.wageType, item.dailyWageRate, item.fixedMonthlyWage, item.presentDays, item.absentDays, item.halfDays,
+            item.basicSalary, item.overtimePay, item.weeklyOffPay,item.totalDeductions, item.grossPay, item.netPay,
+            item.advance, item.advanceRemarks, item.debit, item.debitRemarks, item.incentive, item.incentiveRemarks, item.month, item.year
+        ]);
+
+        // Create Excel Workbook
+        const workbook = xlsx.utils.book_new();
+        const worksheetData = [headers, ...excelData];
+        const worksheet = xlsx.utils.aoa_to_sheet(worksheetData);
+        xlsx.utils.book_append_sheet(workbook, worksheet, 'Monthly Payroll');
+
+        // Generate Excel file buffer
+        const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+        // Define file name
+        const fileName = `MonthlyPayroll_${month}_${year}.xlsx`;
+
+        // Send response with Excel file
+        res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(buffer);
+
+    } catch (error) {
+        console.error("Error exporting Monthly Payroll:", error);
+        res.status(500).json({ message: "Error exporting Monthly Payroll data." });
+    }
+};
   
 
 module.exports = {
@@ -1009,6 +1147,7 @@ module.exports = {
     searchLaboursFromWagesApproval,
     searchLaboursFromAttendanceApproval,
     searchFromSiteTransferApproval,
+    searchFromViewMonthlyPayroll,
     upsertLabourVariablePay,
     getVariablePayAndLabourOnboardingJoincontroller,
     checkExistingVariablePayController,
@@ -1033,6 +1172,9 @@ module.exports = {
     getSalaryGenerationDataAPIAllLabours,
     getSalaryGenerationDataAPI,
     saveFinalizePayrollData,
-    deletePayrollController
+    deletePayrollController,
+    getFinalizedSalaryData,
+    getFinalizedSalaryDataByLabourID,
+    exportMonthlyPayrollExcel
 
 }

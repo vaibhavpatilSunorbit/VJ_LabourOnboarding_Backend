@@ -11,6 +11,7 @@ router.get('/searchLaboursFromVariablePay', insentiveController.searchLaboursFro
 router.get('/searchLaboursFromAttendanceApproval', insentiveController.searchLaboursFromAttendanceApproval);  
 router.get('/searchLaboursFromWagesApproval', insentiveController.searchLaboursFromWagesApproval);  
 router.get('/searchFromSiteTransferApproval', insentiveController.searchFromSiteTransferApproval);  
+router.get('/searchFromViewMonthlyPayroll', insentiveController.searchFromViewMonthlyPayroll);  
 router.get('/getVariablePayAndLabourOnboardingJoin', insentiveController.getVariablePayAndLabourOnboardingJoincontroller);  
 router.post('/upsertVariablePay', insentiveController.upsertLabourVariablePay);
 router.get('/checkExistingVariablePay', insentiveController.checkExistingVariablePayController);
@@ -39,7 +40,9 @@ router.post('/generateMonthlyPayroll/:labourId', insentiveController.generateMon
 /** 9)*/   router.get('/payroll/salaryGenerationData', insentiveController.getSalaryGenerationDataAPI);
 router.post('/payroll/saveFinalPayrollData', insentiveController.saveFinalizePayrollData);
 router.post('/payroll/deleteFinalPayrollData', insentiveController.deletePayrollController);
-
+router.get('/payroll/finalizedSalaryDataByLabourID', insentiveController.getFinalizedSalaryDataByLabourID);
+router.get('/payroll/finalizedSalaryData', insentiveController.getFinalizedSalaryData);
+router.get('/exportMonthlyPayrollExcel', insentiveController.exportMonthlyPayrollExcel);
 
 
 
