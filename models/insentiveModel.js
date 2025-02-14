@@ -148,6 +148,18 @@ async function searchFromSiteTransferApproval(query) {
     }
 };
 
+async function searchFromViewMonthlyPayrolls(query) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('query', sql.NVarChar, `%${query}%`)
+            .query('SELECT * FROM FinalizedSalaryPay WHERE LabourID LIKE @query OR name LIKE @query OR wageType LIKE @query ');
+        return result.recordset;
+    } catch (error) {
+        throw error;
+    }
+};
+
 // const getVariablePayAndLabourOnboardingJoin = async () => {
 //     const pool = await poolPromise;
 
@@ -2250,7 +2262,7 @@ async function generateMonthlyPayroll(month, year) {
     const alreadyExistLabourIds = [];   // Will store labourIds already existing for this month/year
     let finalSalaries = [];            // Will store successful salary results
   
-    console.log(`\n🚀 Starting monthly payroll generation for ${month}/${year}\n`);
+    // console.log(`\n🚀 Starting monthly payroll generation for ${month}/${year}\n`);
     try {
       // 1️⃣ Get a list of all eligible labour IDs for this month/year
       let eligibleLabours = await getEligibleLabours(month, year);
@@ -2263,7 +2275,25 @@ async function generateMonthlyPayroll(month, year) {
   
       for (const labour of eligibleLabours) {
         try {
-          console.log(`🔹 Processing payroll for labourId: ${labour.labourId}`);
+        //   console.log(`🔹 Processing payroll for labourId: ${labour.labourId}`);
+
+            // 4️⃣ Fetch labour details from [labourOnboarding]
+            const labourDetailsResult = await pool.request()
+            .input('labourId', sql.NVarChar, labour.labourId)
+            .query(`
+                SELECT 
+                    id, LabourID, name, businessUnit, projectName, departmentName, department
+                FROM [dbo].[labourOnboarding]
+                WHERE LabourID = @labourId AND status = 'Approved'
+            `);
+
+        if (labourDetailsResult.recordset.length === 0) {
+            // console.warn(`⚠️ Skipping labourId: ${labour.labourId} - Not found in labourOnboarding.`);
+            failedLabourIds.push(labour.labourId);
+            continue;
+        }
+
+        const labourDetails = labourDetailsResult.recordset[0];
   
           // 4️⃣ Check if this labourId, month, year already exist in [FinalizedSalaryPay]
           const checkResult = await pool.request()
@@ -2280,7 +2310,7 @@ async function generateMonthlyPayroll(month, year) {
   
           if (checkResult.recordset.length > 0) {
             // Already exists => skip
-            console.warn(`⚠️ Skipping labourId: ${labour.labourId} - Already exists for ${month}/${year}\n`);
+            // console.warn(`⚠️ Skipping labourId: ${labour.labourId} - Already exists for ${month}/${year}\n`);
             alreadyExistLabourIds.push(labour.labourId);
             continue; // Move on to next labour
           }
@@ -2312,7 +2342,7 @@ async function generateMonthlyPayroll(month, year) {
             incentiveRemarks: ""
           };
   
-          console.log(`🔹 Preparing to insert payroll details for labourId: ${labour.labourId}`);
+        //   console.log(`🔹 Preparing to insert payroll details for labourId: ${labour.labourId}`);
   
           // 8️⃣ Insert final salary into [FinalizedSalaryPay]
           await pool.request()
@@ -2348,15 +2378,22 @@ async function generateMonthlyPayroll(month, year) {
             .input('debitRemarks', sql.NVarChar, truncateString(variablePay.debitRemarks, 255))
             .input('incentive', sql.Decimal(18, 2), variablePay.incentive)
             .input('incentiveRemarks', sql.NVarChar, truncateString(variablePay.incentiveRemarks, 255))
+            .input('id', sql.Int, labourDetails.id)
+            .input('name', sql.NVarChar, labourDetails.name)
+            .input('businessUnit', sql.NVarChar, labourDetails.businessUnit)
+            .input('projectName', sql.Int, labourDetails.projectName)
+            .input('departmentName', sql.NVarChar, labourDetails.departmentName)
+            .input('department', sql.Int, labourDetails.department)
   
             .query(`
               INSERT INTO [dbo].[FinalizedSalaryPay] (
-                  labourId, month, year, WageType, dailyWageRate, fixedMonthlyWage,
+                  LabourID, month, year, WageType, dailyWageRate, fixedMonthlyWage,
                   PresentDays, AbsentDays, HalfDays, missPunchDays, normalOvertimeCount, holidayOvertimeCount,
                   totalHolidaysInMonth, holidayOvertimeHours, holidayOvertimeWages, cappedOvertime,
                   BasicSalary, previousWageAmount, OvertimePay, WeeklyOffPay, Bonuses,
                   TotalDeductions, GrossPay, NetPay,
-                  advance, AdvanceRemarks, debit, DebitRemarks, incentive, IncentiveRemarks
+                  advance, AdvanceRemarks, debit, DebitRemarks, incentive, IncentiveRemarks,
+                  id, name, businessUnit, projectName, departmentName, department
               )
               VALUES (
                   @labourId, @month, @year, @wageType, @dailyWageRate, @fixedMonthlyWage,
@@ -2364,14 +2401,15 @@ async function generateMonthlyPayroll(month, year) {
                   @totalHolidaysInMonth, @holidayOvertimeHours, @holidayOvertimeWages, @cappedOvertime,
                   @basicSalary, @previousWageAmount, @overtimePay, @weeklyOffPay, @bonuses,
                   @totalDeductions, @grossPay, @netPay,
-                  @advance, @advanceRemarks, @debit, @debitRemarks, @incentive, @incentiveRemarks
+                  @advance, @advanceRemarks, @debit, @debitRemarks, @incentive, @incentiveRemarks,
+                  @id, @name, @businessUnit, @projectName, @departmentName, @department
               );
             `);
   
-          console.log(`✅ Inserted payroll for labourId: ${labour.labourId}\n`);
+        //   console.log(`✅ Inserted payroll for labourId: ${labour.labourId}\n`);
   
         } catch (error) {
-          console.error(`❌ Failed payroll for labourId: ${labour.labourId}`, error);
+        //   console.error(`❌ Failed payroll for labourId: ${labour.labourId}`, error);
           failedLabourIds.push(labour.labourId);
         }
       }
@@ -2416,7 +2454,7 @@ async function generateMonthlyPayroll(month, year) {
   
       // If labourIds array is present & not empty, delete only those labourIds
       if (labourIds.length > 0) {
-        console.log(`\n🔸 Deleting payroll for labourIds [${labourIds.join(', ')}] for month=${month}, year=${year}`);
+        // console.log(`\n🔸 Deleting payroll for labourIds [${labourIds.join(', ')}] for month=${month}, year=${year}`);
   
         // Build a parameter list for the IN clause, e.g. @lab0, @lab1, ...
         const labourIdParams = labourIds.map((_, i) => `@lab${i}`).join(', ');
@@ -2447,7 +2485,7 @@ async function generateMonthlyPayroll(month, year) {
       } 
       // Otherwise, delete all labourIds for the given month/year
       else {
-        console.log(`\n🔸 Deleting payroll for ALL labourIds for month=${month}, year=${year}`);
+        // console.log(`\n🔸 Deleting payroll for ALL labourIds for month=${month}, year=${year}`);
   
         const result = await pool.request()
           .input('month', sql.Int, month)
@@ -2471,8 +2509,164 @@ async function generateMonthlyPayroll(month, year) {
   }
 
 
+//   async function getFinalizedSalaryData(month, year) {
+//     try {
+//         const pool = await poolPromise;
+        
+//         let query = `
+//             SELECT 
+//                 fsp.*, 
+//                 onboarding.id, 
+//                 onboarding.LabourID AS LabourId, 
+//                 onboarding.name, 
+//                 onboarding.businessUnit, 
+//                 onboarding.projectName, 
+//                 onboarding.departmentName, 
+//                 onboarding.department
+//             FROM 
+//                 [dbo].[FinalizedSalaryPay] AS fsp
+//             INNER JOIN 
+//                 [dbo].[labourOnboarding] AS onboarding
+//             ON 
+//                 fsp.LabourID = onboarding.LabourID
+//             WHERE 
+//                 fsp.month = @month 
+//                 AND fsp.year = @year 
+//                 AND onboarding.status = 'Approved'
+//             ORDER BY 
+//                 onboarding.LabourID;
+//         `;
+
+//         let request = pool.request()
+//             .input('month', sql.Int, parseInt(month))
+//             .input('year', sql.Int, parseInt(year));
+
+//         const result = await request.query(query);
+
+//         return result.recordset; // Return fetched data
+//     } catch (error) {
+//         console.error("Error fetching finalized salary data:", error);
+//         throw error;
+//     }
+// }
 
 
+// async function getFinalizedSalaryDataByLabourID({ labourId, month, year }) {
+//     try {
+//         const pool = await poolPromise;
+
+//         let query = `
+//             SELECT 
+//                 fsp.*, 
+//                 onboarding.id, 
+//                 onboarding.LabourID AS LabourId, 
+//                 onboarding.name, 
+//                 onboarding.businessUnit, 
+//                 onboarding.projectName, 
+//                 onboarding.departmentName, 
+//                 onboarding.department
+//             FROM 
+//                 [dbo].[FinalizedSalaryPay] AS fsp
+//             INNER JOIN 
+//                 [dbo].[labourOnboarding] AS onboarding
+//             ON 
+//                 fsp.LabourID = onboarding.LabourID
+//             WHERE 
+//                 onboarding.status = 'Approved'`;
+
+//         let request = pool.request();
+
+//         // Add optional filters
+//         if (labourId) {
+//             query += ` AND fsp.LabourID = @labourId`;
+//             request.input('labourId', sql.NVarChar, labourId);
+//         }
+//         if (month) {
+//             query += ` AND fsp.month = @month`;
+//             request.input('month', sql.Int, parseInt(month));
+//         }
+//         if (year) {
+//             query += ` AND fsp.year = @year`;
+//             request.input('year', sql.Int, parseInt(year));
+//         }
+
+//         query += ` ORDER BY onboarding.LabourID;`;
+
+//         const result = await request.query(query);
+
+//         return result.recordset; // Return fetched data
+//     } catch (error) {
+//         console.error("Error fetching finalized salary data by LabourID:", error);
+//         throw error;
+//     }
+// }
+
+async function getFinalizedSalaryData(month, year) {
+    try {
+        const pool = await poolPromise;
+
+        // Base query
+        let query = `
+            SELECT * FROM [dbo].[FinalizedSalaryPay] 
+            WHERE 1=1`;  // Ensures conditions are properly appended
+
+        let request = pool.request();
+
+        // Apply filters for month and year
+        if (month) {
+            query += ` AND month = @month`;
+            request.input('month', sql.Int, parseInt(month));
+        }
+        if (year) {
+            query += ` AND year = @year`;
+            request.input('year', sql.Int, parseInt(year));
+        }
+
+        // Sort by year (descending) and month (descending) to get latest records first
+        query += ` ORDER BY year DESC, month DESC;`;
+
+        const result = await request.query(query);
+
+        return result.recordset; // Return fetched data
+    } catch (error) {
+        console.error("Error fetching finalized salary data:", error);
+        throw error;
+    }
+}
+
+async function getFinalizedSalaryDataByLabourID({ labourId, month, year }) {
+    try {
+        const pool = await poolPromise;
+
+        let query = `
+            SELECT * FROM [dbo].[FinalizedSalaryPay]
+            WHERE 1=1`;  
+
+        let request = pool.request();
+
+        if (labourId) {
+            query += ` AND LabourID = @labourId`;
+            request.input('labourId', sql.NVarChar, labourId);
+        }
+        if (month) {
+            query += ` AND month = @month`;
+            request.input('month', sql.Int, parseInt(month));
+        }
+        if (year) {
+            query += ` AND year = @year`;
+            request.input('year', sql.Int, parseInt(year));
+        }
+
+        query += ` ORDER BY year DESC, month DESC;`;
+
+        const result = await request.query(query);
+
+        return result.recordset; 
+    } catch (error) {
+        console.error("Error fetching finalized salary data by LabourID:", error);
+        throw error;
+    }
+}
 
 
 async function saveFinalizeSalaryData(salaryData) {
@@ -2540,12 +2734,45 @@ async function saveFinalizeSalaryData(salaryData) {
 }
 
 
+async function getMonthlyPayrollData(month, year, projectName) {
+    try {
+        const pool = await poolPromise;
+        let query = `
+            SELECT 
+                LabourID, name, businessUnit, projectName, departmentName, department,
+                wageType, dailyWageRate, fixedMonthlyWage, presentDays, absentDays, halfDays, 
+                basicSalary, overtimePay, weeklyOffPay, bonuses, totalDeductions, grossPay, netPay,
+                advance, advanceRemarks, debit, debitRemarks, incentive, incentiveRemarks, month, year
+            FROM [dbo].[FinalizedSalaryPay]
+            WHERE month = @month AND year = @year`;
+
+        let request = pool.request()
+            .input('month', sql.Int, parseInt(month))
+            .input('year', sql.Int, parseInt(year));
+
+        if (projectName && projectName !== "all") {
+            query += ` AND projectName = @projectName`;
+            request.input('projectName', sql.NVarChar, projectName);
+        }
+
+        console.log(`Executing Query: ${query}`);
+        const result = await request.query(query);
+
+        return result.recordset; // Return fetched data
+    } catch (error) {
+        console.error("Error fetching finalized salary data for export:", error);
+        throw error;
+    }
+}
+
+
 module.exports = {
     getAllLabours,
     registerData,
     searchFromVariablePay,
     searchFromAttendanceApproval,
     searchFromWagesApproval,
+    searchFromViewMonthlyPayrolls,
     searchFromSiteTransferApproval,
     checkExistingVariablePay,
     upsertLabourVariablePay,
@@ -2566,5 +2793,8 @@ module.exports = {
     generateMonthlyPayroll,
     calculateTotalOvertime,
     saveFinalizeSalaryData,
-    deleteMonthlyPayrollData
+    deleteMonthlyPayrollData,
+    getFinalizedSalaryData,
+    getFinalizedSalaryDataByLabourID,
+    getMonthlyPayrollData
 }
