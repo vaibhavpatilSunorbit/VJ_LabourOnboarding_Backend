@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const axios = require('axios');
 const logger = require('../logger')
 const { sql, poolPromise2 } = require('../config/dbConfig2');
+const {  poolPromise4 } = require('../config/dbConfigSCPL');
 const { poolPromise3 } = require('../config/dbConfig3');
 const { poolPromise } = require('../config/dbConfig');
 const xml2js = require("xml2js")
@@ -9,27 +10,53 @@ const xml2js = require("xml2js")
 
 const getProjectNames = async (req, res) => {
   try {
-    const pool = await poolPromise2;
+    const pool = await poolPromise4;
     const result = await pool.request().query(`
-    SELECT a.id, a.Description AS Business_Unit, a.ParentId, b.Description AS Segment_Description
-      FROM Framework.BusinessUnit a
-      LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
-      WHERE (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-      AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
-      AND b.Id = 3
+  Select Id, Description ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
+(IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
     `);
     res.json(result.recordset);
+    console.log('result.recordset}}||',result.recordset)
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
   } 
 };
 
+
+
+
+// const getProjectNames = async (req, res) => {
+//   try {
+//     const apiUrl = 'https://api.vjerp.com/api/businessUnit';
+//     const token = '20a763e266308b35fc75feca4b053d5ce8ea540dbdaa77ee13b1a5e7ce8aadcf';
+
+//     const apiResponse = await axios.get(apiUrl, {
+//       headers: {
+//         'Authorization': `${token}`,
+//         'Accept': 'application/json',
+//         'Content-Type': 'application/json',
+//       }
+//     });
+
+//     console.log("API Response Data:", apiResponse.data);
+//     res.json(apiResponse.data);
+//   } catch (err) {
+//     console.error('Error fetching project names:', err.response?.status, err.response?.data);
+
+//     if (err.response?.status === 401) {
+//       return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
+//     }
+
+//     res.status(500).send('Server error');
+//   }
+// };
+
 const getLabourCategories = async (req, res) => {
   try {
-    const pool = await poolPromise2;
+    const pool = await poolPromise;
     const result = await pool.request().query(`
-      SELECT * FROM Payroll.Grade
+      SELECT * FROM Grade
     `);
     res.json(result.recordset);
   } catch (err) {
@@ -40,13 +67,13 @@ const getLabourCategories = async (req, res) => {
 
 const getDepartments = async (req, res) => {
   try {
-    const pool = await poolPromise2;
+    const pool = await poolPromise;
     if (!pool) {
       throw new Error('Database connection pool is not initialized');
     }
     const result = await pool.request().query(`
-      SELECT * FROM Payroll.Department
-      WHERE IsDeleted IS NULL AND TenantId = 278
+        SELECT [id], [farvision_code] AS Code, [farvision_id] AS Id, [farvision_description] AS Description 
+      FROM [Departments]
     `);
     res.json(result.recordset);
   } catch (err) {
@@ -57,10 +84,10 @@ const getDepartments = async (req, res) => {
 
 const getWorkingHours = async (req, res) => {
   try {
-    const pool = await poolPromise2;
+    const pool = await poolPromise;
     const result = await pool.request().query(`
-      SELECT Id, Description AS Shift_Name, Type FROM Payroll.Shift
-      WHERE Id IN (3, 4)
+      SELECT Id, Shift_Name, Type FROM Shift
+      WHERE Id IN (1, 2)
     `);
     res.json(result.recordset);
   } catch (err) {
@@ -72,14 +99,8 @@ const getWorkingHours = async (req, res) => {
 const getDesignations = async (req, res) => {
   const departmentId = req.params.departmentId;
   try {
-    const pool = await poolPromise2;
-    const result = await pool.request().query(`
-      SELECT a.id, a.TenantId, a.Description, a.ParentId, a.DepartmentId, b.Description AS Department_Name
-      FROM Payroll.Designation a
-      LEFT JOIN Payroll.Department b ON b.Id = a.DepartmentId
-      WHERE a.DepartmentId = ${departmentId}
-      AND a.IsDeleted IS NULL
-      AND a.TenantId = 278
+    const pool = await poolPromise;
+    const result = await pool.request().query(`SELECT * FROM Trades where farvision_department_id = ${departmentId}
     `);
     res.json(result.recordset);
   } catch (err) {
@@ -88,38 +109,150 @@ const getDesignations = async (req, res) => {
   }
 };
 
+// const getCompanyNamesByProjectId = async (req, res) => {
+//   const projectId = req.params.projectId;
+//   try {
+//     const pool = await poolPromise2;
+    
+//     // Step 1: Get the ParentId for the selected project
+//     const parentIdResult = await pool.request().query(`
+//       SELECT ParentId 
+//       FROM Framework.BusinessUnit 
+//       WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+//       AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+//       AND Id = ${projectId}
+//     `);
+
+//     if (parentIdResult.recordset.length === 0) {
+//       return res.status(404).send('ParentId not found for the selected project');
+//     }
+
+//     const parentId = parentIdResult.recordset[0].ParentId;
+
+//     // Step 2: Get the Company Name using the ParentId
+//     const companyNameResult = await pool.request().query(`
+//       SELECT Description AS Company_Name 
+//       FROM Framework.BusinessUnit 
+//       WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+//       AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+//       AND Id = ${parentId}
+//     `);
+
+//     res.json(companyNameResult.recordset);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).send('Server error');
+//   }
+// };
+
+
+// const getCompanyNamesByProjectId = async (req, res) => {
+//   const projectId = parseInt(req.params.projectId); // Ensure it's an integer
+
+//   try {
+//     const apiUrl = 'https://api.vjerp.com/api/businessUnit';
+//     const token = '20a763e266308b35fc75feca4b053d5ce8ea540dbdaa77ee13b1a5e7ce8aadcf';
+
+//     // Step 1: Fetch Business Unit Data from API
+//     const apiResponse = await axios.get(apiUrl, {
+//       headers: {
+//         'Authorization': `${token}`,
+//         'Accept': 'application/json',
+//         'Content-Type': 'application/json',
+//       }
+//     });
+
+//     const businessUnits = apiResponse.data; // API response data
+//     console.log("Business Unit Data:", businessUnits);
+
+//     // Step 2: Find the matching project in the API response
+//     const selectedUnit = businessUnits.find(unit => unit.Id === projectId);
+
+//     if (!selectedUnit) {
+//       return res.status(404).json({ error: 'Project ID not found in Business Unit API data' });
+//     }
+
+//     const parentId = selectedUnit.ParentId; // Extract ParentId from API response
+
+//     if (!parentId) {
+//       return res.status(404).json({ error: 'ParentId not found for the selected project' });
+//     }
+
+//     const pool = await poolPromise;
+
+//     // Step 3: Get Company Name using ParentId
+//     const companyNameResult = await pool.request()
+//       .input('parentId', parentId)
+//       .query(`
+//         SELECT Description AS Company_Name 
+//         FROM CompanyNameByBuId 
+//         WHERE ParentId = @parentId
+//       `);
+
+//     if (companyNameResult.recordset.length === 0) {
+//       return res.status(404).json({ error: 'Company name not found for the given ParentId' });
+//     }
+
+//     // Step 4: Return Business Unit Data & Company Name
+//     const responseData = {
+//       companyName: companyNameResult.recordset[0].Company_Name,
+//       businessUnitData: selectedUnit
+//     };
+
+//     console.log("Final Response Data:", responseData);
+//     res.json(responseData);
+//   } catch (err) {
+//     console.error('Error fetching project data:', err.response?.status, err.response?.data);
+
+//     if (err.response?.status === 401) {
+//       return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
+//     }
+
+//     res.status(500).send('Server error');
+//   }
+// };
+
+
 const getCompanyNamesByProjectId = async (req, res) => {
   const projectId = req.params.projectId;
+console.log('projectId',projectId)
   try {
-    const pool = await poolPromise2;
-    
+    const pool = await poolPromise4;
+
     // Step 1: Get the ParentId for the selected project
-    const parentIdResult = await pool.request().query(`
-      SELECT ParentId 
-      FROM Framework.BusinessUnit 
-      WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-      AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-      AND Id = ${projectId}
-    `);
+    const parentIdResult = await pool.request()
+      .input('projectId', projectId) // Parameterized query for security
+      .query(`
+        Select Id, Description ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
+(IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
+        AND Id = @projectId
+      `);
 
     if (parentIdResult.recordset.length === 0) {
-      return res.status(404).send('ParentId not found for the selected project');
+      return res.status(404).json({ error: 'ParentId not found for the selected project' });
     }
 
     const parentId = parentIdResult.recordset[0].ParentId;
+    // console.log('parentId++',parentIdResult.recordset[0].ParentId)
+    const pool5 = await poolPromise;
 
-    // Step 2: Get the Company Name using the ParentId
-    const companyNameResult = await pool.request().query(`
-      SELECT Description AS Company_Name 
-      FROM Framework.BusinessUnit 
-      WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-      AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-      AND Id = ${parentId}
-    `);
+    // Step 2: Get the Company Name using the ParentId from CompanyNameByBuId table
+    const companyNameResult = await pool5.request()
+      .input('parentId', parentId)
+      .query(`
+        SELECT Description AS Company_Name 
+        FROM CompanyNameByBuId 
+        WHERE ParentId = @parentId
+      `);
 
-    res.json(companyNameResult.recordset);
+    if (companyNameResult.recordset.length === 0) {
+      return res.status(404).json({ error: 'Company name not found for the given ParentId' });
+    }
+
+    res.json(companyNameResult.recordset[0]); // Return only the company name
+    console.log('companyNameResult.recordset[0]',companyNameResult.recordset[0])
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching company name:', err);
     res.status(500).send('Server error');
   }
 };
