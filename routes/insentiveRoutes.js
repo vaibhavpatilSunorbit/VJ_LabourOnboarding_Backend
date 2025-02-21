@@ -28,16 +28,16 @@ router.post('/importVariablePay', upload.single('file'), insentiveController.imp
 router.post('/generateMonthlyPayroll', insentiveController.generateMonthlyPayroll);
 router.post('/generateMonthlyPayroll/:labourId', insentiveController.generateMonthlyPayrollForSingleLabour);
 
-/** 1)*/   router.get('/payroll/eligibleLaboursForSalaryGeneration', insentiveController.getEligibleLaboursAPI);
-/** 2)*/   router.get('/payroll/:labourId/attendanceSummary', insentiveController.getAttendanceSummaryAPI);
-/** 3)*/   router.get('/payroll/:labourId/wageInfo', insentiveController.getWageInfoAPI);
-/** 4)*/   router.get('/payroll/:labourId/variablePay', insentiveController.getVariablePayAPI);
-/** 5)*/   router.get('/payroll/:labourId/calculateSingleLabour', insentiveController.calculateSingleLabourAPI);
-/** 7)*/   router.get('/payroll/monthlySalaries', insentiveController.getMonthlySalariesAPI);
-/** 8)*/   router.get('/payroll/:labourId/getOvertimeMonthly', insentiveController.getOvertimeMonthlyAPI);
-/** 6)*/   router.post('/payroll/generateMonthlySalaryGeneration', insentiveController.generateMonthlyPayrollAPI);
-/** 9)*/   router.get('/payroll/salaryGenerationDataAllLabours', insentiveController.getSalaryGenerationDataAPIAllLabours);
-/** 9)*/   router.get('/payroll/salaryGenerationData', insentiveController.getSalaryGenerationDataAPI);
+/* 1)*/   router.get('/payroll/eligibleLaboursForSalaryGeneration', insentiveController.getEligibleLaboursAPI);
+/* 2)*/   router.get('/payroll/:labourId/attendanceSummary', insentiveController.getAttendanceSummaryAPI);
+/* 3)*/   router.get('/payroll/:labourId/wageInfo', insentiveController.getWageInfoAPI);
+/* 4)*/   router.get('/payroll/:labourId/variablePay', insentiveController.getVariablePayAPI);
+/* 5)*/   router.get('/payroll/:labourId/calculateSingleLabour', insentiveController.calculateSingleLabourAPI);
+/* 7)*/   router.get('/payroll/monthlySalaries', insentiveController.getMonthlySalariesAPI);
+/* 8)*/   router.get('/payroll/:labourId/getOvertimeMonthly', insentiveController.getOvertimeMonthlyAPI);
+/* 6)*/   router.post('/payroll/generateMonthlySalaryGeneration', insentiveController.generateMonthlyPayrollAPI);
+/* 9)*/   router.get('/payroll/salaryGenerationDataAllLabours', insentiveController.getSalaryGenerationDataAPIAllLabours);
+/* 9)*/   router.get('/payroll/salaryGenerationData', insentiveController.getSalaryGenerationDataAPI);
 router.post('/payroll/saveFinalPayrollData', insentiveController.saveFinalizePayrollData);
 router.post('/payroll/deleteFinalPayrollData', insentiveController.deletePayrollController);
 router.get('/payroll/finalizedSalaryDataByLabourID', insentiveController.getFinalizedSalaryDataByLabourID);
