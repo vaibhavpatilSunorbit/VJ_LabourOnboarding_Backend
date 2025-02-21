@@ -2956,6 +2956,7 @@ async function upsertAttendance({
         // const lastPunch  = lastPunchManually  || existingLastPunch;
         const firstPunch = markWeeklyOff ? '00:00:00' : firstPunchManually || existingFirstPunch;
         const lastPunch = markWeeklyOff ? '00:00:00' : lastPunchManually || existingLastPunch;
+        console.log('firstPunch',firstPunch,"+", lastPunch)
 
         if (markWeeklyOff) {
             status = 'WO'; // Weekly Off
@@ -2966,6 +2967,7 @@ async function upsertAttendance({
             const lastPunchTime  = new Date(`${date}T${lastPunch}`);
 
             totalHours = (lastPunchTime - firstPunchTime) / (1000 * 60 * 60); 
+            console.log('totalHours ++',totalHours)
             if (totalHours >= shiftHours) {
                 status = 'P';
                 calculatedOvertime = totalHours > shiftHours ? (totalHours - shiftHours) : 0;
@@ -3689,63 +3691,71 @@ const getLabourMonthlyWages = async () => {
 
 // Add or update wages
 const upsertLabourMonthlyWages = async (wage) => {
-    const pool = await poolPromise;
-    //console.log('Payload received for wages:', wage);
-    // Step 2: Perform the upsert operation
-    const onboardingData = await pool.request()
-    .input('LabourID', sql.NVarChar, wage.labourId || '')
-    .query(`
-        SELECT 
-            LabourID,
-            name,
-            projectName,
-            companyName,
-            From_Date,
-            businessUnit,
-            departmentName
-        FROM [dbo].[labourOnboarding]
-        WHERE LabourID = @LabourID
-    `);
+    try {
+        const pool = await poolPromise;
 
-if (onboardingData.recordset.length === 0) {
-    throw new Error(`LabourID ${wage.labourId} not found in labourOnboarding table`);
-}
+        // Fetch existing Labour details
+        const onboardingResult = await pool.request()
+            .input('LabourID', sql.NVarChar, wage.labourId || '')
+            .query(`
+                SELECT LabourID, name, projectName, companyName, From_Date, businessUnit, departmentName
+                FROM [dbo].[labourOnboarding]
+                WHERE LabourID = @LabourID
+            `);
 
-const labourDetails = onboardingData.recordset[0];
+        // Check if the result is undefined or empty
+        if (!onboardingResult || !onboardingResult.recordset || onboardingResult.recordset.length === 0) {
+            throw new Error(`LabourID ${wage.labourId} not found in labourOnboarding table`);
+        }
 
-// Step 2: Perform the upsert operation
-const query = `
-INSERT INTO LabourMonthlyWages 
-(LabourID, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, 
- WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, FromDate, EffectiveDate, CreatedAt)
-VALUES 
-(@LabourID, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, 
- CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @FixedMonthlyWages ELSE NULL END,
- CASE WHEN @PayStructure = 'Fixed Monthly Wages' THEN @WeeklyOff ELSE NULL END,
- @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, 
- GETDATE(), @EffectiveDate, GETDATE());
-`;
-// Step 3: Execute the query
-await pool.request()
-    .input('LabourID', sql.NVarChar, wage.labourId || '')
-    .input('PayStructure', sql.NVarChar, wage.payStructure || null)
-    .input('DailyWages', sql.Float, wage.dailyWages || 0)
-    .input('PerHourWages', sql.Float, wage.dailyWages ? wage.dailyWages / 8 : 0)
-    .input('MonthlyWages', sql.Float, wage.monthlyWages || 0)
-    .input('YearlyWages', sql.Float, wage.yearlyWages || 0)
-    .input('FixedMonthlyWages', sql.Float, wage.fixedMonthlyWages || null)
-    .input('WeeklyOff', sql.Int, parseInt(wage.weeklyOff, 10) || null)
-    .input('WagesEditedBy', sql.NVarChar, wage.wagesEditedBy || 'System')
-    .input('name', sql.NVarChar, labourDetails.name || '')
-    .input('projectName', sql.Int, labourDetails.projectName || '')
-    .input('companyName', sql.NVarChar, labourDetails.companyName || '')
-    .input('From_Date', sql.Date, labourDetails.From_Date || null)
-    .input('businessUnit', sql.NVarChar, labourDetails.businessUnit || '')
-    .input('departmentName', sql.NVarChar, labourDetails.departmentName || '')
-    .input('EffectiveDate', sql.Date, wage.effectiveDate || null)
-    .query(query);
-    //console.log('Wages successfully saved with EffectiveDate:', wage.effectiveDate);
+        const labourDetails = onboardingResult.recordset[0];
+
+        // UPSERT Query with OUTPUT to return WageID
+        const query = `
+            INSERT INTO LabourMonthlyWages 
+            (LabourID, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, 
+             WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, FromDate, EffectiveDate, CreatedAt)
+            OUTPUT INSERTED.WageID
+            VALUES 
+            (@LabourID, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, 
+             CASE WHEN @PayStructure = 'FIXED MONTHLY WAGES' THEN @FixedMonthlyWages ELSE NULL END,
+             CASE WHEN @PayStructure = 'FIXED MONTHLY WAGES' THEN @WeeklyOff ELSE NULL END,
+             @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, 
+             GETDATE(), @EffectiveDate, GETDATE());
+        `;
+
+        // Execute Query
+        const insertResult = await pool.request()
+            .input('LabourID', sql.NVarChar, wage.labourId || '')
+            .input('PayStructure', sql.NVarChar, wage.payStructure || null)
+            .input('DailyWages', sql.Float, wage.dailyWages || 0)
+            .input('PerHourWages', sql.Float, wage.dailyWages ? wage.dailyWages / 8 : 0)
+            .input('MonthlyWages', sql.Float, wage.monthlyWages || 0)
+            .input('YearlyWages', sql.Float, wage.yearlyWages || 0)
+            .input('FixedMonthlyWages', sql.Float, wage.fixedMonthlyWages || null)
+            .input('WeeklyOff', sql.Int, wage.weeklyOff ? parseInt(wage.weeklyOff, 10) : null)
+            .input('WagesEditedBy', sql.NVarChar, wage.wagesEditedBy || 'System')
+            .input('name', sql.NVarChar, labourDetails.name || '')
+            .input('projectName', sql.Int, labourDetails.projectName || '') // Fixed type issue
+            .input('companyName', sql.NVarChar, labourDetails.companyName || '')
+            .input('From_Date', sql.Date, labourDetails.From_Date || null)
+            .input('businessUnit', sql.NVarChar, labourDetails.businessUnit || '')
+            .input('departmentName', sql.NVarChar, labourDetails.departmentName || '')
+            .input('EffectiveDate', sql.Date, wage.effectiveDate || null)
+            .query(query);
+
+        // Check if insertResult is valid
+        if (!insertResult || !insertResult.recordset || insertResult.recordset.length === 0) {
+            throw new Error('Failed to retrieve WageID after inserting');
+        }
+
+        return insertResult.recordset[0]; // Return the inserted WageID
+    } catch (error) {
+        console.error('Error in upsertLabourMonthlyWages:', error.message);
+        throw new Error(`Failed to upsert wages: ${error.message}`);
+    }
 };
+
 
 
 // Fetch all approvals

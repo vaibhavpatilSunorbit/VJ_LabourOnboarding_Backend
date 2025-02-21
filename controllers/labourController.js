@@ -3820,36 +3820,60 @@ const getLabourMonthlyWages = async (req, res) => {
 //     }
 // };
 
-
 const upsertLabourMonthlyWages = async (req, res) => {
     try {
         const payload = req.body;
+
         if (!payload.labourId || !payload.payStructure) {
             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
         }
 
-        // Check if wages for the labour in the current month already exist
-        const existingWages = await labourModel.checkExistingWages(payload.labourId);
-        //console.log('payload of wages 55',existingWages)
+        // Call labourModel function to insert/update wages
+        const result = await labourModel.upsertLabourMonthlyWages(payload);
 
-        if (existingWages) {
-            if (existingWages.ApprovalStatus === 'Pending') {
-                return res.status(400).json({ message: 'Wages for this month are pending admin approval.' });
-            } else if (existingWages.ApprovalStatus === 'Approved') {
-                // Send wages to admin for re-approval
-                await labourModel.markWagesForApproval(payload);
-                return res.status(200).json({ message: 'Wages changes sent for admin approval.' });
-            }
+        if (result && result.WageID) {
+            return res.status(200).json({ WageID: result.WageID, message: 'Wages upserted successfully' });
         } else {
-            // Add wages directly for the first time
-            await labourModel.upsertLabourMonthlyWages(payload);
-            return res.status(200).json({ message: 'Wages added successfully.' });
+            return res.status(500).json({ message: 'Failed to upsert wages' });
         }
+
     } catch (error) {
-        console.error('Error updating wages:', error);
-        res.status(500).json({ message: 'Error updating wages', error });
+        console.error('Error in upsertLabourMonthlyWages:', error);
+        return res.status(500).json({ message: 'Internal server error', error: error.message });
     }
 };
+
+
+
+// const upsertLabourMonthlyWages = async (req, res) => {
+//     try {
+//         const payload = req.body;
+//         if (!payload.labourId || !payload.payStructure) {
+//             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
+//         }
+
+//         // Check if wages for the labour in the current month already exist
+//         const existingWages = await labourModel.checkExistingWages(payload.labourId);
+//         //console.log('payload of wages 55',existingWages)
+
+//         if (existingWages) {
+//             if (existingWages.ApprovalStatus === 'Pending') {
+//                 return res.status(400).json({ message: 'Wages for this month are pending admin approval.' });
+//             } else if (existingWages.ApprovalStatus === 'Approved') {
+//                 // Send wages to admin for re-approval
+//                 await labourModel.markWagesForApproval(payload);
+//                 return res.status(200).json({ message: 'Wages changes sent for admin approval.' });
+//             }
+//         } else {
+//             // Add wages directly for the first time
+//             await labourModel.upsertLabourMonthlyWages(payload);
+//             return res.status(200).json({ message: 'Wages added successfully.' });
+//         }
+//     } catch (error) {
+//         console.error('Error updating wages:', error);
+//         res.status(500).json({ message: 'Error updating wages', error });
+//     }
+// };
 
 const checkExistingWagesController = async (req, res) => {
     try {
