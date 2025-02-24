@@ -12,7 +12,7 @@ const getProjectNames = async (req, res) => {
   try {
     const pool = await poolPromise4;
     const result = await pool.request().query(`
-  Select Id, Description ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
+  Select Id, Description AS Business_Unit ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
 (IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
     `);
     res.json(result.recordset);
