@@ -458,13 +458,9 @@ finalOnboardName = finalOnboardName.toUpperCase();
         let query;
         if (!isNaN(safeProjectName)) {
             query = `
-                SELECT a.id, a.Description 
-                FROM Framework.BusinessUnit a
-                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
-                WHERE a.id = @projectName
-                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
-                AND b.Id = 3
+                   Select Id, Description ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
+(IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
+        AND Id = @projectName
             `;
         } else {
             query = `
@@ -494,11 +490,9 @@ finalOnboardName = finalOnboardName.toUpperCase();
         let salaryBu;
         const projectId = projectResult.recordset[0].id;
         const parentIdResult = await pool.request().query(`
-            SELECT ParentId 
-            FROM Framework.BusinessUnit 
-            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-            AND Id = ${projectId}
+            Select Id, Description ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
+(IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
+        AND Id = ${projectId}
         `);
 
         if (parentIdResult.recordset.length === 0) {
@@ -506,13 +500,11 @@ finalOnboardName = finalOnboardName.toUpperCase();
         }
 
         const parentId = parentIdResult.recordset[0].ParentId;
-
-        const companyNameResult = await pool.request().query(`
-            SELECT Id, Description AS Company_Name 
-            FROM Framework.BusinessUnit 
-            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-            AND Id = ${parentId}
+        const pool5 = await poolPromise;
+        const companyNameResult = await pool5.request().query(`
+              SELECT Description AS Company_Name 
+        FROM CompanyNameByBuId 
+        WHERE ParentId = ${parentId}
         `);
 
         const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
@@ -537,9 +529,8 @@ finalOnboardName = finalOnboardName.toUpperCase();
         }
 
         const departmentQuery = `
-            SELECT a.Description AS Department_Name
-            FROM Payroll.Department a
-            WHERE a.Id = @departmentId
+             SELECT [id], [farvision_code] AS Code, [farvision_id] AS Id, [farvision_description] AS Description 
+      FROM [Departments] WHERE [farvision_id] = @departmentId
         `;
         const departmentResult = await departmentRequest.query(departmentQuery);
 
@@ -548,7 +539,7 @@ finalOnboardName = finalOnboardName.toUpperCase();
             return res.status(404).send('Department not found');
         }
 
-        const departmentName = departmentResult.recordset[0].Department_Name;
+        const departmentName = departmentResult.recordset[0].Description;
 
         const creationDate = new Date();
 
@@ -682,13 +673,9 @@ finalOnboardName = finalOnboardName.toUpperCase();
         let query;
         if (!isNaN(safeProjectName)) {
             query = `
-                SELECT a.id, a.Description 
-                FROM Framework.BusinessUnit a
-                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
-                WHERE a.id = @projectName
-                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
-                AND b.Id = 3
+               Select Id, Description ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
+(IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
+        AND Id = @projectName
             `;
         } else {
             query = `
