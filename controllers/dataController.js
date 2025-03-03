@@ -15,8 +15,9 @@ const getProjectNames = async (req, res) => {
   Select Id, Description AS Business_Unit ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
 (IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
     `);
+    // console.log("result.recordset++pluse",result.recordset)
     res.json(result.recordset);
-    console.log('result.recordset}}||',result.recordset)
+    // console.log('result.recordset}}||',result.recordset)
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');

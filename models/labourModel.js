@@ -3982,47 +3982,119 @@ const addWageApproval = async (approval) => {
         `);
 };
 
-async function getWagesByDateRange(projectName, startDate, endDate) {
+// async function getWagesByDateRange(projectName, startDate, endDate) {
+//     const pool = await poolPromise;
+
+//     let query = `
+//     WITH LatestWages AS (
+//         SELECT 
+//             onboarding.LabourID,
+//             onboarding.name,
+//             onboarding.projectName,
+//             onboarding.companyName,
+//             onboarding.From_Date,
+//             onboarding.businessUnit,
+//             onboarding.departmentName,
+//             wages.PayStructure,
+//             wages.DailyWages,
+//             wages.WeeklyOff,
+//             wages.FixedMonthlyWages,
+//             wages.EffectiveDate,
+//             wages.CreatedAt,
+//             ROW_NUMBER() OVER (PARTITION BY onboarding.LabourID ORDER BY wages.CreatedAt DESC) AS RowNum
+//         FROM 
+//             [dbo].[labourOnboarding] AS onboarding
+//         LEFT JOIN 
+//             [dbo].[LabourMonthlyWages] AS wages
+//         ON 
+//             onboarding.LabourID = wages.LabourID
+//         WHERE 
+//             onboarding.status = 'Approved'
+//     `;
+
+//     // ✅ Dynamically include filtering conditions only if projectName is not "all"
+//     if (projectName !== "all") {
+//         query += ` AND wages.ProjectName = @projectName AND onboarding.projectName = @projectName`;
+//     }
+
+//     if (startDate && endDate) {
+//         query += ` AND wages.CreatedAt BETWEEN @startDate AND @endDate`;
+//     }
+
+//     query += `)
+//     SELECT 
+//         LabourID,
+//         name,
+//         projectName,
+//         companyName,
+//         From_Date,
+//         businessUnit,
+//         departmentName,
+//         PayStructure,
+//         DailyWages,
+//         WeeklyOff,
+//         FixedMonthlyWages,
+//         EffectiveDate,
+//         CreatedAt
+//     FROM LatestWages
+//     WHERE RowNum = 1`;
+
+//     const request = pool.request();
+
+//     if (projectName !== "all") request.input('projectName', sql.VarChar, projectName);
+//     if (startDate && endDate) {
+//         request.input('startDate', sql.Date, startDate);
+//         request.input('endDate', sql.Date, endDate);
+//     }
+
+//     console.log("Executing SQL Query:", query);  // ✅ Debugging Log
+
+//     const result = await request.query(query);
+//     return result.recordset;
+// };
+
+async function getWagesByDateRange(projectName, payStructure, startDate, endDate) {
     const pool = await poolPromise;
-
+  
     let query = `
-    WITH LatestWages AS (
+      WITH LatestWages AS (
         SELECT 
-            onboarding.LabourID,
-            onboarding.name,
-            onboarding.projectName,
-            onboarding.companyName,
-            onboarding.From_Date,
-            onboarding.businessUnit,
-            onboarding.departmentName,
-            wages.PayStructure,
-            wages.DailyWages,
-            wages.WeeklyOff,
-            wages.FixedMonthlyWages,
-            wages.EffectiveDate,
-            wages.CreatedAt,
-            ROW_NUMBER() OVER (PARTITION BY onboarding.LabourID ORDER BY wages.CreatedAt DESC) AS RowNum
+          onboarding.LabourID,
+          onboarding.name,
+          onboarding.projectName,
+          onboarding.companyName,
+          onboarding.From_Date,
+          onboarding.businessUnit,
+          onboarding.departmentName,
+          wages.PayStructure,
+          wages.DailyWages,
+          wages.WeeklyOff,
+          wages.FixedMonthlyWages,
+          wages.EffectiveDate,
+          wages.CreatedAt,
+          ROW_NUMBER() OVER (PARTITION BY onboarding.LabourID ORDER BY wages.CreatedAt DESC) AS RowNum
         FROM 
-            [dbo].[labourOnboarding] AS onboarding
+          [dbo].[labourOnboarding] AS onboarding
         LEFT JOIN 
-            [dbo].[LabourMonthlyWages] AS wages
+          [dbo].[LabourMonthlyWages] AS wages
         ON 
-            onboarding.LabourID = wages.LabourID
-        WHERE 
-            onboarding.status = 'Approved'
+          onboarding.LabourID = wages.LabourID
+          AND wages.CreatedAt BETWEEN @startDate AND @endDate
+          AND (@payStructure IS NULL OR wages.PayStructure = @payStructure)
     `;
-
-    // ✅ Dynamically include filtering conditions only if projectName is not "all"
+  
+    // If projectName is not "all", add an IN clause for multiple project IDs.
     if (projectName !== "all") {
-        query += ` AND wages.ProjectName = @projectName AND onboarding.projectName = @projectName`;
+      const projectIds = projectName.split(',').map(id => id.trim());
+      const placeholders = projectIds.map((_, index) => `@projectName${index}`).join(', ');
+      query += ` AND wages.ProjectName IN (${placeholders})`;
     }
-
-    if (startDate && endDate) {
-        query += ` AND wages.CreatedAt BETWEEN @startDate AND @endDate`;
-    }
-
-    query += `)
-    SELECT 
+  
+    query += `
+        WHERE 
+          onboarding.status = 'Approved'
+      )
+      SELECT 
         LabourID,
         name,
         projectName,
@@ -4036,23 +4108,107 @@ async function getWagesByDateRange(projectName, startDate, endDate) {
         FixedMonthlyWages,
         EffectiveDate,
         CreatedAt
-    FROM LatestWages
-    WHERE RowNum = 1`;
-
+      FROM LatestWages
+      WHERE RowNum = 1
+    `;
+  
     const request = pool.request();
-
-    if (projectName !== "all") request.input('projectName', sql.VarChar, projectName);
-    if (startDate && endDate) {
-        request.input('startDate', sql.Date, startDate);
-        request.input('endDate', sql.Date, endDate);
+  
+    // Bind each project ID if needed.
+    if (projectName !== "all") {
+      const projectIds = projectName.split(',').map(id => id.trim());
+      projectIds.forEach((id, index) => {
+        request.input(`projectName${index}`, sql.Int, parseInt(id, 10));
+      });
     }
-
-    console.log("Executing SQL Query:", query);  // ✅ Debugging Log
-
+  
+    // Bind other parameters.
+    request.input('payStructure', sql.VarChar, payStructure || null);
+    if (startDate && endDate) {
+      request.input('startDate', sql.Date, startDate);
+      request.input('endDate', sql.Date, endDate);
+    }
+  
     const result = await request.query(query);
     return result.recordset;
-};
+  }
 
+
+
+// async function getWagesByDateRange(projectName, payStructure, startDate, endDate) {
+//     const pool = await poolPromise;
+
+//     let query = `
+//     WITH LatestWages AS (
+//         SELECT 
+//             onboarding.LabourID,
+//             onboarding.name,
+//             onboarding.projectName,
+//             onboarding.companyName,
+//             onboarding.From_Date,
+//             onboarding.businessUnit,
+//             onboarding.departmentName,
+//             wages.PayStructure,
+//             wages.DailyWages,
+//             wages.WeeklyOff,
+//             wages.FixedMonthlyWages,
+//             wages.EffectiveDate,
+//             wages.CreatedAt,
+//             ROW_NUMBER() OVER (PARTITION BY onboarding.LabourID ORDER BY wages.CreatedAt DESC) AS RowNum
+//         FROM 
+//             [dbo].[labourOnboarding] AS onboarding
+//         LEFT JOIN 
+//             [dbo].[LabourMonthlyWages] AS wages
+//         ON 
+//             onboarding.LabourID = wages.LabourID
+//         WHERE 
+//             onboarding.status = 'Approved'
+//     `;
+
+//     if (projectName !== "all") {
+//         query += ` AND wages.ProjectName = @projectName AND onboarding.projectName = @projectName`;
+//     }
+
+//     if (payStructure) {
+//         query += ` AND wages.PayStructure = @payStructure`;
+//     }
+
+//     if (startDate && endDate) {
+//         query += ` AND wages.CreatedAt BETWEEN @startDate AND @endDate`;
+//     }
+
+//     query += `)
+//     SELECT 
+//         LabourID,
+//         name,
+//         projectName,
+//         companyName,
+//         From_Date,
+//         businessUnit,
+//         departmentName,
+//         PayStructure,
+//         DailyWages,
+//         WeeklyOff,
+//         FixedMonthlyWages,
+//         EffectiveDate,
+//         CreatedAt
+//     FROM LatestWages
+//     WHERE RowNum = 1`;
+
+//     const request = pool.request();
+
+//     if (projectName !== "all") request.input('projectName', sql.VarChar, projectName);
+//     if (payStructure) request.input('payStructure', sql.VarChar, payStructure);
+//     if (startDate && endDate) {
+//         request.input('startDate', sql.Date, startDate);
+//         request.input('endDate', sql.Date, endDate);
+//     }
+
+//     console.log("Executing SQL Query:", query);
+
+//     const result = await request.query(query);
+//     return result.recordset;
+// };
 
 
 
@@ -4160,7 +4316,7 @@ async function insertWagesData(row) {
         monthlyWages = dailyWages * 26; // Assuming 26 working days/month
         yearlyWages = monthlyWages * 12; // 12 months/year
     } else if (row.PayStructure === 'FIXED MONTHLY WAGES') {
-        fixedMonthlyWages = parseFloat(row.FixedMonthlyWages) || 13000;
+        fixedMonthlyWages = parseFloat(row.FixedMonthlyWages) || "";
     }
 
     // Insert data into the LabourMonthlyWages table
@@ -4191,18 +4347,31 @@ async function insertWagesData(row) {
         VALUES (@LabourID, @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @FixedMonthlyWages, @WeeklyOff, @EffectiveDate, @CreatedAt, @isApprovalSendAdmin)
     `);
 
-    const wageId = insertResult.recordset[0].WageID;
+    const WageID = insertResult.recordset[0].WageID;
 
-    // Update the LabourMonthlyWages table
-    await request.query(`
-        UPDATE [LabourMonthlyWages]
+    // Now, perform the UPDATE and INSERT operations concurrently
+    const updatePromise = pool.request()
+      .input('WageID', sql.Int, WageID)
+      .query(`
+        UPDATE [dbo].[LabourMonthlyWages]
         SET ApprovalStatusWages = 'Pending',
             EditDate = GETDATE()
         WHERE WageID = @WageID
-    `);
-
-    // Insert into the WagesAdminApprovals table
-    await request.query(`
+      `);
+  
+    const approvalPromise = pool.request()
+      .input('WageID', sql.Int, WageID)
+      .input('LabourID', sql.VarChar, row.LabourID)
+      .input('DailyWages', sql.Decimal, dailyWages)
+      .input('MonthlyWages', sql.Decimal, monthlyWages)
+      .input('FixedMonthlyWages', sql.Decimal, fixedMonthlyWages)
+      .input('PerHourWages', sql.Decimal, perHourWages)
+      .input('YearlyWages', sql.Decimal, yearlyWages)
+      .input('EffectiveDate', sql.Date, effectiveDate)
+      .input('WeeklyOff', sql.Int, parseInt(row.WeeklyOff, 10) || null)
+      .input('PayStructure', sql.VarChar, row.PayStructure)
+      .input('WagesEditedBy', sql.VarChar, row.WagesEditedBy || 'System')
+      .query(`
         INSERT INTO [WagesAdminApprovals] (
             WageID, LabourID, DailyWages, MonthlyWages, FixedMonthlyWages, PerHourWages, YearlyWages, EffectiveDate,
             WeeklyOff, PayStructure, WagesEditedBy, ApprovalStatus, Remarks, CreatedAt
@@ -4211,10 +4380,13 @@ async function insertWagesData(row) {
             @WageID, @LabourID, @DailyWages, @MonthlyWages, @FixedMonthlyWages, @PerHourWages, @YearlyWages, @EffectiveDate,
             @WeeklyOff, @PayStructure, @WagesEditedBy, 'Pending', '', GETDATE()
         )
-    `);
-
-    return { success: true, message: 'Wages inserted and sent for approval.' };
-};
+      `);
+  
+    // Wait for both queries to complete
+    await Promise.all([updatePromise, approvalPromise]);
+  
+    return { success: true, LabourID: row.LabourID, WageID: WageID, message: 'Wages inserted and sent for approval.' };
+  }
 
 
 
@@ -4258,8 +4430,14 @@ async function insertWagesData(row) {
 const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
     const pool = await poolPromise;
   
-    // Build the base query with aliasing
+    // Build the query using a CTE to get only the latest wage record for each LabourID.
     let query = `
+      WITH LatestWages AS (
+        SELECT 
+          *,
+          ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY CreatedAt DESC) AS rn
+        FROM [dbo].[LabourMonthlyWages]
+      )
       SELECT 
         onboarding.LabourID,
         onboarding.name,
@@ -4278,26 +4456,20 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
         wages.CreatedAt,
         wages.FixedMonthlyWages,
         wages.EffectiveDate
-      FROM
-        [dbo].[labourOnboarding] AS onboarding
-      LEFT JOIN
-        [dbo].[LabourMonthlyWages] AS wages
-      ON
-        onboarding.LabourID = wages.LabourID
-      WHERE
-        onboarding.status = 'Approved'
+      FROM [dbo].[labourOnboarding] AS onboarding
+      LEFT JOIN LatestWages AS wages
+        ON onboarding.LabourID = wages.LabourID AND wages.rn = 1
+      WHERE onboarding.status = 'Approved'
     `;
   
-    // Append additional filters if provided from the frontend
+    // Append additional filters if provided.
     if (filters.ProjectID) {
-      // Note: Ensure that the value of filters.ProjectID is safe or use a parameterized query.
+      // Ensure the value is safe or use parameterized queries
       query += ` AND onboarding.projectName = ${filters.ProjectID}`;
     }
     if (filters.DepartmentID) {
       query += ` AND onboarding.department = ${filters.DepartmentID}`;
     }
-  
-    query += ` ORDER BY onboarding.LabourID;`;
   
     const result = await pool.request().query(query);
     return result.recordset;
