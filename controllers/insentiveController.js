@@ -875,28 +875,7 @@ console.log('req.query for slarygeneration',req.query)
                     month: parseInt(month),
                     year: parseInt(year),
                     ...salaryDetails,
-                    // wageType: salaryDetails.wageType || "-",
-                    // dailyWageRate: salaryDetails.dailyWageRate || 0,
-                    // fixedMonthlyWage: salaryDetails.fixedMonthlyWage || 0,
-                    // presentDays: salaryDetails.presentDays || 0,
-                    // absentDays: salaryDetails.absentDays || 0,
-                    // halfDays: salaryDetails.halfDays || 0,
-                    // missPunchDays: salaryDetails.missPunchDays || 0,
-                    // cappedOvertime: salaryDetails.cappedOvertime || 0,
-                    // basicSalary: salaryDetails.basicSalary || 0,
-                    // overtimePay: salaryDetails.overtimePay || 0,
-                    // weeklyOffPay: salaryDetails.weeklyOffPay || 0,
-                    // bonuses: salaryDetails.bonuses || 0,
-                    // totalDeductions: salaryDetails.totalDeductions || 0,
-                    // grossPay: salaryDetails.grossPay || 0,
-                    // netPay: salaryDetails.netPay || 0,
-                    // netPayDescription: salaryDetails.netPayDescription || "-",
-                    // advance: salaryDetails.advance || 0,
-                    // advanceRemarks: salaryDetails.advanceRemarks || "-",
-                    // debit: salaryDetails.debit || 0,
-                    // debitRemarks: salaryDetails.debitRemarks || "-",
-                    // incentive: salaryDetails.incentive || 0,
-                    // incentiveRemarks: salaryDetails.incentiveRemarks || "-",
+                   
                 };
             })
         );
@@ -1139,6 +1118,63 @@ async function exportMonthlyPayrollExcel(req, res) {
     }
 };
   
+const exportWagesexcelSheet = async (req, res) => {
+    try {
+      let { projectName, month, payStructure } = req.query;
+  
+      if (!month) {
+        return res.status(400).json({ message: 'Missing required parameter: month' });
+      }
+  
+      // Use "all" if projectName is missing or empty.
+      if (!projectName || projectName.trim() === "") {
+        projectName = "all";
+      }
+  
+      // Calculate the date range for the given month.
+      const startDate = `${month}-01`;
+      const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
+        .toISOString()
+        .split('T')[0];
+  
+      console.log(`Fetching wages for projectName: ${projectName}, payStructure: ${payStructure}, startDate: ${startDate}, endDate: ${endDate}`);
+  
+      // Fetch wages data (or approved onboarding rows if no matching wages).
+      const wagesData = await labourModel.getWagesByDateRange(projectName, payStructure, startDate, endDate);
+  
+      // Create the Excel workbook.
+      const workbook = xlsx.utils.book_new();
+      const worksheet = xlsx.utils.json_to_sheet(wagesData);
+      xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
+  
+      // Set the file name.
+      const fileName = projectName === "all"
+        ? `Approved_Labours_${month}.xlsx`
+        : `Wages_${projectName}_${month}.xlsx`;
+  
+      // Use res.attachment to set the header only once.
+      res.attachment(fileName);
+      res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.send(xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+    } catch (error) {
+      console.error('Error exporting Wages:', error);
+      res.status(500).json({ message: 'Error exporting Wages data.' });
+    }
+  };
+  
+  // Optionally preset payStructure for dedicated endpoints.
+  const exportMonthlyWagesExcel = async (req, res) => {
+    req.query.payStructure = 'Monthly Wages';
+    exportWagesexcelSheet(req, res);
+  };
+  
+  const exportFixedWagesExcel = async (req, res) => {
+    req.query.payStructure = 'Fix Monthly Wages';
+    exportWagesexcelSheet(req, res);
+  };
+  
+
+
 
 module.exports = {
     getAllLabours,
@@ -1175,6 +1211,9 @@ module.exports = {
     deletePayrollController,
     getFinalizedSalaryData,
     getFinalizedSalaryDataByLabourID,
-    exportMonthlyPayrollExcel
+    exportMonthlyPayrollExcel,
+    exportWagesexcelSheet,
+    exportMonthlyWagesExcel,
+    exportFixedWagesExcel,
 
 }

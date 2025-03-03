@@ -15,7 +15,7 @@ const { createLogger, format, transports } = require('winston');
 const { isHoliday } = require('../models/labourModel');    
 const xlsx = require('xlsx');        
 // const { sql, poolPromise2 } = require('../config/dbConfig');
-
+// 
 const baseUrl = 'http://localhost:4000/uploads/';
 // const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
 // const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
@@ -3988,50 +3988,106 @@ const addWageApproval = async (req, res) => {
     }
 };
 
+// const exportWagesexcelSheet = async (req, res) => {
+//     try {
+//         let { projectName, month } = req.query;
+
+//         if (!month) {
+//             return res.status(400).json({ message: 'Missing required parameter: month' });
+//         }
+
+//         if (!projectName || projectName.trim() === "") {
+//             projectName = "all";  // ✅ Ensure "all" is used instead of an empty string
+//         }
+
+//         const startDate = `${month}-01`;
+//         const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
+//             .toISOString()
+//             .split('T')[0];
+
+//         console.log(`Fetching wages for projectName: ${projectName}, startDate: ${startDate}, endDate: ${endDate}`);
+
+//         // Fetch wages data
+//         const wagesData = await labourModel.getWagesByDateRange(projectName, startDate, endDate);
+
+//         if (!wagesData || wagesData.length === 0) {
+//             return res.status(404).json({ message: 'No data found for the selected criteria.' });
+//         }
+
+//         // Create Excel workbook and worksheet
+//         const workbook = xlsx.utils.book_new();
+//         const worksheet = xlsx.utils.json_to_sheet(wagesData);
+//         xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
+
+//         // Generate Excel file as buffer
+//         const fileName = projectName === "all"
+//             ? `Approved_Labours_${month}.xlsx`
+//             : `Wages_${projectName}_${month}.xlsx`;
+
+//         res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+//         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+//         res.send(xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+//     } catch (error) {
+//         console.error('Error exporting Wages:', error);
+//         res.status(500).json({ message: 'Error exporting Wages data.' });
+//     }
+// };
+
 const exportWagesexcelSheet = async (req, res) => {
     try {
-        let { projectName, month } = req.query;
-
-        if (!month) {
-            return res.status(400).json({ message: 'Missing required parameter: month' });
-        }
-
-        if (!projectName || projectName.trim() === "") {
-            projectName = "all";  // ✅ Ensure "all" is used instead of an empty string
-        }
-
-        const startDate = `${month}-01`;
-        const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
-            .toISOString()
-            .split('T')[0];
-
-        console.log(`Fetching wages for projectName: ${projectName}, startDate: ${startDate}, endDate: ${endDate}`);
-
-        // Fetch wages data
-        const wagesData = await labourModel.getWagesByDateRange(projectName, startDate, endDate);
-
-        if (!wagesData || wagesData.length === 0) {
-            return res.status(404).json({ message: 'No data found for the selected criteria.' });
-        }
-
-        // Create Excel workbook and worksheet
-        const workbook = xlsx.utils.book_new();
-        const worksheet = xlsx.utils.json_to_sheet(wagesData);
-        xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
-
-        // Generate Excel file as buffer
-        const fileName = projectName === "all"
-            ? `Approved_Labours_${month}.xlsx`
-            : `Wages_${projectName}_${month}.xlsx`;
-
-        res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.send(xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+      let { projectName, month, payStructure } = req.query;
+  
+      if (!month) {
+        return res.status(400).json({ message: 'Missing required parameter: month' });
+      }
+  
+      // Use "all" if projectName is missing or empty.
+      if (!projectName || projectName.trim() === "") {
+        projectName = "all";
+      }
+  
+      // Calculate the date range for the given month.
+      const startDate = `${month}-01`;
+      const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
+        .toISOString()
+        .split('T')[0];
+  
+  
+      // Fetch wages data (or approved onboarding rows if no matching wages).
+      const wagesData = await labourModel.getWagesByDateRange(projectName, payStructure, startDate, endDate);
+  
+      // Create the Excel workbook.
+      const workbook = xlsx.utils.book_new();
+      const worksheet = xlsx.utils.json_to_sheet(wagesData);
+      xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
+  
+      // Set the file name.
+      const fileName = projectName === "all"
+        ? `Approved_Labours_${month}.xlsx`
+        : `Wages_${projectName}_${month}.xlsx`;
+  
+      res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.send(xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
     } catch (error) {
-        console.error('Error exporting Wages:', error);
-        res.status(500).json({ message: 'Error exporting Wages data.' });
+      console.error('Error exporting Wages:', error);
+      res.status(500).json({ message: 'Error exporting Wages data.' });
     }
-};
+  };
+  
+  // Optionally preset payStructure for dedicated endpoints.
+  const exportMonthlyWagesExcel = async (req, res) => {
+    req.query.payStructure = 'Monthly Wages';
+    exportWagesexcelSheet(req, res);
+  };
+  
+  const exportFixedWagesExcel = async (req, res) => {
+    req.query.payStructure = 'Fix Monthly Wages';
+    exportWagesexcelSheet(req, res);
+  };
+  
+
+  
 
 /**
  * Converts an Excel serial date to a JavaScript Date object.
@@ -4196,5 +4252,7 @@ module.exports = {
     approveWagesControllerAdmin,
     rejectWagesControllerAdmin,
     checkExistingWagesController,
-    markWagesForApprovalController
+    markWagesForApprovalController,
+    exportMonthlyWagesExcel,
+    exportFixedWagesExcel,
 };

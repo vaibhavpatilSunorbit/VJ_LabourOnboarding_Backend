@@ -64,7 +64,7 @@ router.get('/wages', labourController.getLabourMonthlyWages);
 router.post('/upsertLabourMonthlyWages', labourController.upsertLabourMonthlyWages);
 router.get('/wages/adminApprovals', labourController.getWagesAdminApprovals);
 router.post('/wages/approvals', labourController.addWageApproval);
-router.get('/exportWagesExcel', labourController.exportWagesexcelSheet);
+router.post('/exportWagesExcel', labourController.exportWagesexcelSheet);
 router.post('/importWagesExcel', upload.single('file'), labourController.importWages);
 router.get('/getWagesAndLabourOnboardingJoin', labourController.getWagesAndLabourOnboardingJoincontroller);
 router.get('/searchLaboursFromWages', labourController.searchLaboursFromWages);  
@@ -74,6 +74,9 @@ router.get('/checkExistingWages', labourController.checkExistingWagesController)
 router.post('/sendWagesForApproval', labourController.markWagesForApprovalController);
 router.put('/admin/approveWages', labourController.approveWagesControllerAdmin);
 router.put('/admin/rejectWages', labourController.rejectWagesControllerAdmin);
+
+router.get('/exportMonthlyWagesExcel', labourController.exportMonthlyWagesExcel);
+router.get('/exportFixedWagesExcel', labourController.exportFixedWagesExcel);
 
 // ------------------------------------------------------- IMP ROUTE AND GET USING VIEW DETAILS FOR LABOUR --------------------------------------------------
 router.get('/:id', labourController.getRecordById);
