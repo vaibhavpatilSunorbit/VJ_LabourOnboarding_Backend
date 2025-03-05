@@ -23,7 +23,7 @@ router.get('/exportVariablePayexcelSheetWithBU', insentiveController.exportVaria
 router.get('/exportVariablePayExcel', insentiveController.exportVariablePayexcelSheet);
 
 router.post('/importVariablePay', upload.single('file'), insentiveController.importVariablePay);
-
+    
 // --------------------------------------------------   routes for salary generation process -----------------------------------
 router.post('/generateMonthlyPayroll', insentiveController.generateMonthlyPayroll);
 router.post('/generateMonthlyPayroll/:labourId', insentiveController.generateMonthlyPayrollForSingleLabour);

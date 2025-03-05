@@ -257,7 +257,7 @@ async function createRecord(req, res) {
 
         const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
         const businessUnit = projectResult.recordset[0].Description;
-        console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
+        // console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
 
         // **********************************  NEW  ********************
 
@@ -282,7 +282,7 @@ async function createRecord(req, res) {
 `);
 
         const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
-console.log('companyNameFromDb++',companyNameFromDb)
+// console.log('companyNameFromDb++',companyNameFromDb)
         if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
             salaryBu = `${companyNameFromDb} - HO`;
         } else {
@@ -303,7 +303,7 @@ console.log('companyNameFromDb++',companyNameFromDb)
         }
 
         const departmentName = departmentResult.recordset[0].Description;
-        console.log('departmentResult++',departmentName)
+        // console.log('departmentResult++',departmentName)
 
         const creationDate = new Date();
         //console.log('Received OnboardName:', finalOnboardName);
@@ -3882,7 +3882,7 @@ const markWagesForApprovalController = async (req, res) => {
     try {
         const payload = req.body;
         const { wageId, labourId, dailyWages, perHourWages, monthlyWages, yearlyWages, effectiveDate, fixedMonthlyWages, weeklyOff, payStructure, wagesEditedBy, remarks } = payload;
-console.log('payload for wages new 55',payload)
+// console.log('payload for wages new 55',payload)
         if (!wageId || !labourId || !payStructure) {
             return res.status(400).json({ message: 'Wage ID, Labour ID, and Pay Structure are required' });
         }
@@ -3945,7 +3945,7 @@ const handleApproval = async (req, res) => {
 
 async function approveWagesControllerAdmin(req, res) {
     const { ApprovalID } = req.query;
-    //console.log('id___approveWagesControllerAdmin',ApprovalID)
+    console.log('id___approveWagesControllerAdmin',ApprovalID)
     if (!ApprovalID) {
         return res.status(400).json({ message: 'WageID is required.' });
     }
