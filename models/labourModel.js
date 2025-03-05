@@ -2332,29 +2332,29 @@ async function markAttendanceForApproval(
 async function approveAttendance(id) {
     try {
         const pool = await poolPromise;
-
+                console.log(id)
         // Fetch the approval record
         const result = await pool.request()
-            .input('id', sql.Int, id)
+            .input('AttendanceId', sql.Int, id)
             .query(`
                 SELECT *
                 FROM LabourAttendanceApproval
-                WHERE id = @id
+                WHERE AttendanceId = @AttendanceId
             `);
 
         if (result.recordset.length === 0) {
             throw new Error('Approval record not found.');
         }
 
-        const approvalData = result.recordset[0];
-
+        const approvalData = result.recordset[result.recordset.length - 1];
+// console.log('approvalData attendance   --',approvalData)
         // Extract only the date part of the Date field
         const formattedDate = approvalData.Date.toISOString().split('T')[0];
 
-        console.log('Approval Data:', {
-            ...approvalData,
-            Date: formattedDate,
-        });
+        // console.log('Approval Data:', {
+        //     ...approvalData,
+        //     Date: formattedDate,
+        // });
 
         // Call upsertAttendance to handle insertion or update of LabourAttendanceDetails
         await upsertAttendance({
@@ -2366,6 +2366,7 @@ async function approveAttendance(id) {
             remarkManually: approvalData.RemarkManually,
             workingHours: approvalData.WorkingHours,
             onboardName: approvalData.OnboardName,
+            markWeeklyOff: false
         });
 
         // Update the LabourAttendanceApproval table with 'Approved' status
@@ -2375,7 +2376,7 @@ async function approveAttendance(id) {
                 UPDATE LabourAttendanceApproval
                 SET ApprovalStatus = 'Approved',
                     ApprovalDate = GETDATE()
-                WHERE id = @id
+                WHERE AttendanceId = @id
             `);
 
         // Update the LabourAttendanceDetails table with 'Approved' status
@@ -2391,7 +2392,7 @@ async function approveAttendance(id) {
                 WHERE LabourId = @labourId AND Date = @date
             `);
 
-        console.log('Attendance approved and updated successfully.');
+        // console.log('Attendance approved and updated successfully.');
         return { success: true, message: 'Attendance approved successfully.' };
     } catch (error) {
         console.error('Error approving attendance:', error);
@@ -2410,7 +2411,7 @@ async function rejectAttendanceAdmin(id, rejectReason) {
             .query(`
                 SELECT *
                 FROM LabourAttendanceApproval
-                WHERE id = @id
+                WHERE AttendanceId = @id
             `);
 
         if (result.recordset.length === 0) {
@@ -2448,7 +2449,7 @@ async function rejectAttendanceAdmin(id, rejectReason) {
                 SET ApprovalStatus = 'Rejected',
                     RejectedDate = GETDATE(),
                     RejectAttendanceReason = @rejectReason
-                WHERE id = @id
+                WHERE AttendanceId = @id
             `);
 
         // Update the LabourAttendanceDetails table with 'Approved' status
@@ -2922,14 +2923,9 @@ async function upsertAttendance({
             .input('labourId', sql.NVarChar, labourId)
             .input('date',     sql.Date, date)
             .query(`
-                SELECT 
-                    [TimesUpdate],
-                    [SentForApproval],
-                    [ApprovalStatus],
-                    [FirstPunch],
-                    [LastPunch]
+                 SELECT TimesUpdate, FirstPunch, LastPunch
                 FROM [dbo].[LabourAttendanceDetails]
-                WHERE [LabourId] = @labourId AND [Date] = @date
+                WHERE LabourId = @labourId AND Date = @date
             `);
 
         let timesUpdate       = 0;
@@ -3855,7 +3851,7 @@ async function markWagesForApproval(
 async function approveWages(ApprovalID) {
     try {
         const pool = await poolPromise;
-        //console.log('approvalWages ID in model.js:', ApprovalID);
+        console.log('approvalWages ID in model.js:', ApprovalID);
 
         // Fetch the approval record
         const approvalResult = await pool.request()
@@ -3870,7 +3866,7 @@ async function approveWages(ApprovalID) {
         }
 
         const approvalData = approvalResult.recordset[0];
-        //console.log('approvalData:', approvalData);
+        console.log('approvalData:', approvalData);
 
         // Approve in LabourMonthlyWages
         await pool.request()
@@ -3899,12 +3895,13 @@ async function approveWages(ApprovalID) {
             .input('ApprovalID', sql.Int, ApprovalID)
             .query(`
                 UPDATE [WagesAdminApprovals]
-                SET ApprovalStatus = 'Approved',
+                SET ApprovalStatusWages = 'Approved',
+                ApprovalStatus = 'Approved',
                     ApprovalDate = GETDATE()
                 WHERE ApprovalID = @ApprovalID
             `);
 
-        //console.log('Wages approved successfully.');
+        console.log('Wages approved successfully.');
         return { success: true, message: 'Wages approved successfully.' };
     } catch (error) {
         console.error('Error approving wages:', error);
@@ -3951,7 +3948,8 @@ async function rejectWages(ApprovalID, Remarks) {
             .input('Remarks', sql.NVarChar, Remarks || null)
             .query(`
                 UPDATE [WagesAdminApprovals]
-                SET ApprovalStatus = 'Rejected',
+                SET ApprovalStatusWages = 'Rejected',
+                 ApprovalStatus = 'Rejected',
                     RejectionDate = GETDATE(),
                     Remarks = @Remarks
                 WHERE ApprovalID = @ApprovalID
@@ -4390,49 +4388,15 @@ async function insertWagesData(row) {
 
 
 
-// const getWagesAndLabourOnboardingJoin = async () => {
-//     const pool = await poolPromise;
-
-//     const result = await pool.request().query(`
-//         SELECT 
-//             onboarding.LabourID,
-//             onboarding.name,
-//             onboarding.businessUnit,
-//             onboarding.departmentName,
-//             onboarding.From_Date,
-//             onboarding.projectName,
-//             onboarding.department,
-//             wages.WagesEditedBy,
-//             wages.PayStructure,
-//             wages.DailyWages,
-//             wages.PerHourWages,
-//             wages.MonthlyWages,
-//             wages.YearlyWages,
-//             wages.WeeklyOff,
-//             wages.CreatedAt,
-//             wages.FixedMonthlyWages,
-//             wages.EffectiveDate
-//         FROM
-//             [dbo].[labourOnboarding] AS onboarding
-//         LEFT JOIN
-//             [dbo].[LabourMonthlyWages] AS wages
-//         ON
-//             onboarding.LabourID = wages.LabourID
-//         WHERE
-//             onboarding.status = 'Approved'
-//             ORDER BY
-//     onboarding.LabourID;
-//     `);
-
-//     return result.recordset;
-// };
-
-const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
+  const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
     const pool = await poolPromise;
   
-    // Build the query using a CTE to get only the latest wage record for each LabourID.
+    // Build the query using a CTE and OUTER APPLY
+    // The CTE "RankedWages" ranks all wage records by CreatedAt descending for each LabourID.
+    // The OUTER APPLY selects the TOP 1 wage record where ApprovalStatusWages = 'Approved'
+    // ordered so that if the latest record (rn = 1) is approved it comes first.
     let query = `
-      WITH LatestWages AS (
+      WITH RankedWages AS (
         SELECT 
           *,
           ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY CreatedAt DESC) AS rn
@@ -4457,14 +4421,20 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
         wages.FixedMonthlyWages,
         wages.EffectiveDate
       FROM [dbo].[labourOnboarding] AS onboarding
-      LEFT JOIN LatestWages AS wages
-        ON onboarding.LabourID = wages.LabourID AND wages.rn = 1
+      OUTER APPLY (
+        SELECT TOP 1 *
+        FROM RankedWages R
+        WHERE R.LabourID = onboarding.LabourID
+          AND R.ApprovalStatusWages = 'Approved'
+        ORDER BY 
+          CASE WHEN R.rn = 1 THEN 0 ELSE 1 END,
+          R.CreatedAt DESC
+      ) AS wages
       WHERE onboarding.status = 'Approved'
     `;
   
     // Append additional filters if provided.
     if (filters.ProjectID) {
-      // Ensure the value is safe or use parameterized queries
       query += ` AND onboarding.projectName = ${filters.ProjectID}`;
     }
     if (filters.DepartmentID) {
@@ -4472,22 +4442,76 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
     }
   
     const result = await pool.request().query(query);
+    console.log('result wages', result);
     return result.recordset;
   };
+  
+
+// const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
+//     const pool = await poolPromise;
+  
+//     // Build the query using a CTE to get only the latest wage record for each LabourID.
+//     let query = `
+//       WITH LatestWages AS (
+//         SELECT 
+//           *,
+//           ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY CreatedAt DESC) AS rn
+//         FROM [dbo].[LabourMonthlyWages]
+//       )
+//       SELECT 
+//         onboarding.LabourID,
+//         onboarding.name,
+//         onboarding.businessUnit,
+//         onboarding.departmentName,
+//         onboarding.From_Date,
+//         onboarding.projectName AS ProjectID,
+//         onboarding.department AS DepartmentID,
+//         wages.WagesEditedBy,
+//         wages.PayStructure,
+//         wages.DailyWages,
+//         wages.PerHourWages,
+//         wages.MonthlyWages,
+//         wages.YearlyWages,
+//         wages.WeeklyOff,
+//         wages.CreatedAt,
+//         wages.FixedMonthlyWages,
+//         wages.EffectiveDate
+//       FROM [dbo].[labourOnboarding] AS onboarding
+//       LEFT JOIN LatestWages AS wages
+//         ON onboarding.LabourID = wages.LabourID AND wages.rn = 1
+//       WHERE onboarding.status = 'Approved'
+//     `;
+  
+//     // Append additional filters if provided.
+//     if (filters.ProjectID) {
+//       // Ensure the value is safe or use parameterized queries
+//       query += ` AND onboarding.projectName = ${filters.ProjectID}`;
+//     }
+//     if (filters.DepartmentID) {
+//       query += ` AND onboarding.department = ${filters.DepartmentID}`;
+//     }
+  
+//     const result = await pool.request().query(query);
+//     console.log('result wages',result)
+//     return result.recordset;
+//   };
 
 
 // Function to search FromWages records
+
+
 async function searchFromWages(query) {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
-            .query('SELECT * FROM LabourMonthlyWages WHERE name LIKE @query OR companyName LIKE @query OR LabourID LIKE @query OR DailyWages LIKE @query OR departmentName LIKE @query OR WagesEditedBy LIKE @query OR PayStructure LIKE @query');
+            .query('SELECT * FROM labourOnboarding WHERE name LIKE @query OR companyName LIKE @query OR LabourID LIKE @query OR departmentName LIKE @query');
         return result.recordset;
     } catch (error) {
         throw error;
     }
-}
+};
+// .query('SELECT * FROM LabourMonthlyWages WHERE name LIKE @query OR companyName LIKE @query OR LabourID LIKE @query OR DailyWages LIKE @query OR departmentName LIKE @query OR WagesEditedBy LIKE @query OR PayStructure LIKE @query');
 
 const getVariablePayAndLabourOnboardingJoin = async () => {
     const pool = await poolPromise;
