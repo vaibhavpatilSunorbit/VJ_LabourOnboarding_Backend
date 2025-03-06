@@ -981,13 +981,12 @@ async function search(query) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
-            .query('SELECT * FROM labourOnboarding WHERE name LIKE @query OR aadhaarNumber LIKE @query OR LabourID LIKE @query OR OnboardName LIKE @query OR workingHours LIKE @query OR businessUnit LIKE @query OR designation LIKE @query');
+            .query('SELECT * FROM labourOnboarding WHERE name LIKE @query OR aadhaarNumber LIKE @query OR LabourID LIKE @query OR OnboardName LIKE @query OR workingHours LIKE @query OR businessUnit LIKE @query OR designation LIKE @query OR location LIKE @query');
         return result.recordset;
     } catch (error) {
         throw error;
     }
 }
-
 
 async function getAllLabours() {
     try {
@@ -1808,17 +1807,17 @@ async function insertIntoLabourAttendanceSummary(summary) {
             `);
 
         if (existingRecord.recordset[0].count > 0) {
-            //console.log(`Record already exists for LabourId: ${summary.labourId} in month: ${summary.selectedMonth}`);
+            console.log(`Record already exists for LabourId: ${summary.labourId} in month: ${summary.selectedMonth}`);
             return; 
         }
 
         const query = `
             INSERT INTO [dbo].[LabourAttendanceSummary] (
                 LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
-                TotalOvertimeHours, Shift, CreationDate, SelectedMonth, Date
+                TotalOvertimeHours, Shift, CreationDate, SelectedMonth, Date , RoundOffTotalOvertime
             ) VALUES (
                 @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
-                @TotalOvertimeHours, @Shift, @CreationDate, @SelectedMonth, @Date
+                @TotalOvertimeHours, @Shift, @CreationDate, @SelectedMonth, @Date , @RoundOffTotalOvertime
             )
         `;
 
@@ -1831,13 +1830,14 @@ async function insertIntoLabourAttendanceSummary(summary) {
             .input('AbsentDays', sql.Int, summary.absentDays)
             .input('MissPunchDays', sql.Int, summary.missPunchDays)
             .input('TotalOvertimeHours', sql.Float, summary.totalOvertimeHours)
+            .input('RoundOffTotalOvertime', sql.Float, summary.RoundOffTotalOvertime)
             .input('Shift', sql.NVarChar, summary.shift)
             .input('CreationDate', sql.DateTime, summary.creationDate)
             .input('SelectedMonth', sql.NVarChar, summary.selectedMonth)
             .input('Date', sql.Date, summary.date)
             .query(query);
 
-        //console.log(`Inserted summary for LabourId: ${summary.labourId}`);
+        console.log(`Inserted summary for LabourId updated: ${summary.labourId}`);
     } catch (err) {
         console.error('Error inserting into LabourAttendanceSummary:', err);
         throw err;
@@ -2112,8 +2112,8 @@ async function fetchAttendanceDetailsByMonthYear(month, year) {
                 SELECT *
                 FROM [dbo].[LabourAttendanceSummary]
                 WHERE 
-                    MONTH(CONVERT(DATE, SelectedMonth + '-01')) = @month 
-                    AND YEAR(CONVERT(DATE, SelectedMonth + '-01')) = @year
+                    MONTH(TRY_CONVERT(DATE, SelectedMonth + '-01')) = @month 
+                    AND YEAR(TRY_CONVERT(DATE, SelectedMonth + '-01')) = @year
             `);
         return result.recordset;
     } catch (error) {
@@ -2329,13 +2329,13 @@ async function markAttendanceForApproval(
     }
 }
 
-async function approveAttendance(id) {
+async function approveAttendance(AttendanceId) {
     try {
         const pool = await poolPromise;
-                console.log(id)
+                console.log(AttendanceId)
         // Fetch the approval record
         const result = await pool.request()
-            .input('AttendanceId', sql.Int, id)
+            .input('AttendanceId', sql.Int, AttendanceId)
             .query(`
                 SELECT *
                 FROM LabourAttendanceApproval
@@ -2371,12 +2371,12 @@ async function approveAttendance(id) {
 
         // Update the LabourAttendanceApproval table with 'Approved' status
         await pool.request()
-            .input('id', sql.Int, id)
+            .input('AttendanceId', sql.Int, AttendanceId)
             .query(`
                 UPDATE LabourAttendanceApproval
                 SET ApprovalStatus = 'Approved',
                     ApprovalDate = GETDATE()
-                WHERE AttendanceId = @id
+                WHERE AttendanceId = @AttendanceId
             `);
 
         // Update the LabourAttendanceDetails table with 'Approved' status
@@ -2401,24 +2401,24 @@ async function approveAttendance(id) {
 }
 
 
-async function rejectAttendanceAdmin(id, rejectReason) {
+async function rejectAttendanceAdmin(AttendanceId, rejectReason) {
     try {
         const pool = await poolPromise;
 
         // Fetch the approval record
         const result = await pool.request()
-            .input('id', sql.Int, id)
+            .input('AttendanceId', sql.Int, AttendanceId)
             .query(`
                 SELECT *
                 FROM LabourAttendanceApproval
-                WHERE AttendanceId = @id
+                WHERE AttendanceId = @AttendanceId
             `);
 
         if (result.recordset.length === 0) {
             throw new Error('Approval record not found.');
         }
 
-        const approvalData = result.recordset[0];
+        const approvalData = result.recordset[result.recordset.length - 1];
 
         // Extract only the date part of the Date field
         const formattedDate = approvalData.Date.toISOString().split('T')[0];
@@ -2438,18 +2438,19 @@ async function rejectAttendanceAdmin(id, rejectReason) {
             remarkManually: approvalData.RemarkManually,
             workingHours: approvalData.WorkingHours,
             onboardName: approvalData.OnboardName,
+            markWeeklyOff: false
         });
 
         // Update the LabourAttendanceApproval table with 'Approved' status
         await pool.request()
-            .input('id', sql.Int, id)
+            .input('AttendanceId', sql.Int, AttendanceId)
             .input('rejectReason', sql.NVarChar, rejectReason)
             .query(`
                 UPDATE LabourAttendanceApproval
                 SET ApprovalStatus = 'Rejected',
                     RejectedDate = GETDATE(),
                     RejectAttendanceReason = @rejectReason
-                WHERE AttendanceId = @id
+                WHERE AttendanceId = @AttendanceId
             `);
 
         // Update the LabourAttendanceDetails table with 'Approved' status
@@ -4505,12 +4506,71 @@ async function searchFromWages(query) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
-            .query('SELECT * FROM labourOnboarding WHERE name LIKE @query OR companyName LIKE @query OR LabourID LIKE @query OR departmentName LIKE @query');
+            .query(`
+                SELECT id, aadhaarNumber, name, projectName as ProjectID, labourCategory, department as DepartmentID,
+                       LabourID, companyName, OnboardName, workingHours, businessUnit, designation, location
+                FROM labourOnboarding
+                WHERE status = 'Approved'
+                  AND (name LIKE @query 
+                       OR companyName LIKE @query 
+                       OR LabourID LIKE @query 
+                       OR departmentName LIKE @query 
+                       OR location LIKE @query)
+            `);
         return result.recordset;
     } catch (error) {
         throw error;
     }
 };
+
+async function searchAttendance(query) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('query', sql.NVarChar, `%${query}%`)
+            .query(`
+                SELECT id, aadhaarNumber, name, projectName as ProjectID, labourCategory, department as DepartmentID,
+                       LabourID, companyName, OnboardName, workingHours, businessUnit, designation, location
+                FROM labourOnboarding 
+                WHERE status = 'Approved'
+                  AND (name LIKE @query 
+                       OR aadhaarNumber LIKE @query 
+                       OR LabourID LIKE @query 
+                       OR OnboardName LIKE @query 
+                       OR workingHours LIKE @query 
+                       OR businessUnit LIKE @query 
+                       OR designation LIKE @query 
+                       OR location LIKE @query)
+            `);
+        return result.recordset;
+    } catch (error) {
+        throw error;
+    }
+};
+
+
+async function searchLaboursFromSiteTransfer(query) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('query', sql.NVarChar, `%${query}%`)
+            .query(`
+                SELECT id, aadhaarNumber, name, projectName, labourCategory, department as departmentId,
+                       LabourID, companyName, OnboardName, workingHours, businessUnit, designation, location
+                FROM labourOnboarding
+                WHERE status = 'Approved'
+                  AND (name LIKE @query 
+                       OR companyName LIKE @query 
+                       OR LabourID LIKE @query 
+                       OR departmentName LIKE @query 
+                       OR location LIKE @query)
+            `);
+        return result.recordset;
+    } catch (error) {
+        throw error;
+    }
+};
+
 // .query('SELECT * FROM LabourMonthlyWages WHERE name LIKE @query OR companyName LIKE @query OR LabourID LIKE @query OR DailyWages LIKE @query OR departmentName LIKE @query OR WagesEditedBy LIKE @query OR PayStructure LIKE @query');
 
 const getVariablePayAndLabourOnboardingJoin = async () => {
@@ -4631,6 +4691,8 @@ module.exports = {
     approveWages,
     rejectWages,
     getVariablePayAndLabourOnboardingJoin,
-    getHolidayDates
+    getHolidayDates,
+    searchAttendance,
+    searchLaboursFromSiteTransfer
 
 };
