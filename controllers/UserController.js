@@ -68,7 +68,7 @@ async function loginUserController(req, res) {
         userType: user.userType,
         projectIds:user.assigned_projects , 
         departmentIds:user.assigned_departments ,
-      },
+      }, 
       token });
   } catch (err) {
     console.error("Error:", err);
