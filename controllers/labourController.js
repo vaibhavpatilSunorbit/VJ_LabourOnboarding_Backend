@@ -2256,6 +2256,7 @@ async function getAllLaboursAttendance(req, res) {
             let absentDays = 0;
             let totalOvertimeHours = 0;
             let monthlyAttendance = [];
+            let roundOffTotalOvertime = 0;
 
             // Fetch attendance records for the labour for the specified month and year
             const labourAttendance = await labourModel.getAttendanceByLabourId(labourId, parsedMonth, parsedYear);
@@ -2271,6 +2272,7 @@ async function getAllLaboursAttendance(req, res) {
                 const { status, firstPunch, lastPunch, misPunch, totalHours } = determineStatus(punchesForDay, shiftHours, halfDayHours, workingHours);
 
                 let overtime = 0;
+                let dailyRoundOffOvertime = 0;
                 let firstPunchAttendanceId = null;
                 let firstPunchDeviceId = null;
                 let lastPunchAttendanceId = null;
@@ -2291,6 +2293,7 @@ async function getAllLaboursAttendance(req, res) {
                     case 'P':
                         presentDays++;
                         overtime = totalHours > shiftHours ? parseFloat((totalHours - shiftHours).toFixed(2)) : 0;
+                        dailyRoundOffOvertime = overtime > 4 ? 4 : overtime;
                         break;
                     case 'HD':
                         halfDays++;
@@ -2306,7 +2309,7 @@ async function getAllLaboursAttendance(req, res) {
                 }
 
                 totalOvertimeHours += overtime;
-
+                roundOffTotalOvertime += dailyRoundOffOvertime;
                 // Ensure totalHours is a valid number
                 const safeTotalHours = typeof totalHours === 'number' && !isNaN(totalHours) ? totalHours : 0;
 
@@ -2339,6 +2342,7 @@ async function getAllLaboursAttendance(req, res) {
                 missPunchDays,
                 absentDays,
                 totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(1)),
+                RoundOffTotalOvertime: parseFloat(roundOffTotalOvertime.toFixed(2)),
                 shift: workingHours,
                 creationDate: new Date(),
                 selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`, // e.g., "2024-11"
@@ -3552,14 +3556,16 @@ async function upsertAttendance(req, res) {
 }
 
 async function approveAttendanceController(req, res) {
-    const { id } = req.query;
-console.log('id',id)
-    if (!id) {
+    const { AttendanceId } = req.query;
+    console.log("----->",req.query)
+
+console.log('id',AttendanceId)
+    if (!AttendanceId) {
         return res.status(400).json({ message: 'id is required.' });
     }
 
     try {
-        const result = await labourModel.approveAttendance(id);
+        const result = await labourModel.approveAttendance(AttendanceId);
         res.status(200).json(result);
     } catch (error) {
         console.error('Error in approving attendance:', error);
@@ -3568,14 +3574,15 @@ console.log('id',id)
 }
 
 async function rejectAttendanceControllerAdmin(req, res) {
-    const { id, rejectReason } = req.query;
+    const { AttendanceId, rejectReason } = req.query;
+    console.log("----->",req.query)
 //console.log('id___rejectAttendanceControllerAdmin',req.query)
-    if (!id) {
+    if (!AttendanceId) {
         return res.status(400).json({ message: 'id is required.' });
     }
 
     try {
-        const result = await labourModel.rejectAttendanceAdmin(id, rejectReason);
+        const result = await labourModel.rejectAttendanceAdmin(AttendanceId, rejectReason);
         res.status(200).json(result);
     } catch (error) {
         console.error('Error in approving attendance:', error);
@@ -4190,6 +4197,30 @@ async function searchLaboursFromWages(req, res) {
 }
 
 
+async function searchLaboursFromSiteTransfer(req, res) {
+    const { q } = req.query;
+
+    try {
+        const results = await labourModel.searchLaboursFromSiteTransfer(q);
+        return res.json(results);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
+async function searchAttendance(req, res) {
+    const { q } = req.query;
+
+    try {
+        const results = await labourModel.searchAttendance(q);
+        return res.json(results);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
 
 module.exports = {
     handleCheckAadhaar,
@@ -4255,4 +4286,6 @@ module.exports = {
     markWagesForApprovalController,
     exportMonthlyWagesExcel,
     exportFixedWagesExcel,
+    searchLaboursFromSiteTransfer,
+    searchAttendance
 };

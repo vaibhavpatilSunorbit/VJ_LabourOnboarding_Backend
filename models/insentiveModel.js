@@ -108,7 +108,7 @@ async function searchFromVariablePay(query) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
-            .query('SELECT * FROM VariablePay WHERE name LIKE @query OR companyName LIKE @query OR LabourID LIKE @query OR departmentName LIKE @query OR payAddedBy LIKE @query OR PayStructure LIKE @query OR businessUnit LIKE @query OR variablePayRemark LIKE @query');
+            .query('SELECT * FROM VariablePay WHERE name LIKE @query OR companyName LIKE @query OR LabourID LIKE @query OR departmentName LIKE @query OR payAddedBy LIKE @query OR PayStructure LIKE @query OR businessUnit LIKE @query OR variablePayRemark LIKE @query OR VariablepayAmount LIKE @query OR variablePayRemark LIKE @query');
         return result.recordset;
     } catch (error) {
         throw error;
@@ -263,6 +263,22 @@ const checkExistingVariablePay = async (LabourID) => {
     return result.recordset[0] || null;
 };
 
+// In your labourModel file, update the function to retrieve the monthly wages record
+const getLabourMonthlyWages = async (LabourID) => {
+    const pool = await poolPromise;
+    const result = await pool.request()
+        .input('LabourID', sql.NVarChar, LabourID)
+        .query(`
+            SELECT MonthlyWages, FixedMonthlyWages 
+            FROM LabourMonthlyWages 
+            WHERE LabourID = @LabourID
+            ORDER BY LabourID ASC
+        `);
+    // Return the latest record (last element) if available, otherwise null.
+    return result.recordset && result.recordset.length 
+        ? result.recordset[result.recordset.length - 1] 
+        : null;
+};
 
 
 // Add or update variablePay
@@ -3986,5 +4002,6 @@ module.exports = {
     getFinalizedSalaryData,
     getFinalizedSalaryDataByLabourID,
     getMonthlyPayrollData,
-    getWagesByDateRange
+    getWagesByDateRange,
+    getLabourMonthlyWages
 }
