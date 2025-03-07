@@ -2156,7 +2156,8 @@ async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month,
                     att.EditUserName,
                     att.LastUpdatedDate,
                     att.WorkingHours,
-                    att.OnboardName
+                    att.OnboardName,
+                    att.ApprovalStatus
                 FROM [dbo].[LabourAttendanceDetails] att
                 LEFT JOIN [dbo].[HolidayDate] hol
                     ON att.Date = hol.HolidayDate
@@ -4408,6 +4409,7 @@ async function insertWagesData(row) {
         onboarding.name,
         onboarding.businessUnit,
         onboarding.departmentName,
+        onboarding.workingHours,
         onboarding.From_Date,
         onboarding.projectName AS ProjectID,
         onboarding.department AS DepartmentID,
