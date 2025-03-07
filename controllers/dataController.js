@@ -1540,10 +1540,10 @@ const approveSiteTransfer = async (req, res) => {
 const rejectSiteTransfer = async (req, res) => {
   try {
     const { id, rejectReason } = req.body; // Extract `id` and `rejectReason` from the request body.
-
-    if (!id) {
-      return res.status(400).json({ message: "ID is required." });
-    }
+    console.log('req.body+++}}',req.body)
+    // if (!id) {
+    //   return res.status(400).json({ message: "ID is required." });
+    // }
 
     const pool = await poolPromise;
 
@@ -1595,7 +1595,7 @@ const rejectSiteTransfer = async (req, res) => {
       "Rejected"
     );
 
-    res.status(200).json({ message: "Site transfer request rejected successfully." });
+    res.status(200).json({ message: "Site transfer request rejected successfully.", success:true });
   } catch (error) {
     console.error("Error rejecting site transfer:", error);
     res.status(500).json({ message: "Failed to reject site transfer.", error: error.message });

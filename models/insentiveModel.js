@@ -637,7 +637,7 @@ async function rejectAdminVariablePay(VariablePayId, Remarks) {
 const getVariablePayAdminApproval = async () => {
     const pool = await poolPromise;
     const result = await pool.request().query(`
-        SELECT * FROM VariablePay
+        SELECT * FROM VariablePay ORDER BY LabourID DESC
     `);
     return result.recordset;
 };

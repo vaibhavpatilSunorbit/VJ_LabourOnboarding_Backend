@@ -283,17 +283,17 @@ const getVariablePayAndLabourOnboardingJoincontroller = async (req, res) => {
 const upsertLabourVariablePay = async (req, res) => {
     try {
         const payload = req.body;
-
+console.log('payload}}}}==',payload)
         // Check that LabourID and Pay Structure are provided
         if (!payload.LabourID || !payload.payStructure) {
             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
         }
 
         // First, check if labour wages record exists
-        const existingWages = await labourModel.checkExistingVariablePay(payload.LabourID);
-        if (!existingWages) {
-            return res.status(400).json({ message: 'Labour wages are not added' });
-        }
+        // const existingWages = await labourModel.checkExistingVariablePay(payload.LabourID);
+        // if (!existingWages) {
+        //     return res.status(400).json({ message: 'Labour wages are not added bugs and new' });
+        // }
 
         // If an incentive is provided, perform the incentive check
         if (payload.payStructure.Incentive !== undefined && payload.payStructure.Incentive !== null) {
