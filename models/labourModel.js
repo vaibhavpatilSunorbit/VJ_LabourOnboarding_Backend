@@ -2126,10 +2126,13 @@ async function fetchAttendanceDetailsByMonthYear(month, year) {
 async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month, year) {
     try {
         const pool = await poolPromise;
+        let formattedMonth = month.toString().padStart(2, '0');
+        let datefornewquery = `${year}-${formattedMonth}`;  
         const result = await pool.request()
             .input('labourId', sql.NVarChar, labourId)
             .input('month', sql.Int, month)
             .input('year', sql.Int, year)
+            .input('datefornewquery',  sql.NVarChar, datefornewquery)
             .query(`
                 SELECT 
                     att.AttendanceId,
@@ -2157,15 +2160,33 @@ async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month,
                     att.LastUpdatedDate,
                     att.WorkingHours,
                     att.OnboardName,
-                    att.ApprovalStatus
+                    att.ApprovalStatus,
+                    las.TotalOvertimeHoursManually
                 FROM [dbo].[LabourAttendanceDetails] att
+                inner join LabourAttendanceSummary  las on las.LabourId=att.LabourId
                 LEFT JOIN [dbo].[HolidayDate] hol
                     ON att.Date = hol.HolidayDate
                 WHERE 
                     att.LabourId = @labourId
                     AND MONTH(att.Date) = @month 
                     AND YEAR(att.Date) = @year
+                    and las.SelectedMonth=@datefornewquery
             `);
+
+           // Ensure the month is always two digits (01, 02, ..., 12)
+
+
+// console.log("datefornewquery", datefornewquery);
+
+const result2 = await pool.request()
+    .input('labourId', sql.NVarChar, labourId)
+    .input('datefornewquery', sql.NVarChar, datefornewquery) // Explicitly define type
+    .query(
+        `SELECT TotalOvertimeHours FROM LabourAttendanceSummary 
+         WHERE LabourId = @labourId AND SelectedMonth = @datefornewquery`
+    );
+
+
 
         return result.recordset.map((row) => {
             // Ensure the status is not an array
