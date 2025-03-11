@@ -1,6 +1,8 @@
 
 const express = require('express');
-const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, getDesignations, getCompanyNamesByProjectId, getDevices, getAttendanceLogs, approveLabour, getProjectDeviceStatus,updateProjectDeviceStatus, deleteProjectDeviceStatus, getProjectDeviceStatusSS, fetchDynamicData, fetchOrgDynamicData, addFvEmpId, updateEmployeeMaster, saveApiResponsePayload, getLaboursWithOldAttendance, fetchCachedLabours, saveTransferData, getAllLaboursWithTransferDetails, employeeMasterPayloadUpdatepost, organizationMasterPayloadUpdatepost, siteTransferRequestforAdmin, approveSiteTransfer, rejectSiteTransfer, editSiteTransfer, getAdminSiteTransferApproval} = require('../controllers/dataController');
+const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, getDesignations, getCompanyNamesByProjectId, getDevices, getAttendanceLogs, approveLabour, getProjectDeviceStatus,updateProjectDeviceStatus, deleteProjectDeviceStatus, getProjectDeviceStatusSS, fetchDynamicData, fetchOrgDynamicData, addFvEmpId, updateEmployeeMaster, saveApiResponsePayload, getLaboursWithOldAttendance, fetchCachedLabours, saveTransferData, getAllLaboursWithTransferDetails, employeeMasterPayloadUpdatepost, organizationMasterPayloadUpdatepost, siteTransferRequestforAdmin, approveSiteTransfer, rejectSiteTransfer, editSiteTransfer, getAdminSiteTransferApproval, getWagesforInsentiveAdd
+    , getAdminCompanyTransferApproval, companyTransferRequestforAdmin, approveCompanyTransfer, rejectCompanyTransfer, editCompanyTransfer
+} = require('../controllers/dataController');
 const {addEmployee} =require("../controllers/sendLabourData")
 const router = express.Router();
 
@@ -35,7 +37,15 @@ router.post('/admin/sitetransfertoadmin', siteTransferRequestforAdmin);
 router.put('/admin/approveSiteTransferadmin', approveSiteTransfer);
 router.put('/admin/rejectSiteTransferadmin', rejectSiteTransfer);
 router.put('/admin/editSiteTransferadmin', editSiteTransfer);
+router.get('/getWagesforInsentiveAdd', getWagesforInsentiveAdd);
 
+// ----------------------------------------------------- COMPANY TRANSFER API  -------------------
+
+router.get('/getAdminCompanyTransferApproval', getAdminCompanyTransferApproval);
+router.post('/admin/companytransfertoadmin', companyTransferRequestforAdmin);
+router.put('/admin/approveCompanyTransferadmin', approveCompanyTransfer);
+router.put('/admin/rejectCompanyTransferadmin', rejectCompanyTransfer);
+router.put('/admin/editCompanyTransferadmin', editCompanyTransfer);
 
 module.exports = router;
 
