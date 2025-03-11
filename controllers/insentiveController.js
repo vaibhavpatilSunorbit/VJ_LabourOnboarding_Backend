@@ -1215,7 +1215,7 @@ const exportWagesexcelSheet = async (req, res) => {
     req.query.payStructure = 'Fix Monthly Wages';
     exportWagesexcelSheet(req, res);
   };
-  
+
 
 
 
