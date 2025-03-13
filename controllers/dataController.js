@@ -2083,6 +2083,7 @@ const saveCompanyTransferData = async (req, res) => {
           currentCompanyName,
           transferCompanyName,
           siteTransferBy,
+          AdminStatus,
           createdAt
         )
         VALUES (
@@ -2096,6 +2097,7 @@ const saveCompanyTransferData = async (req, res) => {
           @currentCompanyName,
           @transferCompanyName,
           @siteTransferBy,
+          'Approved',
           GETDATE()
         )
       `);

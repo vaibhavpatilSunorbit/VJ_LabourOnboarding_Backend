@@ -1796,7 +1796,7 @@ async function addApprovalRequest(labourId, punchType, punchDate, punchTime) {
 async function insertIntoLabourAttendanceSummary(summary) {
     try {
         const pool = await poolPromise;
-        // console.log("summary",summary)
+        console.log("summary",summary)
         const existingRecord = await pool
             .request()
             .input('LabourId', sql.NVarChar, summary.labourId)
@@ -1815,10 +1815,10 @@ async function insertIntoLabourAttendanceSummary(summary) {
         const query = `
             INSERT INTO [dbo].[LabourAttendanceSummary] (
                 LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
-                TotalOvertimeHours, Shift, CreationDate, SelectedMonth, Date , RoundOffTotalOvertime, PayrollCalRoundoffTotalOvertime
+                TotalOvertimeHours, Shift, CreationDate, SelectedMonth, Date , RoundOffTotalOvertime, PayrollCalRoundoffTotalOvertime, TotalOvertimeHoursManually
             ) VALUES (
                 @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
-                @TotalOvertimeHours, @Shift, @CreationDate, @SelectedMonth, @Date , @RoundOffTotalOvertime, @PayrollCalRoundoffTotalOvertime
+                @TotalOvertimeHours, @Shift, @CreationDate, @SelectedMonth, @Date , @RoundOffTotalOvertime, @PayrollCalRoundoffTotalOvertime, @TotalOvertimeHoursManually
             )
         `;
 
@@ -1837,6 +1837,7 @@ async function insertIntoLabourAttendanceSummary(summary) {
             .input('SelectedMonth', sql.NVarChar, summary.selectedMonth)
             .input('Date', sql.Date, summary.date)
             .input('PayrollCalRoundoffTotalOvertime', sql.Float, summary.PayrollCalRoundoffTotalOvertime)
+            .input('TotalOvertimeHoursManually', sql.Float, summary.TotalOvertimeHoursManually)
             .query(query);
 
         console.log(`Inserted summary for LabourId updated: ${summary.labourId}`);
@@ -3327,6 +3328,7 @@ async function upsertAttendance({
         // 9b) Build monthly attendance
         let presentDays = 0, halfDays = 0, missPunchDays = 0, absentDays = 0;
         let totalOvertimeHrs = 0;
+        let totalManualOvertime= 0;
         let monthlyAttendance = [];
 
         for (let day = 1; day <= daysInMonth; day++) {
@@ -3379,6 +3381,7 @@ async function upsertAttendance({
                 case 'A': default: absentDays++; break;
             }
             totalOvertimeHrs += dailyRoundedOT;
+            totalManualOvertime += finalOTManually;
 
             monthlyAttendance.push({
                 labourId,
@@ -3409,7 +3412,8 @@ async function upsertAttendance({
             shift: workingHours,
             creationDate: new Date(),
             selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`,
-            RoundOffTotalOvertime: parseFloat(totalOvertimeHrs.toFixed(1))
+            RoundOffTotalOvertime: parseFloat(totalOvertimeHrs.toFixed(1)),
+            TotalOvertimeHoursManually: parseFloat(totalManualOvertime.toFixed(1))
         };
 
         await insertIntoLabourAttendanceSummary(summary);
