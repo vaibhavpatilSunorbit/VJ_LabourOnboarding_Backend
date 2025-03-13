@@ -2267,6 +2267,7 @@ async function getAllLaboursAttendance(req, res) {
 
             let presentDays = 0, halfDays = 0, missPunchDays = 0, absentDays = 0;
             let totalOvertimeHours = 0, roundOffTotalOvertime = 0 ,PayrollCalRoundoffTotalOvertime=0;
+            let totalManualOvertimeManually = 0;
             let monthlyAttendance = [];
 
             // Fetch attendance records for the labour for the month
@@ -2318,6 +2319,7 @@ async function getAllLaboursAttendance(req, res) {
                 totalOvertimeHours += overtime;
                 PayrollCalRoundoffTotalOvertime += roundOvertime(overtime)
                 roundOffTotalOvertime += dailyRoundOffOvertime;
+                totalManualOvertimeManually += OvertimeManually;
 
                 const safeTotalHours = typeof totalHours === 'number' && !isNaN(totalHours) ? totalHours : 0;
 
@@ -2353,6 +2355,7 @@ async function getAllLaboursAttendance(req, res) {
                 totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(2)),
                 PayrollCalRoundoffTotalOvertime: parseFloat(PayrollCalRoundoffTotalOvertime.toFixed(2)),
                 RoundOffTotalOvertime: parseFloat(roundOffTotalOvertime.toFixed(2)),
+                TotalOvertimeHoursManually: parseFloat(totalManualOvertimeManually.toFixed(2)),
                 shift: workingHours,
                 creationDate: new Date(),
                 selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`,
@@ -2371,6 +2374,7 @@ async function getAllLaboursAttendance(req, res) {
         res.status(500).json({ message: 'Error processing attendance' });
     }
 }
+
 // async function getAllLaboursAttendance(req, res) {
 //     try {
 //         const { month, year } = req.query;
