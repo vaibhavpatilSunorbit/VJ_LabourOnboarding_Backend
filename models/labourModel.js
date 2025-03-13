@@ -1796,7 +1796,7 @@ async function addApprovalRequest(labourId, punchType, punchDate, punchTime) {
 async function insertIntoLabourAttendanceSummary(summary) {
     try {
         const pool = await poolPromise;
-        console.log("summary",summary)
+        // console.log("summary",summary)
         const existingRecord = await pool
             .request()
             .input('LabourId', sql.NVarChar, summary.labourId)
@@ -1808,7 +1808,7 @@ async function insertIntoLabourAttendanceSummary(summary) {
             `);
 
         if (existingRecord.recordset[0].count > 0) {
-            console.log(`Record already exists for LabourId: ${summary.labourId} in month: ${summary.selectedMonth}`);
+            // console.log(`Record already exists for LabourId: ${summary.labourId} in month: ${summary.selectedMonth}`);
             return; 
         }
 
@@ -1840,7 +1840,7 @@ async function insertIntoLabourAttendanceSummary(summary) {
             .input('TotalOvertimeHoursManually', sql.Float, summary.TotalOvertimeHoursManually)
             .query(query);
 
-        console.log(`Inserted summary for LabourId updated: ${summary.labourId}`);
+        // console.log(`Inserted summary for LabourId updated: ${summary.labourId}`);
     } catch (err) {
         console.error('Error inserting into LabourAttendanceSummary:', err);
         throw err;
@@ -2019,7 +2019,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                     WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
                 `);
 
-            console.log(`Updated summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
+            // console.log(`Updated summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
         } else {
             // Insert new record
             await pool
@@ -2045,7 +2045,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                     )
                 `);
 
-            console.log(`Inserted summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
+            // console.log(`Inserted summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
         }
     } catch (err) {
         console.error('Error in insertOrUpdateLabourAttendanceSummary:', err);
@@ -2476,7 +2476,7 @@ async function markAttendanceForApproval(
 async function approveAttendance(AttendanceId) {
     try {
         const pool = await poolPromise;
-                console.log(AttendanceId)
+                // console.log(AttendanceId)
         // Fetch the approval record
         const result = await pool.request()
             .input('AttendanceId', sql.Int, AttendanceId)
@@ -2495,10 +2495,10 @@ async function approveAttendance(AttendanceId) {
         // Extract only the date part of the Date field
         const formattedDate = approvalData.Date.toISOString().split('T')[0];
 
-        console.log('Approval Data:', {
-            ...approvalData,
-            Date: formattedDate,
-        });
+        // console.log('Approval Data:', {
+        //     ...approvalData,
+        //     Date: formattedDate,
+        // });
 
         // Call upsertAttendance to handle insertion or update of LabourAttendanceDetails
         await upsertAttendance({
@@ -3919,7 +3919,21 @@ const upsertLabourMonthlyWages = async (wage) => {
     try {
         const pool = await poolPromise;
 
-        // Fetch existing Labour details
+        // Check if LabourID exists in LabourMonthlyWages
+        const checkExistingWage = await pool.request()
+            .input('LabourID', sql.NVarChar, wage.labourId || '')
+            .query(`
+              SELECT LabourID, ApprovalStatusWages
+                FROM LabourMonthlyWages
+                WHERE LabourID = @LabourID and ApprovalStatusWages = 'Pending'
+            `);
+
+        if (checkExistingWage.recordset.length > 0) {
+            const existingWage = checkExistingWage.recordset[0];
+                return ({success : false, message:`LabourID ${wage.labourId} already has a pending approval in Labour Monthly Wages`});
+        }
+
+        // Fetch existing Labour details from labourOnboarding table
         const onboardingResult = await pool.request()
             .input('LabourID', sql.NVarChar, wage.labourId || '')
             .query(`
@@ -3928,12 +3942,12 @@ const upsertLabourMonthlyWages = async (wage) => {
                 WHERE LabourID = @LabourID
             `);
 
-        // Check if the result is undefined or empty
+        // Check if LabourID exists in labourOnboarding
         if (!onboardingResult || !onboardingResult.recordset || onboardingResult.recordset.length === 0) {
             throw new Error(`LabourID ${wage.labourId} not found in labourOnboarding table`);
         }
-
         const labourDetails = onboardingResult.recordset[0];
+      
 
         // UPSERT Query with OUTPUT to return WageID
         const query = `
@@ -4672,7 +4686,7 @@ async function insertWagesData(row) {
     }
   
     const result = await pool.request().query(query);
-    console.log('result wages', result);
+    // console.log('result wages', result);
     return result.recordset;
   };
   
@@ -4733,44 +4747,76 @@ async function insertWagesData(row) {
 async function searchFromWages(query) {
     try {
         const pool = await poolPromise;
-        const result = await pool.request()
-            .input('query', sql.NVarChar, `%${query}%`)
-            .query(
-                `SELECT 
-                    l.id,
-                    l.aadhaarNumber,
-                    l.name,
-                    l.projectName AS ProjectID,
-                    l.labourCategory,
-                    l.department AS DepartmentID,
-                    l.departmentName,
-                    l.LabourID,
-                    l.companyName,
-                    l.OnboardName,
-                    l.workingHours,
-                    l.businessUnit,
-                    l.designation,
-                    l.location,
-                    w.From_Date,
-                    w.WagesEditedBy,
-                    w.PayStructure,
-                    w.DailyWages,
-                    w.PerHourWages,
-                    w.MonthlyWages,
-                    w.YearlyWages,
-                    w.WeeklyOff,
-                    w.CreatedAt,
-                    w.FixedMonthlyWages,
-                    w.EffectiveDate
-                 FROM labourOnboarding l
-                 LEFT JOIN LabourMonthlyWages w ON l.LabourID = w.LabourID
-                 WHERE l.status = 'Approved'
-                   AND (l.name LIKE @query 
-                        OR l.companyName LIKE @query 
-                        OR l.LabourID LIKE @query 
-                        OR l.departmentName LIKE @query 
-                        OR l.location LIKE @query)`
-            );
+        const isLabourID = /^[A-Za-z]+\d+$/.test(query.trim());
+
+       
+                // `SELECT top (1)
+                //     l.id,
+                //     l.aadhaarNumber,
+                //     l.name,
+                //     l.projectName AS ProjectID,
+                //     l.labourCategory,
+                //     l.department AS DepartmentID,
+                //     l.departmentName,
+                //     l.LabourID,
+                //     l.companyName,
+                //     l.OnboardName,
+                //     l.workingHours,
+                //     l.businessUnit,
+                //     l.designation,
+                //     l.location,
+                //     w.From_Date,
+                //     w.WagesEditedBy,
+                //     w.PayStructure,
+                //     w.DailyWages,
+                //     w.PerHourWages,
+                //     w.MonthlyWages,
+                //     w.YearlyWages,
+                //     w.WeeklyOff,
+                //     w.CreatedAt,
+                //     w.FixedMonthlyWages,
+                //     w.EffectiveDate
+                //  FROM labourOnboarding l
+                //  LEFT JOIN LabourMonthlyWages w ON l.LabourID = w.LabourID
+                //  WHERE l.status = 'Approved'
+                //    AND (l.name LIKE @query 
+                //         OR l.companyName LIKE @query 
+                //         OR l.LabourID LIKE @query 
+                //         OR l.departmentName LIKE @query 
+                //         OR l.location LIKE @query)
+                //     order by w.CreatedAt desc`
+                let searchQuery = `WITH LatestWages AS (
+            SELECT 
+                w.LabourID, w.From_Date, w.WagesEditedBy, w.PayStructure,
+                w.DailyWages, w.PerHourWages, w.MonthlyWages, w.YearlyWages,
+                w.WeeklyOff, w.CreatedAt, w.FixedMonthlyWages, w.EffectiveDate,
+                ROW_NUMBER() OVER (PARTITION BY w.LabourID ORDER BY w.CreatedAt DESC) AS rn
+            FROM LabourMonthlyWages w
+        )
+        SELECT ${isLabourID ? "TOP (1)" : ""}
+            l.id, l.aadhaarNumber, l.name, l.projectName AS ProjectID,
+            l.labourCategory, l.department AS DepartmentID, l.departmentName,
+            l.LabourID, l.companyName, l.OnboardName, l.workingHours, l.businessUnit,
+            l.designation, l.location, lw.From_Date, lw.WagesEditedBy, lw.PayStructure,
+            lw.DailyWages, lw.PerHourWages, lw.MonthlyWages, lw.YearlyWages, lw.WeeklyOff,
+            lw.CreatedAt, lw.FixedMonthlyWages, lw.EffectiveDate
+        FROM labourOnboarding l
+        LEFT JOIN LatestWages lw ON l.LabourID = lw.LabourID AND lw.rn = 1
+        WHERE l.status = 'Approved'
+        AND (${isLabourID ? "l.LabourID = @query" : `
+            l.name LIKE '%' + @query + '%' 
+            OR l.companyName LIKE '%' + @query + '%'
+            OR l.departmentName LIKE '%' + @query + '%'
+            OR l.location LIKE '%' + @query + '%'
+        `})
+        ORDER BY lw.CreatedAt DESC;`
+            ;
+            
+            const result = await pool
+      .request()
+      .input("query", sql.VarChar, query)
+      .query(searchQuery);
+
         return result.recordset;
     } catch (error) {
         throw error;

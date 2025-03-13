@@ -265,6 +265,7 @@ const getDesignations = async (req, res) => {
 
 const getCompanyNamesByProjectId = async (req, res) => {
   const projectId = req.params.projectId;
+  
   try {
     const pool = await poolPromise4;
 
@@ -293,9 +294,11 @@ const getCompanyNamesByProjectId = async (req, res) => {
       if (parentIdResult2.recordset.length === 0) {
         return res.status(404).json({ error: 'ParentId not found for the selected project' });
       }else{
-        parentId = parentIdResult2?.recordset[0].ParentId;
+        parentId = parentIdResult2?.recordset[0].Id;
       } 
     }
+
+    console.log("parentId",parentId)
     // console.log('parentId++',parentIdResult.recordset[0].ParentId)
 
     // Step 2: Get the Company Name using the ParentId from CompanyNameByBuId table
@@ -304,7 +307,7 @@ const getCompanyNamesByProjectId = async (req, res) => {
       .query(`
         SELECT Description AS Company_Name 
         FROM CompanyNameByBuId 
-        WHERE ParentId = @parentId
+        WHERE Id = @parentId
       `);
 
     if (companyNameResult.recordset.length === 0) {
@@ -356,16 +359,23 @@ const getAttendanceLogs = async (req, res) => {
 const approveLabour = async (req, res) => {
   try {
     const { projectId, deviceId } = req.body;
+    console.log('projectId, deviceId',req.body)
 
     if (!projectId || !deviceId) {
       return res.status(400).json({ message: 'ProjectID and DeviceID are required' });
     }
 
     // Query from the first database (dbConfig2) for the project
-    const pool2 = await poolPromise2;
+    const pool2 = await poolPromise4;
     const projectResult = await pool2.request()
       .input('ProjectID', sql.Int, projectId)
-      .query('SELECT Description FROM Framework.BusinessUnit WHERE id = @ProjectID');
+      // .query('SELECT Description FROM Framework.BusinessUnit WHERE id = @ProjectID');
+      .query(`SELECT Id, Description, Type, Email1, ParentId 
+      FROM Framework.BusinessUnit 
+      WHERE Type = 'B' 
+      AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
+      AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0) and Id = @ProjectID`);
+      
 
     // Query from the second database (dbConfig3) for the device
     const pool3 = await poolPromise3;
@@ -1499,6 +1509,20 @@ const siteTransferRequestforAdmin = async (req, res) => {
           message: "All fields are required (LabourID, currentSite, transferSite).",
         });
       }
+
+        const checkresult = await pool.request()
+            .input('LabourID', sql.NVarChar, LabourID)
+            .query(`
+                SELECT *
+                FROM AdminSiteTransferApproval
+                WHERE LabourID = @LabourID  and adminStatus = 'Pending' `);
+    
+         if(checkresult.recordset.length > 0){
+          return res.status(200).json({
+            message: `LabourID ${LabourID} already has a pending approval in Admin SiteTransfer Approval.`,
+          });
+         };
+
       await pool.request()
           .input("userId", sql.Int, userId || null)
           .input("LabourID", sql.NVarChar(50), LabourID)
@@ -1530,7 +1554,7 @@ const siteTransferRequestforAdmin = async (req, res) => {
 
 const approveSiteTransfer = async (req, res) => {
   try {
-    const { id } = req.query; // Extract `id` from query parameters.
+    const { id } = req.query;
 
     if (!id) {
       return res.status(400).json({ message: "ID is required." });
@@ -1540,7 +1564,7 @@ const approveSiteTransfer = async (req, res) => {
 
     // Fetch the approval details using `id`
     const approval = await pool.request()
-      .input("id", sql.NVarChar(50), id)
+      .input("id", sql.Int, id)
       .query(`
         SELECT * FROM AdminSiteTransferApproval
         WHERE id = @id AND adminStatus = 'Pending'
@@ -1550,16 +1574,7 @@ const approveSiteTransfer = async (req, res) => {
       return res.status(404).json({ message: "No pending approval found for the given ID." });
     }
 
-    const transferDetails = approval.recordset[0];
-
-    // Update admin approval status
-    await pool.request()
-      .input("id", sql.NVarChar(50), id)
-      .query(`
-        UPDATE AdminSiteTransferApproval
-        SET adminStatus = 'Approved', isAdminApproval = 1, updatedAt = GETDATE(), siteTransferApproveDate = GETDATE()
-        WHERE id = @id AND adminStatus = 'Pending'
-      `);
+    const transferDetails = approval.recordset[0];   
 
     // Call saveTransferData with the fetched details
     await saveTransferData({
@@ -1581,6 +1596,15 @@ const approveSiteTransfer = async (req, res) => {
       }),
     });
 
+     // Update admin approval status
+     await pool.request()
+     .input("id", sql.NVarChar(50), id)
+     .query(`
+       UPDATE AdminSiteTransferApproval
+       SET adminStatus = 'Approved', isAdminApproval = 1, updatedAt = GETDATE(), siteTransferApproveDate = GETDATE()
+       WHERE id = @id AND adminStatus = 'Pending'
+     `);
+
     // Log admin approval
     await saveLogToDatabaseSiteTransfer(
       transferDetails.userId,
@@ -1600,8 +1624,7 @@ const approveSiteTransfer = async (req, res) => {
 
 const rejectSiteTransfer = async (req, res) => {
   try {
-    const { id, rejectReason } = req.body; // Extract `id` and `rejectReason` from the request body.
-    console.log('req.body+++}}',req.body)
+    const { id, rejectReason } = req.body; 
     // if (!id) {
     //   return res.status(400).json({ message: "ID is required." });
     // }
@@ -1946,7 +1969,7 @@ const saveTransferData = async (req, res) => {
   }
 };
 
-cron.schedule('28 12 * * *', async () => {
+cron.schedule('31 16 * * *', async () => {
   console.log('Running site transfer approval cron job at 01:08 AM');
 
   try {
@@ -1955,7 +1978,7 @@ cron.schedule('28 12 * * *', async () => {
     // Fetch pending approvals for the current date
     const pendingApprovals = await pool.request()
       .query(`
-        SELECT LabourID 
+        SELECT id, LabourID 
         FROM AdminSiteTransferApproval
         WHERE adminStatus = 'Pending' AND transferDate = CAST(GETDATE() AS DATE)
       `);
@@ -1971,7 +1994,7 @@ cron.schedule('28 12 * * *', async () => {
       try {
         // Call approveSiteTransfer for each pending LabourID
         await approveSiteTransfer(
-          { body: { LabourID: approval.LabourID } },
+          { query: { id: approval.id } },
           {
             status: (statusCode) => ({
               json: (response) => {

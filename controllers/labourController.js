@@ -4050,7 +4050,9 @@ const upsertLabourMonthlyWages = async (req, res) => {
 
         if (result && result.WageID) {
             return res.status(200).json({ WageID: result.WageID, message: 'Wages upserted successfully' });
-        } else {
+        } else if(result && !result.success) {
+            return res.status(200).json({ message: result.message });
+        }else{
             return res.status(500).json({ message: 'Failed to upsert wages' });
         }
 
