@@ -1,4 +1,4 @@
-const { saveUser, getAllUsers, findUserByEmail, updateUser, deleteUser } = require("../models/UserModel");
+const { saveUser, getAllUsers, findUserByEmail, updateUser, deleteUser, getLaboursMonthlyWages } = require("../models/UserModel");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const uuid = require("uuid");
@@ -147,7 +147,17 @@ async function deleteUserController(req, res) {
     console.error("Error:", err);
     res.status(500).json({ msg: "Internal Server Error" });
   }
-}
+};
+
+
+const getLaboursMonthlyWagesTable = async (req, res) => {
+  try {
+      const wages = await getLaboursMonthlyWages();
+      res.status(200).json(wages);
+  } catch (error) {
+      res.status(500).json({ message: 'Error fetching wages', error });
+  }
+};
 
 module.exports = {
   saveUserController,
@@ -155,5 +165,6 @@ module.exports = {
   loginUserController,
   updateUserController,
   deleteUserController,
+  getLaboursMonthlyWagesTable,
 };
 
