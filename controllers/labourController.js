@@ -15,7 +15,7 @@ const { createLogger, format, transports } = require('winston');
 const { isHoliday } = require('../models/labourModel');    
 const xlsx = require('xlsx');        
 // const { sql, poolPromise2 } = require('../config/dbConfig');
-// 
+
 const baseUrl = 'http://localhost:4000/uploads/';
 // const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
 // const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
@@ -3729,7 +3729,6 @@ async function upsertAttendance(req, res) {
         onboardName,
         AttendanceStatus,
     } = req.body;
-    console.log('req.body the upsertAttendance', req.body)
 
     // Validate input
     if (!labourId || !date) {
@@ -3804,7 +3803,7 @@ async function approveAttendanceController(req, res) {
         console.error('Error in approving attendance:', error);
         res.status(error.statusCode || 500).json({ message: error.message });
     }
-}
+};
 
 async function rejectAttendanceControllerAdmin(req, res) {
     const { AttendanceId, rejectReason } = req.query;
@@ -3823,14 +3822,12 @@ async function rejectAttendanceControllerAdmin(req, res) {
 
 
 async function rejectAttendanceController(req, res) {
-    const id = parseInt(req.params.id, 10); // Extract ID from route parameter
-    const { rejectReason } = req.body; // Extract rejection reason from request body
+    const { AttendanceId, rejectReason } = req.query;
+    // const id = parseInt(req.params.id, 10); 
+    // const { rejectReason } = req.body; 
 
-    //console.log('req.params.id', req.params.id)
-    //console.log('req.body:', req.body); // Debug log
-    //console.log('rejectReason:', rejectReason); // Debug log
 
-    if (isNaN(id)) {
+    if (isNaN(AttendanceId)) {
         return res.status(400).json({ message: 'Invalid attendance ID.' });
     }
 
@@ -3839,7 +3836,7 @@ async function rejectAttendanceController(req, res) {
     }
 
     try {
-        const success = await labourModel.rejectAttendance(id, rejectReason); // Call model function
+        const success = await labourModel.rejectAttendance(AttendanceId, rejectReason); // Call model function
         if (success) {
             res.json({ success: true, message: 'Attendance rejected successfully.' });
         } else {

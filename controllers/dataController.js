@@ -289,7 +289,7 @@ const getCompanyNamesByProjectId = async (req, res) => {
 
       const parentIdResult2 = await pool5.request()
       .input('projectId', projectId) // Parameterized query for security
-      .query(`select [Buid], [Id] ,[Description],[ParentId] FROM [LabourOnboardingForm_TEST].[dbo].[CompanyNameByBuId] where  Id = @projectId `);
+      .query(`select [Buid], [Id] ,[Description],[ParentId] FROM CompanyNameByBuId where Id = @projectId `);
 
       if (parentIdResult2.recordset.length === 0) {
         return res.status(404).json({ error: 'ParentId not found for the selected project' });
@@ -307,7 +307,7 @@ const getCompanyNamesByProjectId = async (req, res) => {
       .query(`
         SELECT Description AS Company_Name 
         FROM CompanyNameByBuId 
-        WHERE Id = @parentId
+        WHERE parentId = @parentId
       `);
 
     if (companyNameResult.recordset.length === 0) {

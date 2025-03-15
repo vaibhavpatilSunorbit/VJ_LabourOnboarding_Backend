@@ -2250,6 +2250,18 @@ async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month,
         const pool = await poolPromise;
         let formattedMonth = month.toString().padStart(2, '0');
         let datefornewquery = `${year}-${formattedMonth}`;  
+
+          const finalPayResult = await pool.request()
+          .input('labourId', sql.NVarChar, labourId)
+          .input('month', sql.Int, month)
+          .input('year', sql.Int, year)
+          .query(`
+              SELECT COUNT(*) AS Count
+              FROM [dbo].[FinalizedSalaryPay]
+              WHERE LabourID = @labourId AND Month = @month AND Year = @year
+          `);
+
+      const isFinalPayAvailable = finalPayResult.recordset[0].Count > 0;
         const result = await pool.request()
             .input('labourId', sql.NVarChar, labourId)
             .input('month', sql.Int, month)
@@ -2297,7 +2309,6 @@ async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month,
 
            // Ensure the month is always two digits (01, 02, ..., 12)
 
-
 // console.log("datefornewquery", datefornewquery);
 
 const result2 = await pool.request()
@@ -2308,18 +2319,17 @@ const result2 = await pool.request()
          WHERE LabourId = @labourId AND SelectedMonth = @datefornewquery`
     );
 
-
-
         return result.recordset.map((row) => {
             // Ensure the status is not an array
             row.Status = Array.isArray(row.Status) ? row.Status[0] : row.Status;
+            row.isFinalPayAvailable = isFinalPayAvailable;
             return row;
         });
     } catch (error) {
         console.error('Error fetching attendance details for a single labour:', error);
         throw error;
     }
-}
+};
 
 async function showAttendanceCalenderSingleLabour(labourId, month, year) {
     try {
@@ -2476,7 +2486,7 @@ async function markAttendanceForApproval(
 async function approveAttendance(AttendanceId) {
     try {
         const pool = await poolPromise;
-                // console.log(AttendanceId)
+                console.log(AttendanceId)
         // Fetch the approval record
         const result = await pool.request()
             .input('AttendanceId', sql.Int, AttendanceId)
@@ -2490,10 +2500,26 @@ async function approveAttendance(AttendanceId) {
             throw new Error('Approval record not found.');
         }
 
-        const approvalData = result.recordset[result.recordset.length - 1];
-// console.log('approvalData attendance   --',approvalData)
+        const approvalData = result.recordset[0];
+console.log('approvalData attendance   --',approvalData)
         // Extract only the date part of the Date field
         const formattedDate = approvalData.Date.toISOString().split('T')[0];
+
+    const getResult = await pool
+    .request()
+    .input('LabourID', sql.NVarChar(50), approvalData.LabourId)
+    .query(`
+        SELECT workingHours 
+        FROM [dbo].[labourOnboarding] 
+        WHERE LabourID = @LabourID
+    `);
+
+if (getResult.recordset.length === 0) {
+    throw new Error(`LabourID ${row.LabourID} not found in labourOnboarding table`);
+}
+
+const workingHours = getResult.recordset[0].workingHours;
+console.log('workingHours get for attendance',workingHours)
 
         // console.log('Approval Data:', {
         //     ...approvalData,
@@ -2508,7 +2534,7 @@ async function approveAttendance(AttendanceId) {
             lastPunchManually: approvalData.LastPunchManually,
             overtimeManually: approvalData.OvertimeManually,
             remarkManually: approvalData.RemarkManually,
-            workingHours: approvalData.WorkingHours,
+            workingHours: workingHours,
             onboardName: approvalData.OnboardName,
             markWeeklyOff: false
         });
@@ -2542,7 +2568,7 @@ async function approveAttendance(AttendanceId) {
         console.error('Error approving attendance:', error);
         throw new Error('Error approving attendance.');
     }
-}
+};
 
 
 async function rejectAttendanceAdmin(AttendanceId, rejectReason) {
@@ -3083,7 +3109,6 @@ async function upsertAttendance({
     onboardName,
     markWeeklyOff
 }) {
-    // console.log("overtimeManually firstly ",overtimeManually)
     let totalHours  = 0;
     let status      = 'A';
     let shiftHours  = (workingHours === 'FLEXI SHIFT - 9 HRS') ? 9 : 8;
@@ -3146,6 +3171,7 @@ async function upsertAttendance({
             ? '00:00:00'
             : (lastPunchManually  || existingLastPunch);
 
+
         let rawOvertime = 0;
 
         // 4) Decide status & rawOvertime
@@ -3155,29 +3181,35 @@ async function upsertAttendance({
         } 
         else if (firstPunch && lastPunch) {
             // Compute total hours from times
-            const firstPunchTime = new Date(`${date}T${firstPunch}`);
-            const lastPunchTime  = new Date(`${date}T${lastPunch}`);
-            const diffMs         = lastPunchTime - firstPunchTime;
-            const hoursDiff      = diffMs / (1000 * 60 * 60);
-
-            totalHours = (hoursDiff > 0) ? parseFloat(hoursDiff.toFixed(2)) : 0;
-
-            // If <15 min total, treat as mis-punch
-            if (totalHours > 0 && (diffMs / (1000 * 60)) < 15) {
-                status      = 'MP';
+            if (firstPunch === "00:00:00" && lastPunch === "00:00:00") {            
+                status = 'A';
                 rawOvertime = 0;
-            } else {
-                // Half-day / Full-day logic
-                if (totalHours >= halfDayHours) {
-                    status = 'P';
-                    // Calculate OT from shift
-                    const potentialOvertime = totalHours - shiftHours;
-                    rawOvertime = (potentialOvertime > 0) ? potentialOvertime : 0;
-                } else {
-                    status      = 'HD';
+            } else{
+                const firstPunchTime = new Date(`${date}T${firstPunch}`);
+                const lastPunchTime  = new Date(`${date}T${lastPunch}`);
+                const diffMs         = lastPunchTime - firstPunchTime;
+                const hoursDiff      = diffMs / (1000 * 60 * 60);
+    
+                totalHours = (hoursDiff > 0) ? parseFloat(hoursDiff.toFixed(2)) : 0;
+    
+                // If <15 min total, treat as mis-punch
+                if (totalHours > 0 && (diffMs / (1000 * 60)) < 15) {
+                    status      = 'MP';
                     rawOvertime = 0;
+                } else {
+                    // Half-day / Full-day logic
+                    if (totalHours >= halfDayHours) {
+                        status = 'P';
+                        // Calculate OT from shift
+                        const potentialOvertime = totalHours - shiftHours;
+                        rawOvertime = (potentialOvertime > 0) ? potentialOvertime : 0;
+                    } else {
+                        status      = 'HD';
+                        rawOvertime = 0;
+                    }
                 }
             }
+           
         }
         else if (overtimeManually && String(overtimeManually).trim() !== '') {
             // No (or partial) punches, but user specified manual OT => treat as present
@@ -4830,24 +4862,29 @@ async function searchAttendance(query) {
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
             .query(`
-                SELECT id, aadhaarNumber, name, projectName as ProjectID, labourCategory, department as DepartmentID,
-                       LabourID, companyName, OnboardName, workingHours, businessUnit, designation, location
-                FROM labourOnboarding 
-                WHERE status = 'Approved'
-                  AND (name LIKE @query 
-                       OR aadhaarNumber LIKE @query 
-                       OR LabourID LIKE @query 
-                       OR OnboardName LIKE @query 
-                       OR workingHours LIKE @query 
-                       OR businessUnit LIKE @query 
-                       OR designation LIKE @query 
-                       OR location LIKE @query)
+                SELECT lo.id, lo.aadhaarNumber, lo.name, lo.projectName AS ProjectID, 
+                       lo.labourCategory, lo.department AS DepartmentID, lo.LabourID, 
+                       lo.companyName, lo.OnboardName, lo.workingHours, lo.businessUnit, 
+                       lo.designation, lo.location As projectName, lo.departmentName As department,
+                       fs.netPay, fs.basicSalary
+                FROM labourOnboarding lo
+                LEFT JOIN FinalizedSalaryPay fs ON lo.LabourID = fs.LabourID
+                WHERE lo.status = 'Approved'
+                  AND (lo.name LIKE @query 
+                       OR lo.aadhaarNumber LIKE @query 
+                       OR lo.LabourID LIKE @query 
+                       OR lo.OnboardName LIKE @query 
+                       OR lo.workingHours LIKE @query 
+                       OR lo.businessUnit LIKE @query 
+                       OR lo.designation LIKE @query 
+                       OR lo.location LIKE @query)
             `);
         return result.recordset;
     } catch (error) {
         throw error;
     }
 };
+
 
 
 async function searchLaboursFromSiteTransfer(query) {

@@ -290,10 +290,11 @@ console.log('payload}}}}==',payload)
         }
 
         // First, check if labour wages record exists
-        // const existingWages = await labourModel.checkExistingVariablePay(payload.LabourID);
-        // if (!existingWages) {
-        //     return res.status(400).json({ message: 'Labour wages are not added bugs and new' });
-        // }
+        const existingvariablePay = await labourModel.checkExistingVariablePay(payload.LabourID);
+        console.log('existingvariablePay ++',existingvariablePay)
+        if (existingvariablePay.ApprovalStatusPay === "AdminPending") {
+            return res.status(400).json({ message: `Labour ${existingvariablePay.LabourID} Variable Pay Already With Admin Pending` });
+        }
 
         // If an incentive is provided, perform the incentive check
         if (payload.payStructure.Incentive !== undefined && payload.payStructure.Incentive !== null) {

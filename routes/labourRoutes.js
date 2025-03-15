@@ -51,7 +51,7 @@ router.post('/upsertAttendance', labourController.upsertAttendance);
 router.put('/attendance/approve', labourController.approveAttendanceController);
 router.put('/attendance/reject', labourController.rejectAttendanceControllerAdmin);
 router.get('/LabourAttendanceApproval', labourController.LabourAttendanceApproval);
-router.put('/attendance/reject/:id', labourController.rejectAttendanceController);
+router.put('/attendance/rejectFromAdmin', labourController.rejectAttendanceController);
 router.get('/showAttendanceCalenderSingleLabour/:id', labourController.getAttendanceCalenderSingleLabour);
 
 
