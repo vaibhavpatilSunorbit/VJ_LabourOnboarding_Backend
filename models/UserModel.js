@@ -149,7 +149,13 @@ async function deleteUser(id) {
     console.error("Error occurred:", error);
     throw error;
   }
-}
+};
+
+const getLaboursMonthlyWages = async () => {
+  const pool = await poolPromise;
+  const result = await pool.request().query(`SELECT * FROM LabourMonthlyWages`);
+  return result.recordset;
+};
 
 module.exports = {
   saveUser,
@@ -157,5 +163,6 @@ module.exports = {
   findUserByEmail,
   updateUser,
   deleteUser,
+  getLaboursMonthlyWages,
 };
 

@@ -3674,6 +3674,7 @@ async function LabourAttendanceApprovalModel() {
 };
 
 
+
 async function rejectAttendance(id, rejectReason) {
     try {
         const pool = await poolPromise;
@@ -3697,6 +3698,18 @@ async function rejectAttendance(id, rejectReason) {
             throw new Error('Attendance is already rejected.');
         }
 
+        await pool.request()
+        .input('id', sql.Int, id)
+        .input('rejectReason', sql.NVarChar, rejectReason)
+        .query(`
+            UPDATE LabourAttendanceApproval
+            SET ApprovalStatus = 'Rejected',
+                RejectedDate = GETDATE(),
+                RejectAttendanceReason = @rejectReason
+            WHERE AttendanceId = @id
+        `);
+
+
         // Update the attendance record
         await pool.request()
             .input('id', sql.Int, id)
@@ -3716,6 +3729,7 @@ async function rejectAttendance(id, rejectReason) {
         throw new Error('Error rejecting attendance.');
     }
 }
+
 // ------------------------------------   Excel sheet import and Export funnciton --------------------
 
 async function getAttendanceByDateRange(projectName, startDate, endDate) {
@@ -4663,13 +4677,68 @@ async function insertWagesData(row) {
 
 
 
+//   const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
+//     const pool = await poolPromise;
+  
+//     // Build the query using a CTE and OUTER APPLY
+//     // The CTE "RankedWages" ranks all wage records by CreatedAt descending for each LabourID.
+//     // The OUTER APPLY selects the TOP 1 wage record where ApprovalStatusWages = 'Approved'
+//     // ordered so that if the latest record (rn = 1) is approved it comes first.
+//     let query = `
+//       WITH RankedWages AS (
+//         SELECT 
+//           *,
+//           ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY CreatedAt DESC) AS rn
+//         FROM [dbo].[LabourMonthlyWages]
+//       )
+//       SELECT 
+//         onboarding.LabourID,
+//         onboarding.name,
+//         onboarding.businessUnit,
+//         onboarding.departmentName,
+//         onboarding.workingHours,
+//         onboarding.From_Date,
+//         onboarding.projectName AS ProjectID,
+//         onboarding.department AS DepartmentID,
+//         wages.WagesEditedBy,
+//         wages.PayStructure,
+//         wages.DailyWages,
+//         wages.PerHourWages,
+//         wages.MonthlyWages,
+//         wages.YearlyWages,
+//         wages.WeeklyOff,
+//         wages.CreatedAt,
+//         wages.FixedMonthlyWages,
+//         wages.EffectiveDate
+//       FROM [dbo].[labourOnboarding] AS onboarding
+//       OUTER APPLY (
+//         SELECT TOP 1 *
+//         FROM RankedWages R
+//         WHERE R.LabourID = onboarding.LabourID
+//           AND R.ApprovalStatusWages = 'Approved'
+//         ORDER BY 
+//           CASE WHEN R.rn = 1 THEN 0 ELSE 1 END,
+//           R.CreatedAt DESC
+//       ) AS wages
+//       WHERE onboarding.status = 'Approved'
+//     `;
+  
+//     // Append additional filters if provided.
+//     if (filters.ProjectID) {
+//       query += ` AND onboarding.projectName = ${filters.ProjectID}`;
+//     }
+//     if (filters.DepartmentID) {
+//       query += ` AND onboarding.department = ${filters.DepartmentID}`;
+//     }
+  
+//     const result = await pool.request().query(query);
+//     // console.log('result wages', result);
+//     return result.recordset;
+//   };
+  
   const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
     const pool = await poolPromise;
-  
-    // Build the query using a CTE and OUTER APPLY
-    // The CTE "RankedWages" ranks all wage records by CreatedAt descending for each LabourID.
-    // The OUTER APPLY selects the TOP 1 wage record where ApprovalStatusWages = 'Approved'
-    // ordered so that if the latest record (rn = 1) is approved it comes first.
+
     let query = `
       WITH RankedWages AS (
         SELECT 
@@ -4695,85 +4764,36 @@ async function insertWagesData(row) {
         wages.WeeklyOff,
         wages.CreatedAt,
         wages.FixedMonthlyWages,
-        wages.EffectiveDate
+        wages.EffectiveDate,
+        wages.ApprovalStatusWages
       FROM [dbo].[labourOnboarding] AS onboarding
       OUTER APPLY (
         SELECT TOP 1 *
         FROM RankedWages R
         WHERE R.LabourID = onboarding.LabourID
-          AND R.ApprovalStatusWages = 'Approved'
         ORDER BY 
-          CASE WHEN R.rn = 1 THEN 0 ELSE 1 END,
+          CASE 
+            WHEN R.ApprovalStatusWages = 'Approved' THEN 1 
+            WHEN R.ApprovalStatusWages = 'Pending' THEN 2
+            ELSE 3 
+          END,
           R.CreatedAt DESC
       ) AS wages
       WHERE onboarding.status = 'Approved'
     `;
-  
+
     // Append additional filters if provided.
     if (filters.ProjectID) {
-      query += ` AND onboarding.projectName = ${filters.ProjectID}`;
+        query += ` AND onboarding.projectName = '${filters.ProjectID}'`;
     }
     if (filters.DepartmentID) {
-      query += ` AND onboarding.department = ${filters.DepartmentID}`;
+        query += ` AND onboarding.department = '${filters.DepartmentID}'`;
     }
-  
+
     const result = await pool.request().query(query);
-    // console.log('result wages', result);
     return result.recordset;
-  };
-  
+};
 
-// const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
-//     const pool = await poolPromise;
-  
-//     // Build the query using a CTE to get only the latest wage record for each LabourID.
-//     let query = `
-//       WITH LatestWages AS (
-//         SELECT 
-//           *,
-//           ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY CreatedAt DESC) AS rn
-//         FROM [dbo].[LabourMonthlyWages]
-//       )
-//       SELECT 
-//         onboarding.LabourID,
-//         onboarding.name,
-//         onboarding.businessUnit,
-//         onboarding.departmentName,
-//         onboarding.From_Date,
-//         onboarding.projectName AS ProjectID,
-//         onboarding.department AS DepartmentID,
-//         wages.WagesEditedBy,
-//         wages.PayStructure,
-//         wages.DailyWages,
-//         wages.PerHourWages,
-//         wages.MonthlyWages,
-//         wages.YearlyWages,
-//         wages.WeeklyOff,
-//         wages.CreatedAt,
-//         wages.FixedMonthlyWages,
-//         wages.EffectiveDate
-//       FROM [dbo].[labourOnboarding] AS onboarding
-//       LEFT JOIN LatestWages AS wages
-//         ON onboarding.LabourID = wages.LabourID AND wages.rn = 1
-//       WHERE onboarding.status = 'Approved'
-//     `;
-  
-//     // Append additional filters if provided.
-//     if (filters.ProjectID) {
-//       // Ensure the value is safe or use parameterized queries
-//       query += ` AND onboarding.projectName = ${filters.ProjectID}`;
-//     }
-//     if (filters.DepartmentID) {
-//       query += ` AND onboarding.department = ${filters.DepartmentID}`;
-//     }
-  
-//     const result = await pool.request().query(query);
-//     console.log('result wages',result)
-//     return result.recordset;
-//   };
-
-
-// Function to search FromWages records
 
 
 async function searchFromWages(query) {
