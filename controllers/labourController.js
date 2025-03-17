@@ -3737,6 +3737,22 @@ async function upsertAttendance(req, res) {
         });
     }
 
+const pool = await poolPromise;
+    const checkAdminApproval = await pool.request()
+    .input('labourId', sql.NVarChar, labourId)
+    .input('AttendanceId', sql.Int, AttendanceId)
+    .query(`
+        SELECT *
+        FROM [LabourAttendanceApproval]
+        WHERE LabourID = @labourId AND AttendanceId = @AttendanceId AND ApprovalStatus = 'Pending'
+    `);
+
+    if(checkAdminApproval.recordset.length > 0){
+        return res.status(400).json({
+            message: 'Attendance is Already Pending with Admin Approval.',
+        });
+    }
+
     if (
         !firstPunchManually &&
         !lastPunchManually &&

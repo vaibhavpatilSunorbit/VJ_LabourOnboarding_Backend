@@ -3662,10 +3662,27 @@ async function upsertAttendance({
 async function LabourAttendanceApprovalModel() {
     try {
         const pool = await poolPromise;
+        // const result = await pool.request().query(`
+        //     SELECT *
+        //     FROM [dbo].[LabourAttendanceApproval]
+        // `);
         const result = await pool.request().query(`
-            SELECT *
-            FROM [dbo].[LabourAttendanceApproval]
+            SELECT 
+    L.*,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM [FinalizedSalaryPay] F
+            WHERE F.LabourID = L.LabourId
+              AND F.month = MONTH(L.[Date])
+              AND F.year = YEAR(L.[Date])
+        )
+        THEN 'true'
+        ELSE 'false'
+    END AS IsApproveDisable
+FROM [LabourAttendanceApproval] L order by L.LastUpdatedDate desc;
         `);
+       
         return result.recordset;
     } catch (error) {
         console.error('Error fetching attendance Approval:', error);
@@ -4046,9 +4063,21 @@ const upsertLabourMonthlyWages = async (wage) => {
 // Fetch all approvals
 const getWagesAdminApprovals = async () => {
     const pool = await poolPromise;
-    const result = await pool.request().query(`
-        SELECT * FROM WagesAdminApprovals
-    `);
+    const result = await pool.request().query(`SELECT 
+    W.*,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM [FinalizedSalaryPay] F
+            WHERE F.LabourID = W.LabourID
+              AND F.month = MONTH(W.EffectiveDate)
+              AND F.year = YEAR(W.EffectiveDate)
+        )
+        THEN 'true'
+        ELSE 'false'
+    END AS IsApproveDisable
+FROM [WagesAdminApprovals] W order by W.CreatedAt desc;
+`);
     return result.recordset;
 };
 

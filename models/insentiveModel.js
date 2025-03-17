@@ -108,7 +108,30 @@ async function searchFromVariablePay(query) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
-            .query('SELECT * FROM VariablePay WHERE name LIKE @query OR companyName LIKE @query OR LabourID LIKE @query OR departmentName LIKE @query OR payAddedBy LIKE @query OR PayStructure LIKE @query OR businessUnit LIKE @query OR variablePayRemark LIKE @query OR VariablepayAmount LIKE @query OR variablePayRemark LIKE @query');
+            .query(`SELECT 
+    V.*,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM [FinalizedSalaryPay] F
+            WHERE F.LabourID = V.LabourID
+              AND F.month = MONTH(V.EffectiveDate)
+              AND F.year = YEAR(V.EffectiveDate)
+        )
+        THEN 'true'
+        ELSE 'false'
+    END AS IsApproveDisable
+FROM [VariablePay] V
+WHERE name LIKE @query 
+   OR companyName LIKE @query 
+   OR LabourID LIKE @query 
+   OR departmentName LIKE @query 
+   OR payAddedBy LIKE @query 
+   OR PayStructure LIKE @query 
+   OR businessUnit LIKE @query 
+   OR variablePayRemark LIKE @query 
+   OR VariablepayAmount LIKE @query;
+`);
         return result.recordset;
     } catch (error) {
         throw error;
@@ -120,7 +143,23 @@ async function searchFromAttendanceApproval(query) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
-            .query('SELECT * FROM LabourAttendanceApproval WHERE LabourId LIKE @query OR Date LIKE @query OR OnboardName LIKE @query');
+            .query(`SELECT 
+    L.*, 
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM [FinalizedSalaryPay] F
+            WHERE F.LabourID = L.LabourId
+              AND MONTH(L.[Date]) = F.[month]
+              AND YEAR(L.[Date]) = F.[year]
+        )
+        THEN 'true'
+        ELSE 'false'
+    END AS IsApproveDisable
+FROM [LabourAttendanceApproval] L
+WHERE LabourId LIKE @query 
+   OR CONVERT(varchar(10), [Date], 120) LIKE @query 
+   OR OnboardName LIKE @query;`);
         return result.recordset;
     } catch (error) {
         throw error;
@@ -132,7 +171,29 @@ async function searchFromWagesApproval(query) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
-            .query('SELECT * FROM WagesAdminApprovals WHERE LabourID LIKE @query OR DailyWages LIKE @query OR WagesEditedBy LIKE @query OR MonthlyWages LIKE @query OR FixedMonthlyWages LIKE @query OR WeeklyOff LIKE @query OR PayStructure LIKE @query OR EffectiveDate LIKE @query');
+            .query(`SELECT 
+    W.*,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM [FinalizedSalaryPay] F
+            WHERE F.LabourID = W.LabourID
+              AND F.month = MONTH(W.EffectiveDate)
+              AND F.year = YEAR(W.EffectiveDate)
+        )
+        THEN 'true'
+        ELSE 'false'
+    END AS IsApproveDisable
+FROM [WagesAdminApprovals] W
+WHERE LabourID LIKE @query 
+   OR DailyWages LIKE @query 
+   OR WagesEditedBy LIKE @query 
+   OR MonthlyWages LIKE @query 
+   OR FixedMonthlyWages LIKE @query 
+   OR WeeklyOff LIKE @query 
+   OR PayStructure LIKE @query 
+   OR CONVERT(varchar(10), EffectiveDate, 120) LIKE @query;
+`);
         return result.recordset;
     } catch (error) {
         throw error;
@@ -144,7 +205,28 @@ async function searchFromSiteTransferApproval(query) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
-            .query('SELECT * FROM AdminSiteTransferApproval WHERE LabourID LIKE @query OR name LIKE @query OR currentSiteName LIKE @query OR transferSiteName LIKE @query OR siteTransferBy LIKE @query OR rejectionReason LIKE @query OR transferDate LIKE @query');
+            .query(`SELECT 
+    A.*,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM [FinalizedSalaryPay] F
+            WHERE F.LabourID = A.LabourID
+              AND F.month = MONTH(A.transferDate)
+              AND F.year = YEAR(A.transferDate)
+        )
+        THEN 'true'
+        ELSE 'false'
+    END AS IsApproveDisable
+FROM [AdminSiteTransferApproval] A
+WHERE LabourID LIKE @query 
+    OR name LIKE @query 
+    OR currentSiteName LIKE @query 
+    OR transferSiteName LIKE @query 
+    OR siteTransferBy LIKE @query 
+    OR rejectionReason LIKE @query 
+    OR CONVERT(varchar(10), transferDate, 120) LIKE @query;
+`);
         return result.recordset;
     } catch (error) {
         throw error;
@@ -497,8 +579,9 @@ async function rejectAdminVariablePay(VariablePayId, Remarks) {
                     RejectAdminDate = GETDATE()
                 WHERE VariablePayId = @VariablePayId
             `);
-        await request.input('VariablePayId', sql.Int, approvalData.VariablePayId)
-        request.input('Remarks', sql.NVarChar, Remarks || null)
+        await pool.request()
+        .input('VariablePayId', sql.Int, approvalData.VariablePayId)
+        .input('Remarks', sql.NVarChar, Remarks || null)
             .query(`
     UPDATE [VariablePayAdminApprovals]
     SET ApprovalStatusPay = 'Rejected',
@@ -636,9 +719,21 @@ async function rejectAdminVariablePay(VariablePayId, Remarks) {
 
 const getVariablePayAdminApproval = async () => {
     const pool = await poolPromise;
-    const result = await pool.request().query(`
-        SELECT * FROM VariablePay ORDER BY LabourID DESC
-    `);
+    const result = await pool.request().query(`SELECT 
+    V.*,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM [FinalizedSalaryPay] F
+            WHERE F.LabourID = V.LabourID
+              AND F.month = MONTH(V.EffectiveDate)
+              AND F.year = YEAR(V.EffectiveDate)
+        )
+        THEN 'true'
+        ELSE 'false'
+    END AS IsApproveDisable
+FROM [VariablePay] V order by V.CreatedAt desc;
+`);
     return result.recordset;
 };
 
