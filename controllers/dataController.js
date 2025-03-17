@@ -1463,11 +1463,20 @@ cron.schedule('08 01 * * *', async () => {
 const getAdminSiteTransferApproval = async (req, res) => {
   try {
     const pool = await poolPromise;
-    const result = await pool.request().query(`
-      SELECT * FROM AdminSiteTransferApproval`);
-    // if (result.recordset.length === 0) {
-    //   return res.status(404).json({ message: 'No records found' });
-    // }
+    const result = await pool.request().query(`SELECT 
+    A.*,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM [FinalizedSalaryPay] F
+            WHERE F.LabourID = A.LabourID
+              AND F.month = MONTH(A.transferDate)
+              AND F.year = YEAR(A.transferDate)
+        )
+        THEN 'true'
+        ELSE 'false'
+    END AS IsApproveDisable
+FROM [AdminSiteTransferApproval] A order by A.createdAt desc;`);
     res.json(result.recordset);
   } catch (err) {
     console.error(err);
@@ -1475,10 +1484,88 @@ const getAdminSiteTransferApproval = async (req, res) => {
   }
 };
 
+// const siteTransferRequestforAdmin = async (req, res) => {
+//   try {
+//     // 1) Grab the `labours` array from the request body
+//     const { labours } = req.body;
+//     console.log("req.body for transfer labour",req.body)
+
+//     // 2) If no labours array or empty, return an error
+//     if (!labours || !Array.isArray(labours) || labours.length === 0) {
+//       return res.status(400).json({ message: "No labours provided." });
+//     }
+
+//     // Get a pooled connection
+//     const pool = await poolPromise;
+
+//     // 3) Loop over each labour object
+//     for (const labour of labours) {
+//       const {
+//         userId,
+//         LabourID,
+//         name,
+//         currentSite,
+//         transferSite,
+//         currentSiteName,
+//         transferSiteName,
+//         transferDate,
+//         siteTransferBy,
+//       } = labour;
+
+//       // 4) Check required fields per labour
+//       //    (adjust as needed, e.g., if userId is also required, add that check)
+//       if (!LabourID || !currentSite || !transferSite) {
+//         return res.status(400).json({
+//           message: "All fields are required (LabourID, currentSite, transferSite).",
+//         });
+//       }
+
+//         const checkresult = await pool.request()
+//             .input('LabourID', sql.NVarChar, LabourID)
+//             .query(`
+//                 SELECT *
+//                 FROM AdminSiteTransferApproval
+//                 WHERE LabourID = @LabourID  and adminStatus = 'Pending' `);
+    
+//          if(checkresult.recordset.length > 0){
+//           return res.status(200).json({
+//             message: `LabourID ${LabourID} already has a pending approval in Admin SiteTransfer Approval.`,
+//           });
+//          };
+
+//       await pool.request()
+//           .input("userId", sql.Int, userId || null)
+//           .input("LabourID", sql.NVarChar(50), LabourID)
+//           .input("name", sql.NVarChar(255), name || null)
+//           .input("currentSite", sql.Int, currentSite)
+//           .input("transferSite", sql.Int, transferSite)
+//           .input("currentSiteName", sql.NVarChar(255), currentSiteName)
+//           .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+//           .input("transferDate", sql.Date, transferDate || null)
+//           .input("siteTransferBy", sql.NVarChar(50), siteTransferBy || null)
+//           .query(`
+//               INSERT INTO AdminSiteTransferApproval 
+//               (userId, LabourID, name, currentSite, transferSite, currentSiteName, transferSiteName, siteTransferBy, transferDate, adminStatus, isAdminApproval, isAdminReject)
+//               VALUES (@userId, @LabourID, @name, @currentSite, @transferSite, @currentSiteName, @transferSiteName, @siteTransferBy, @transferDate, 'Pending', 0, 0)
+//           `);
+//           }
+//           return res
+//           .status(201)
+//           .json({ message: "Transfer request submitted successfully." });
+//       } catch (error) {
+//         console.error("Error adding transfer request:", error);
+//         return res
+//           .status(500)
+//           .json({ message: "Failed to add transfer request.", error: error.message });
+//       }
+//     };
+
+
 const siteTransferRequestforAdmin = async (req, res) => {
   try {
     // 1) Grab the `labours` array from the request body
     const { labours } = req.body;
+    console.log("req.body for transfer labour", req.body);
 
     // 2) If no labours array or empty, return an error
     if (!labours || !Array.isArray(labours) || labours.length === 0) {
@@ -1487,6 +1574,10 @@ const siteTransferRequestforAdmin = async (req, res) => {
 
     // Get a pooled connection
     const pool = await poolPromise;
+
+    // Arrays to track successful transfers and errored labours
+    let successfulTransfers = [];
+    let errorLabours = [];
 
     // 3) Loop over each labour object
     for (const labour of labours) {
@@ -1503,52 +1594,128 @@ const siteTransferRequestforAdmin = async (req, res) => {
       } = labour;
 
       // 4) Check required fields per labour
-      //    (adjust as needed, e.g., if userId is also required, add that check)
       if (!LabourID || !currentSite || !transferSite) {
-        return res.status(400).json({
-          message: "All fields are required (LabourID, currentSite, transferSite).",
+        errorLabours.push({
+          LabourID,
+          error: "Missing required fields (LabourID, currentSite, transferSite).",
         });
+        continue;
       }
 
-        const checkresult = await pool.request()
-            .input('LabourID', sql.NVarChar, LabourID)
-            .query(`
-                SELECT *
-                FROM AdminSiteTransferApproval
-                WHERE LabourID = @LabourID  and adminStatus = 'Pending' `);
-    
-         if(checkresult.recordset.length > 0){
-          return res.status(200).json({
-            message: `LabourID ${LabourID} already has a pending approval in Admin SiteTransfer Approval.`,
-          });
-         };
-
-      await pool.request()
-          .input("userId", sql.Int, userId || null)
-          .input("LabourID", sql.NVarChar(50), LabourID)
-          .input("name", sql.NVarChar(255), name || null)
-          .input("currentSite", sql.Int, currentSite)
-          .input("transferSite", sql.Int, transferSite)
-          .input("currentSiteName", sql.NVarChar(255), currentSiteName)
-          .input("transferSiteName", sql.NVarChar(255), transferSiteName)
-          .input("transferDate", sql.Date, transferDate || null)
-          .input("siteTransferBy", sql.NVarChar(50), siteTransferBy || null)
-          .query(`
-              INSERT INTO AdminSiteTransferApproval 
-              (userId, LabourID, name, currentSite, transferSite, currentSiteName, transferSiteName, siteTransferBy, transferDate, adminStatus, isAdminApproval, isAdminReject)
-              VALUES (@userId, @LabourID, @name, @currentSite, @transferSite, @currentSiteName, @transferSiteName, @siteTransferBy, @transferDate, 'Pending', 0, 0)
-          `);
-          }
-          return res
-          .status(201)
-          .json({ message: "Transfer request submitted successfully." });
-      } catch (error) {
-        console.error("Error adding transfer request:", error);
-        return res
-          .status(500)
-          .json({ message: "Failed to add transfer request.", error: error.message });
+      // 5) Validate that currentSiteName and transferSiteName are not the same.
+      if (currentSiteName === transferSiteName) {
+        errorLabours.push({
+          LabourID,
+          error: "currentSiteName and transferSiteName cannot be the same.",
+        });
+        continue;
       }
+
+      // 6) Check if a pending approval already exists for this labour
+      const pendingResult = await pool
+        .request()
+        .input("LabourID", sql.NVarChar, LabourID)
+        .query(`
+          SELECT *
+          FROM AdminSiteTransferApproval
+          WHERE LabourID = @LabourID AND adminStatus = 'Pending'
+        `);
+
+      if (pendingResult.recordset.length > 0) {
+        errorLabours.push({
+          LabourID,
+          error: "Pending approval already exists in Admin SiteTransfer Approval.",
+        });
+        continue;
+      }
+
+      // 7) Process the transfer request for the valid labour
+      await pool
+        .request()
+        .input("userId", sql.Int, userId || null)
+        .input("LabourID", sql.NVarChar(50), LabourID)
+        .input("name", sql.NVarChar(255), name || null)
+        .input("currentSite", sql.Int, currentSite)
+        .input("transferSite", sql.Int, transferSite)
+        .input("currentSiteName", sql.NVarChar(255), currentSiteName)
+        .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+        .input("transferDate", sql.Date, transferDate || null)
+        .input("siteTransferBy", sql.NVarChar(50), siteTransferBy || null)
+        .query(`
+          INSERT INTO AdminSiteTransferApproval 
+          (userId, LabourID, name, currentSite, transferSite, currentSiteName, transferSiteName, siteTransferBy, transferDate, adminStatus, isAdminApproval, isAdminReject)
+          VALUES (@userId, @LabourID, @name, @currentSite, @transferSite, @currentSiteName, @transferSiteName, @siteTransferBy, @transferDate, 'Pending', 0, 0)
+        `);
+
+      // Add this labour to the successfulTransfers array
+      successfulTransfers.push({ LabourID, name });
+    }
+
+    // 8) Separate pending approval errors from other errors
+    const pendingApprovalErrors = errorLabours.filter(
+      (item) => item.error === "Pending approval already exists in Admin SiteTransfer Approval."
+    );
+    const otherErrors = errorLabours.filter(
+      (item) => item.error !== "Pending approval already exists in Admin SiteTransfer Approval." || item.error !== "currentSiteName and transferSiteName cannot be the same."
+    );
+
+    const sameNameErrors = errorLabours.filter(
+      (item) => item.error === "currentSiteName and transferSiteName cannot be the same."
+    );
+
+    // Build counts for the response message
+    const successCount = successfulTransfers.length;
+    const pendingApprovalCount = pendingApprovalErrors.length;
+    const otherErrorsCount = otherErrors.length;
+    const sameNameErrorsCount = sameNameErrors.length;
+    const totalErrors = errorLabours.length;
+
+    // Compose a multi-line response message
+    let responseMessage = "";
+    if (totalErrors > 0) {
+      responseMessage = 
+        `Transfer Request Summary:\n` +
+        `\nSuccessful transfers: ${successCount}\n` +
+        `\nPending approval errors: ${pendingApprovalCount} ${pendingApprovalCount > 0 ? `(LabourIDs: ${pendingApprovalErrors.map(item => item.LabourID).join(', ')})` : ''}\n` +
+        `\nSame Current Site errors: ${sameNameErrorsCount} ${sameNameErrorsCount > 0 ? `(LabourIDs: ${sameNameErrors.map(item => item.LabourID).join(', ')})` : ''}\n` +
+        `\nOther errors: ${otherErrorsCount} ${otherErrorsCount > 0 ? `(LabourIDs: ${otherErrors.map(item => item.LabourID).join(', ')})` : ''}\n`;
+    } else {
+      responseMessage = `Transfer request submitted successfully for all ${successCount} labours.`;
+    }
+
+    // Compose the response payload
+    const responsePayload = {
+      message: responseMessage,
+      summary: {
+        successfulTransfers: successCount,
+        pendingApprovalErrors: pendingApprovalCount,
+        sameNameErrors : sameNameErrorsCount,
+        otherErrors: otherErrorsCount,
+        totalErrors,
+        errorLabourIDs: errorLabours.map((item) => item.LabourID),
+      },
+      details: {
+        successfulTransfers,      
+        pendingApprovalErrors, 
+        sameNameErrors,    
+        otherErrors,   
+      },
     };
+
+    // 9) Respond with a 200 status if there were any errors (partial success) or 201 if all processed successfully
+    if (totalErrors > 0) {
+      return res.status(200).json(responsePayload);
+    } else {
+      return res.status(201).json(responsePayload);
+    }
+  } catch (error) {
+    console.error("Error adding transfer request:", error);
+    return res.status(500).json({
+      message: "Failed to add transfer request.",
+      error: error.message,
+    });
+  }
+};
 
 
 
