@@ -2295,7 +2295,8 @@ async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month,
                     att.WorkingHours,
                     att.OnboardName,
                     att.ApprovalStatus,
-                    las.TotalOvertimeHoursManually
+                    las.TotalOvertimeHoursManually,
+                    las.Shift
                 FROM [dbo].[LabourAttendanceDetails] att
                 inner join LabourAttendanceSummary  las on las.LabourId=att.LabourId
                 LEFT JOIN [dbo].[HolidayDate] hol
@@ -2435,12 +2436,14 @@ async function markAttendanceForApproval(
     firstPunchManually, 
     lastPunchManually, 
     remarkManually, 
-    finalOnboardName
+    finalOnboardName,
+    markWeeklyOff
 ) {
     try {
         if (AttendanceId === undefined || AttendanceId === null || isNaN(AttendanceId)) {
             throw new Error('AttendanceId must be a valid number and cannot be empty.');
         }
+       
         const pool = await poolPromise;
         const request = pool.request();
 
@@ -2453,6 +2456,7 @@ async function markAttendanceForApproval(
         request.input('finalOnboardName', sql.VarChar, finalOnboardName || null);
         request.input('firstPunchManually', sql.VarChar, firstPunchManually || null);
         request.input('lastPunchManually', sql.VarChar, lastPunchManually || null);
+        request.input('markWeeklyOff', sql.Bit, markWeeklyOff === true ? 1 : 0 || null);
 
         // Perform the UPDATE query
         await request.query(`
@@ -2469,10 +2473,10 @@ async function markAttendanceForApproval(
         // Perform the INSERT query
         await request.query(`
             INSERT INTO LabourAttendanceApproval (
-              AttendanceId, LabourId, Date, OvertimeManually, RemarkManually, OnboardName, FirstPunchManually, LastPunchManually
+              AttendanceId, LabourId, Date, OvertimeManually, RemarkManually, OnboardName, FirstPunchManually, LastPunchManually, markWeeklyOff
             )
             VALUES (
-              @AttendanceId, @labourId, @date, @overtimeManually, @remarkManually, @finalOnboardName, @firstPunchManually, @lastPunchManually
+              @AttendanceId, @labourId, @date, @overtimeManually, @remarkManually, @finalOnboardName, @firstPunchManually, @lastPunchManually, @markWeeklyOff
             )
         `);
 
@@ -2486,14 +2490,14 @@ async function markAttendanceForApproval(
 async function approveAttendance(AttendanceId) {
     try {
         const pool = await poolPromise;
-                console.log(AttendanceId)
+                console.log( "AttendanceId add ==>",AttendanceId)
         // Fetch the approval record
         const result = await pool.request()
             .input('AttendanceId', sql.Int, AttendanceId)
             .query(`
                 SELECT *
                 FROM LabourAttendanceApproval
-                WHERE AttendanceId = @AttendanceId
+                WHERE AttendanceId = @AttendanceId and ApprovalStatus = 'Pending'
             `);
 
         if (result.recordset.length === 0) {
@@ -2536,7 +2540,7 @@ console.log('workingHours get for attendance',workingHours)
             remarkManually: approvalData.RemarkManually,
             workingHours: workingHours,
             onboardName: approvalData.OnboardName,
-            markWeeklyOff: false
+            markWeeklyOff: approvalData.markWeeklyOff
         });
 
         // Update the LabourAttendanceApproval table with 'Approved' status
