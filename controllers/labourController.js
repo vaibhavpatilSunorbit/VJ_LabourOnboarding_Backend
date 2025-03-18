@@ -16,8 +16,8 @@ const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');        
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
-const baseUrl = 'http://localhost:4000/uploads/';
-// const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+// const baseUrl = 'http://localhost:4000/uploads/';
+const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
 // const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
@@ -3728,6 +3728,7 @@ async function upsertAttendance(req, res) {
         workingHours,
         onboardName,
         AttendanceStatus,
+        markWeeklyOff,
     } = req.body;
 
     // Validate input
@@ -3777,12 +3778,12 @@ const pool = await poolPromise;
             const timesUpdated = await labourModel.getTimesUpdateForMonth(labourId, date);
 
             if (AttendanceStatus !== "MP") {
-                await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName);
+                await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff);
                 return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
             };
 
             if (AttendanceStatus === "MP" && timesUpdated >= 3) {
-                await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName);
+                await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff);
                 return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
             };
 
@@ -3797,6 +3798,7 @@ const pool = await poolPromise;
             workingHours,
             onboardName: finalOnboardName,
             editUserName: finalOnboardName, 
+            markWeeklyOff,
         });
 
         res.status(200).json({ message: 'Attendance updated successfully.' });
