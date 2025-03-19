@@ -1739,10 +1739,10 @@ async function getWageInfoForLabour(labourId, month, year) {
         const pool = await poolPromise;
 
         // Last day of the target month
-        const lastDayOfMonth = new Date(year, month, 0); // e.g. for (2025,1) => Jan-31-2025
+        const lastDayOfMonth = new Date(Date.UTC(year, month, 0)); // e.g. for (2025,1) => Jan-31-2025
 
         // Start of the target month
-        const firstDayOfMonth = new Date(year, month - 1, 1); // e.g. for (2025,1) => Jan-01-2025
+        const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1)); 
 
         // 1) Fetch all wages that:
         //    - Are approved (isApprovalDoneAdmin = 1)
