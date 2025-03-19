@@ -2136,7 +2136,7 @@ const saveTransferData = async (req, res) => {
   }
 };
 
-cron.schedule('31 16 * * *', async () => {
+cron.schedule('31 02 * * *', async () => {
   console.log('Running site transfer approval cron job at 01:08 AM');
 
   try {
