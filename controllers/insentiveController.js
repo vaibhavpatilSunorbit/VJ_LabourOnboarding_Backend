@@ -443,7 +443,7 @@ const getVariablePayAdminApprovals = async (req, res) => {
 const exportVariablePayexcelSheetWithBU = async (req, res) => {
     try {
         const { projectName, startDate } = req.query;
-//console.log('projectName, startDate ,',req.query)
+console.log('projectName, startDate ,',req.query)
         if (!startDate) {
             return res.status(400).json({ message: 'Missing required parameter: startDate' });
         }

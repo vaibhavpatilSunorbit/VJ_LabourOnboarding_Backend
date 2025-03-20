@@ -1656,7 +1656,7 @@ const siteTransferRequestforAdmin = async (req, res) => {
       (item) => item.error === "Pending approval already exists in Admin SiteTransfer Approval."
     );
     const otherErrors = errorLabours.filter(
-      (item) => item.error !== "Pending approval already exists in Admin SiteTransfer Approval." || item.error !== "currentSiteName and transferSiteName cannot be the same."
+      (item) => item.error === "Missing required fields (LabourID, currentSite, transferSite)."
     );
 
     const sameNameErrors = errorLabours.filter(
@@ -1664,24 +1664,59 @@ const siteTransferRequestforAdmin = async (req, res) => {
     );
 
     // Build counts for the response message
-    const successCount = successfulTransfers.length;
-    const pendingApprovalCount = pendingApprovalErrors.length;
-    const otherErrorsCount = otherErrors.length;
-    const sameNameErrorsCount = sameNameErrors.length;
-    const totalErrors = errorLabours.length;
+  // Build counts for the response message
+const successCount = successfulTransfers.length;
+const pendingApprovalCount = pendingApprovalErrors.length;
+const otherErrorsCount = otherErrors.length;
+const sameNameErrorsCount = sameNameErrors.length;
+const totalErrors = errorLabours.length;
 
-    // Compose a multi-line response message
-    let responseMessage = "";
-    if (totalErrors > 0) {
-      responseMessage = 
-        `Transfer Request Summary:\n` +
-        `\nSuccessful transfers: ${successCount}\n` +
-        `\nPending approval errors: ${pendingApprovalCount} ${pendingApprovalCount > 0 ? `(LabourIDs: ${pendingApprovalErrors.map(item => item.LabourID).join(', ')})` : ''}\n` +
-        `\nSame Current Site errors: ${sameNameErrorsCount} ${sameNameErrorsCount > 0 ? `(LabourIDs: ${sameNameErrors.map(item => item.LabourID).join(', ')})` : ''}\n` +
-        `\nOther errors: ${otherErrorsCount} ${otherErrorsCount > 0 ? `(LabourIDs: ${otherErrors.map(item => item.LabourID).join(', ')})` : ''}\n`;
+// Initialize an array to store message lines
+let responseLines = [];
+
+if (totalErrors > 0) {
+  responseLines.push(`Transfer Request Summary:`);
+
+  if (successCount > 0) {
+    if (successCount === 1) {
+      responseLines.push(`\nTransfer request submitted successfully for Labour ID: ${successfulTransfers[0].LabourID} (${successfulTransfers[0].name})`);
     } else {
-      responseMessage = `Transfer request submitted successfully for all ${successCount} labours.`;
+      responseLines.push(`\nTransfer request submitted successfully for ${successCount} labours.`);
     }
+  }
+  
+  if (pendingApprovalCount > 0) {
+    if (pendingApprovalCount === 1) {
+      responseLines.push(`\nPending approval already exists for Labour ID: ${pendingApprovalErrors[0].LabourID}`);
+    } else {
+      responseLines.push(`\nPending approval already exists for ${pendingApprovalCount} labours.`);
+    }
+  }
+
+  if (sameNameErrorsCount > 0) {
+    if (sameNameErrorsCount === 1) {
+      responseLines.push(`\nCurrent site and transfer site cannot be the same for Labour ID: ${sameNameErrors[0].LabourID}`);
+    } else {
+      responseLines.push(`\nCurrent site and transfer site cannot be the same for ${sameNameErrorsCount} labours.`);
+    }
+  }
+
+  if (otherErrorsCount > 0) {
+    if (otherErrorsCount === 1) {
+      responseLines.push(`\nPlease try again. Contact admin for Labour ID: ${otherErrors[0].LabourID}`);
+    } else {
+      responseLines.push(`\nPlease try again. Contact admin for ${otherErrorsCount} labours.`);
+    }
+  }
+
+  responseMessage = responseLines.join("\n"); // Join all non-empty lines
+} else {
+  if (successCount === 1) {
+    responseMessage = `Transfer request submitted successfully for Labour ID: ${successfulTransfers[0].LabourID} (${successfulTransfers[0].name}).`;
+  } else {
+    responseMessage = `Transfer request submitted successfully for ${successCount} labours.`;
+  }
+}   
 
     // Compose the response payload
     const responsePayload = {

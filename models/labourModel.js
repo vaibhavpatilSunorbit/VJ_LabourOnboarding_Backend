@@ -2463,7 +2463,6 @@ async function markAttendanceForApproval(
             UPDATE [LabourAttendanceDetails]
             SET SentForApproval = 1,
                 ApprovalStatus = 'Pending',
-                OvertimeManually = @overtimeManually,
                 RemarkManually = @remarkManually,
                 OnboardName = @finalOnboardName,
                 LastUpdatedDate = GETDATE()
@@ -3853,6 +3852,43 @@ async function getAttendanceByDateRange(projectName, startDate, endDate) {
     await pool.request().bulk(table);
     //console.log(`All unmatched rows inserted.`);
   }
+
+  async function updateTotalOvertimeHours(labourId, selectedMonth) {
+    try {
+      const pool = await poolPromise;
+      // Sum the OvertimeManually values for the given labour and month
+      const overtimeResult = await pool
+        .request()
+        .input('LabourId', sql.VarChar(50), labourId)
+        .input('SelectedMonth', sql.VarChar, selectedMonth) // e.g., '2024-08'
+        .query(`
+          SELECT SUM(OvertimeManually) AS TotalOvertime
+          FROM LabourAttendanceDetails
+          WHERE LabourId = @LabourId 
+            AND CONVERT(varchar(7), Date, 120) = @SelectedMonth
+        `);
+      
+      const totalOvertime = overtimeResult.recordset[0].TotalOvertime || 0;
+      
+      // Update LabourAttendanceSummary with the computed overtime total
+      await pool
+        .request()
+        .input('LabourId', sql.VarChar(50), labourId)
+        .input('SelectedMonth', sql.VarChar, selectedMonth)
+        .input('TotalOvertimeHours', sql.Float, totalOvertime)
+        .query(`
+          UPDATE LabourAttendanceSummary
+          SET TotalOvertimeHoursManually = @TotalOvertimeHours
+          WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
+        `);
+      
+      return totalOvertime;
+    } catch (error) {
+      console.error("Error updating TotalOvertimeHours:", error);
+      throw error;
+    }
+  }
+
 // ------------------------   ////////////////////////////////////----------end -------  
   
 
@@ -4260,7 +4296,15 @@ async function rejectWages(ApprovalID, Remarks) {
                 UPDATE [LabourMonthlyWages]
                 SET ApprovalStatusWages = 'Rejected',
                     Remarks = @Remarks,
-                    isApprovalReject = @isApprovalReject
+                    isApprovalReject = @isApprovalReject,
+                    PayStructure = NULL,
+                    DailyWages = NULL,
+                    PerHourWages = NULL,
+                    MonthlyWages = NULL,
+                    YearlyWages = NULL,
+                    WeeklyOff = NULL,
+                    EffectiveDate = NULL,
+                    FixedMonthlyWages = NULL
                 WHERE WageID = @WageID
             `);
 
@@ -4874,7 +4918,7 @@ async function searchFromWages(query) {
             SELECT 
                 w.LabourID, w.From_Date, w.WagesEditedBy, w.PayStructure,
                 w.DailyWages, w.PerHourWages, w.MonthlyWages, w.YearlyWages,
-                w.WeeklyOff, w.CreatedAt, w.FixedMonthlyWages, w.EffectiveDate,
+                w.WeeklyOff, w.CreatedAt, w.FixedMonthlyWages, w.EffectiveDate, w.ApprovalStatusWages,
                 ROW_NUMBER() OVER (PARTITION BY w.LabourID ORDER BY w.CreatedAt DESC) AS rn
             FROM LabourMonthlyWages w
         )
@@ -4884,7 +4928,7 @@ async function searchFromWages(query) {
             l.LabourID, l.companyName, l.OnboardName, l.workingHours, l.businessUnit,
             l.designation, l.location, lw.From_Date, lw.WagesEditedBy, lw.PayStructure,
             lw.DailyWages, lw.PerHourWages, lw.MonthlyWages, lw.YearlyWages, lw.WeeklyOff,
-            lw.CreatedAt, lw.FixedMonthlyWages, lw.EffectiveDate
+            lw.CreatedAt, lw.FixedMonthlyWages, lw.EffectiveDate, lw.ApprovalStatusWages
         FROM labourOnboarding l
         LEFT JOIN LatestWages lw ON l.LabourID = lw.LabourID AND lw.rn = 1
         WHERE l.status = 'Approved'
@@ -5084,6 +5128,7 @@ module.exports = {
     getVariablePayAndLabourOnboardingJoin,
     getHolidayDates,
     searchAttendance,
-    searchLaboursFromSiteTransfer
+    searchLaboursFromSiteTransfer,
+    updateTotalOvertimeHours
 
 };

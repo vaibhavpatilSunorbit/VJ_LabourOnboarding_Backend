@@ -152,9 +152,11 @@ async function deleteUserController(req, res) {
 
 const getLaboursMonthlyWagesTable = async (req, res) => {
   try {
-      const wages = await getLaboursMonthlyWages();
+      const { labourId } = req.query; 
+      const wages = await getLaboursMonthlyWages(labourId); 
       res.status(200).json(wages);
   } catch (error) {
+      console.error("Error fetching wages:", error);
       res.status(500).json({ message: 'Error fetching wages', error });
   }
 };
