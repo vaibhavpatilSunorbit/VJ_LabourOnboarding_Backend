@@ -151,9 +151,18 @@ async function deleteUser(id) {
   }
 };
 
-const getLaboursMonthlyWages = async () => {
+const getLaboursMonthlyWages = async (labourId = null) => {
   const pool = await poolPromise;
-  const result = await pool.request().query(`SELECT * FROM LabourMonthlyWages`);
+  let query = `SELECT * FROM LabourMonthlyWages`;
+  
+  if (labourId) {
+      query += ` WHERE LabourID = @labourId ORDER BY CreatedAt DESC`;
+  }
+  const request = pool.request();
+  if (labourId) {
+      request.input("labourId", labourId);
+  }
+  const result = await request.query(query);
   return result.recordset;
 };
 

@@ -3943,6 +3943,22 @@ const exportAttendance = async (req, res) => {
             //console.log(`${unmatchedRows.length} rows inserted successfully.`);
         }
 
+        // After updating/inserting, update LabourAttendanceSummary overtime totals.
+    // Group by LabourId and SelectedMonth (derived from Date as YYYY-MM)
+    const groups = {};
+    validData.forEach((row) => {
+      const labourId = row.LabourId;
+      // Extract "YYYY-MM" from the date string ("YYYY-MM-DD")
+      const selectedMonth = row.Date.substring(0, 7);
+      const key = `${labourId}_${selectedMonth}`;
+      groups[key] = { labourId, selectedMonth };
+    });
+
+    // Iterate over each group and update summary overtime totals
+    for (const key in groups) {
+      await labourModel.updateTotalOvertimeHours(groups[key].labourId, groups[key].selectedMonth);
+    }
+
         res.send({
             message: 'Data imported successfully',
             matchedRows: matchedRows.length,

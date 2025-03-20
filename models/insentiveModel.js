@@ -2121,6 +2121,8 @@ async function getEligibleLabours(month, year, idsArray) {
                 onboarding.departmentName,
                 onboarding.department,
                 onboarding.workingHours,
+                onboarding.aadhaarNumber,
+                onboarding.accountNumber,
                 AttendanceCTE.AttendanceCount
             FROM 
                 AttendanceCTE
@@ -2153,6 +2155,8 @@ async function getEligibleLabours(month, year, idsArray) {
             projectName: row.projectName,
             departmentName: row.departmentName,
             department: row.department,
+            aadhaarNumber: row.aadhaarNumber,
+            accountNumber: row.accountNumber,
             attendanceCount: row.AttendanceCount
         }));
 
