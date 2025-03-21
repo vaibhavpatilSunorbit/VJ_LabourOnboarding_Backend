@@ -2230,13 +2230,23 @@ async function fetchAttendanceDetailsByMonthYear(month, year) {
         const result = await pool.request()
             .input('month', sql.Int, month)
             .input('year', sql.Int, year)
-            .query(`
-                SELECT *
-                FROM [dbo].[LabourAttendanceSummary]
-                WHERE 
-                    MONTH(TRY_CONVERT(DATE, SelectedMonth + '-01')) = @month 
-                    AND YEAR(TRY_CONVERT(DATE, SelectedMonth + '-01')) = @year
-            `);
+            .query(` SELECT 
+    L.*,
+    CASE 
+      WHEN EXISTS (
+         SELECT 1 
+         FROM dbo.LabourAttendanceDetails d
+         WHERE d.LabourId = L.LabourId
+           AND MONTH(d.Date) = @month
+           AND YEAR(d.Date) = @year
+           AND d.ApprovalStatus = 'Pending'
+      ) THEN CAST(1 AS BIT)
+      ELSE CAST(0 AS BIT)
+    END AS InApprovalStatus
+FROM dbo.LabourAttendanceSummary AS L
+WHERE 
+    MONTH(TRY_CONVERT(DATE, L.SelectedMonth + '-01')) = @month 
+    AND YEAR(TRY_CONVERT(DATE, L.SelectedMonth + '-01')) = @year; `);
         return result.recordset;
     } catch (error) {
         console.error('Error fetching attendance details for all labours:', error);
