@@ -472,7 +472,7 @@ console.log('projectName, startDate ,',req.query)
 
         // Handle the case where no data is found
         if (wagesData.length === 0) {
-            return res.status(404).json({ message: 'No data found for the selected criteria.' });
+            return res.status(404).json({ message: 'No data found for the selected Business Unit' });
         }
 
         // Process data: Exclude 'projectName', add 'ExportDate'
