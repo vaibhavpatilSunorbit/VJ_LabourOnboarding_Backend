@@ -1584,7 +1584,7 @@ async function getAllApprovedLabours() {
         const pool = await poolPromise;
         const result = await pool
             .request()
-            .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [LabourOnboardingForm].[dbo].[labourOnboarding] WHERE status = 'Approved'`);
+            .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [labourOnboarding] WHERE status = 'Approved'`);
         //console.log('Fetched approved labours:', result.recordset);
         return result.recordset; // Returns an array of approved labour IDs and working hours
     } catch (err) {
@@ -1601,7 +1601,7 @@ async function getLabourDetailsById(labourId) {
         const result = await pool
             .request()
             .input('labourId', sql.NVarChar, labourId)
-            .query(`SELECT LabourID AS labourId, workingHours FROM [dbo].[labourOnboarding] WHERE LabourID = @labourId`);
+            .query(`SELECT LabourID AS labourId, workingHours FROM [labourOnboarding] WHERE LabourID = @labourId`);
         //console.log('Fetched labour details:', result.recordset[0]);
         return result.recordset[0];
     } catch (err) {
@@ -4963,6 +4963,83 @@ async function searchFromWages(query) {
 };
 
 
+async function searchFromVariableInput(query) {
+    try {
+        const pool = await poolPromise;
+        const isLabourID = /^[A-Za-z]+\d+$/.test(query.trim());
+
+        let searchQuery = `
+            WITH LatestVariablePay AS (
+                SELECT 
+                    vp.VariablePayId,
+                    vp.LabourID,
+                    vp.payAddedBy,
+                    vp.PayStructure,
+                    vp.projectName,
+                    vp.name,
+                    vp.companyName,
+                    vp.businessUnit,
+                    vp.departmentName,
+                    vp.VariablepayAmount,
+                    vp.EffectiveDate,
+                    vp.ApprovalStatusPay,
+                    vp.variablePayRemark,
+                    ROW_NUMBER() OVER (PARTITION BY vp.LabourID ORDER BY vp.CreatedAt DESC) AS rn
+                FROM VariablePay vp
+            )
+            SELECT ${isLabourID ? "TOP (1)" : ""}
+                l.id,
+                l.aadhaarNumber,
+                COALESCE(l.name, vp.name) AS name,
+                l.projectName AS ProjectID,
+                l.department AS DepartmentID,
+                COALESCE(l.departmentName, vp.departmentName) AS departmentName,
+                COALESCE(l.LabourID, vp.LabourID) AS LabourID,
+                COALESCE(l.companyName, vp.companyName) AS companyName,
+                l.OnboardName,
+                l.workingHours,
+                COALESCE(l.businessUnit, vp.businessUnit) AS businessUnit,
+                l.designation,
+                l.location,
+                vp.VariablePayId,
+                vp.payAddedBy,
+                vp.PayStructure,
+                vp.projectName AS vpProjectName,
+                vp.VariablepayAmount,
+                vp.EffectiveDate,
+                vp.ApprovalStatusPay,
+                vp.variablePayRemark
+            FROM labourOnboarding l
+            LEFT JOIN LatestVariablePay vp ON l.LabourID = vp.LabourID AND vp.rn = 1
+            WHERE l.status = 'Approved'
+              AND (${isLabourID 
+                      ? "l.LabourID = @query" 
+                      : `
+                        l.name LIKE '%' + @query + '%'
+                        OR l.companyName LIKE '%' + @query + '%'
+                        OR l.departmentName LIKE '%' + @query + '%'
+                        OR l.location LIKE '%' + @query + '%'
+                      `})
+            ORDER BY vp.VariablePayId DESC;
+        `;
+
+        const result = await pool
+            .request()
+            .input("query", sql.VarChar, query)
+            .query(searchQuery);
+
+        return result.recordset;
+    } catch (error) {
+        throw error;
+    }
+};
+
+
+
+
+
+
+
 async function searchAttendance(query) {
     try {
         const pool = await poolPromise;
@@ -5139,6 +5216,7 @@ module.exports = {
     getHolidayDates,
     searchAttendance,
     searchLaboursFromSiteTransfer,
-    updateTotalOvertimeHours
+    updateTotalOvertimeHours,
+    searchFromVariableInput
 
 };
