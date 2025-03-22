@@ -16,8 +16,8 @@ const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');        
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
-const baseUrl = 'http://localhost:4000/uploads/';
-// const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+// const baseUrl = 'http://localhost:4000/uploads/';
+const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
 // const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
@@ -4460,6 +4460,18 @@ async function searchLaboursFromWages(req, res) {
     }
 }
 
+async function searchLaboursFromVariableInput(req, res) {
+    const { q } = req.query;
+
+    try {
+        const results = await labourModel.searchFromVariableInput(q);
+        return res.json(results);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
 
 async function searchLaboursFromSiteTransfer(req, res) {
     const { q } = req.query;
@@ -4551,5 +4563,6 @@ module.exports = {
     exportMonthlyWagesExcel,
     exportFixedWagesExcel,
     searchLaboursFromSiteTransfer,
-    searchAttendance
+    searchAttendance,
+    searchLaboursFromVariableInput
 };
