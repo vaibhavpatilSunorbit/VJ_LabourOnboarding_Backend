@@ -2,34 +2,111 @@ const cron = require('node-cron');
 const axios = require('axios');
 const logger = require('../logger')
 const { sql, poolPromise2 } = require('../config/dbConfig2');
+const {  poolPromise4 } = require('../config/dbConfigSCPL');
 const { poolPromise3 } = require('../config/dbConfig3');
 const { poolPromise } = require('../config/dbConfig');
 const xml2js = require("xml2js")
 // const SOAP_URL = "https://essl.vjerp.com:8530/iclock/WebAPIService.asmx";
 
+// const getProjectNames = async (req, res) => {
+//   try {
+//     const pool = await poolPromise4;
+//     const result = await pool.request().query(`
+//   Select Id, Description AS Business_Unit ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
+// (IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
+//     `);
+//     // console.log("result.recordset++pluse",result.recordset)
+//     res.json(result.recordset);
+//     // console.log('result.recordset}}||',result.recordset)
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).send('Server error');
+//   } 
+// };
+
+
 const getProjectNames = async (req, res) => {
   try {
-    const pool = await poolPromise2;
-    const result = await pool.request().query(`
-    SELECT a.id, a.Description AS Business_Unit, a.ParentId, b.Description AS Segment_Description
-      FROM Framework.BusinessUnit a
-      LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
-      WHERE (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-      AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
-      AND b.Id = 3
+    // Fetch data from Framework.BusinessUnit (Server 1 - poolPromise4)
+    const pool1 = await poolPromise4;
+    const businessUnitResult = await pool1.request().query(`
+      SELECT Id, Description, Type, Email1, ParentId 
+      FROM Framework.BusinessUnit 
+      WHERE Type = 'B' 
+      AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
+      AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0)
     `);
-    res.json(result.recordset);
+    const businessUnits = businessUnitResult.recordset.map(bu => ({
+      Id: bu.Id,
+      Business_Unit: bu.Description, // Keep Business_Unit as Description
+      Type: bu.Type,
+      Email1: bu.Email1,
+      ParentId: bu.ParentId,
+      ComapanyDescription: bu.ParentId === 3 ? "SANKALP CONTRACTS PRIVATE LIMITED" : bu.Description, // Handle ParentId = 3 condition
+      ComapnyID: null // No company ID for business units
+    }));
+
+    // Fetch data from CompanyNameByBuId (Server 2 - poolPromise)
+    const pool2 = await poolPromise;
+    const companyResult = await pool2.request().query(`
+      SELECT 
+        Id AS Id, 
+        ProjectName AS Business_Unit, -- Change Business_Unit to ProjectName
+        Description AS ComapanyDescription, -- Change ComapanyDescription to Description
+        Type, 
+        ParentId, 
+        Id AS ComapnyID 
+      FROM LabourOnboardingForm_TEST.dbo.CompanyNameByBuId
+    `);
+    const companyData = companyResult.recordset.map(company => ({
+      ...company,
+      ComapanyDescription: company.ParentId === 3 ? "SANKALP CONTRACTS PRIVATE LIMITED" : company.ComapanyDescription // Handle ParentId = 3 condition
+    }));
+
+    // Combine both datasets
+    const combinedData = [...businessUnits, ...companyData];
+
+    res.json(combinedData);
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
-  } 
+  }
 };
+
+
+
+
+// const getProjectNames = async (req, res) => {
+//   try {
+//     const apiUrl = 'https://api.vjerp.com/api/businessUnit';
+//     const token = '20a763e266308b35fc75feca4b053d5ce8ea540dbdaa77ee13b1a5e7ce8aadcf';
+
+//     const apiResponse = await axios.get(apiUrl, {
+//       headers: {
+//         'Authorization': `${token}`,
+//         'Accept': 'application/json',
+//         'Content-Type': 'application/json',
+//       }
+//     });
+
+//     console.log("API Response Data:", apiResponse.data);
+//     res.json(apiResponse.data);
+//   } catch (err) {
+//     console.error('Error fetching project names:', err.response?.status, err.response?.data);
+
+//     if (err.response?.status === 401) {
+//       return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
+//     }
+
+//     res.status(500).send('Server error');
+//   }
+// };
 
 const getLabourCategories = async (req, res) => {
   try {
-    const pool = await poolPromise2;
+    const pool = await poolPromise;
     const result = await pool.request().query(`
-      SELECT * FROM Payroll.Grade
+      SELECT * FROM Grade
     `);
     res.json(result.recordset);
   } catch (err) {
@@ -40,13 +117,13 @@ const getLabourCategories = async (req, res) => {
 
 const getDepartments = async (req, res) => {
   try {
-    const pool = await poolPromise2;
+    const pool = await poolPromise;
     if (!pool) {
       throw new Error('Database connection pool is not initialized');
     }
     const result = await pool.request().query(`
-      SELECT * FROM Payroll.Department
-      WHERE IsDeleted IS NULL AND TenantId = 278
+        SELECT [id], [farvision_code] AS Code, [farvision_id] AS Id, [farvision_description] AS Description 
+      FROM [Departments]
     `);
     res.json(result.recordset);
   } catch (err) {
@@ -57,10 +134,10 @@ const getDepartments = async (req, res) => {
 
 const getWorkingHours = async (req, res) => {
   try {
-    const pool = await poolPromise2;
+    const pool = await poolPromise;
     const result = await pool.request().query(`
-      SELECT Id, Description AS Shift_Name, Type FROM Payroll.Shift
-      WHERE Id IN (3, 4)
+      SELECT Id, Shift_Name, Type FROM Shift
+      WHERE Id IN (1, 2)
     `);
     res.json(result.recordset);
   } catch (err) {
@@ -72,14 +149,8 @@ const getWorkingHours = async (req, res) => {
 const getDesignations = async (req, res) => {
   const departmentId = req.params.departmentId;
   try {
-    const pool = await poolPromise2;
-    const result = await pool.request().query(`
-      SELECT a.id, a.TenantId, a.Description, a.ParentId, a.DepartmentId, b.Description AS Department_Name
-      FROM Payroll.Designation a
-      LEFT JOIN Payroll.Department b ON b.Id = a.DepartmentId
-      WHERE a.DepartmentId = ${departmentId}
-      AND a.IsDeleted IS NULL
-      AND a.TenantId = 278
+    const pool = await poolPromise;
+    const result = await pool.request().query(`SELECT * FROM Trades where farvision_department_id = ${departmentId}
     `);
     res.json(result.recordset);
   } catch (err) {
@@ -88,38 +159,165 @@ const getDesignations = async (req, res) => {
   }
 };
 
+// const getCompanyNamesByProjectId = async (req, res) => {
+//   const projectId = req.params.projectId;
+//   try {
+//     const pool = await poolPromise2;
+    
+//     // Step 1: Get the ParentId for the selected project
+//     const parentIdResult = await pool.request().query(`
+//       SELECT ParentId 
+//       FROM Framework.BusinessUnit 
+//       WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+//       AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+//       AND Id = ${projectId}
+//     `);
+
+//     if (parentIdResult.recordset.length === 0) {
+//       return res.status(404).send('ParentId not found for the selected project');
+//     }
+
+//     const parentId = parentIdResult.recordset[0].ParentId;
+
+//     // Step 2: Get the Company Name using the ParentId
+//     const companyNameResult = await pool.request().query(`
+//       SELECT Description AS Company_Name 
+//       FROM Framework.BusinessUnit 
+//       WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
+//       AND (IsDeleted = 0 OR IsDeleted IS NULL) 
+//       AND Id = ${parentId}
+//     `);
+
+//     res.json(companyNameResult.recordset);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).send('Server error');
+//   }
+// };
+
+
+// const getCompanyNamesByProjectId = async (req, res) => {
+//   const projectId = parseInt(req.params.projectId); // Ensure it's an integer
+
+//   try {
+//     const apiUrl = 'https://api.vjerp.com/api/businessUnit';
+//     const token = '20a763e266308b35fc75feca4b053d5ce8ea540dbdaa77ee13b1a5e7ce8aadcf';
+
+//     // Step 1: Fetch Business Unit Data from API
+//     const apiResponse = await axios.get(apiUrl, {
+//       headers: {
+//         'Authorization': `${token}`,
+//         'Accept': 'application/json',
+//         'Content-Type': 'application/json',
+//       }
+//     });
+
+//     const businessUnits = apiResponse.data; // API response data
+//     console.log("Business Unit Data:", businessUnits);
+
+//     // Step 2: Find the matching project in the API response
+//     const selectedUnit = businessUnits.find(unit => unit.Id === projectId);
+
+//     if (!selectedUnit) {
+//       return res.status(404).json({ error: 'Project ID not found in Business Unit API data' });
+//     }
+
+//     const parentId = selectedUnit.ParentId; // Extract ParentId from API response
+
+//     if (!parentId) {
+//       return res.status(404).json({ error: 'ParentId not found for the selected project' });
+//     }
+
+//     const pool = await poolPromise;
+
+//     // Step 3: Get Company Name using ParentId
+//     const companyNameResult = await pool.request()
+//       .input('parentId', parentId)
+//       .query(`
+//         SELECT Description AS Company_Name 
+//         FROM CompanyNameByBuId 
+//         WHERE ParentId = @parentId
+//       `);
+
+//     if (companyNameResult.recordset.length === 0) {
+//       return res.status(404).json({ error: 'Company name not found for the given ParentId' });
+//     }
+
+//     // Step 4: Return Business Unit Data & Company Name
+//     const responseData = {
+//       companyName: companyNameResult.recordset[0].Company_Name,
+//       businessUnitData: selectedUnit
+//     };
+
+//     console.log("Final Response Data:", responseData);
+//     res.json(responseData);
+//   } catch (err) {
+//     console.error('Error fetching project data:', err.response?.status, err.response?.data);
+
+//     if (err.response?.status === 401) {
+//       return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
+//     }
+
+//     res.status(500).send('Server error');
+//   }
+// };
+
+
 const getCompanyNamesByProjectId = async (req, res) => {
   const projectId = req.params.projectId;
+  
   try {
-    const pool = await poolPromise2;
-    
-    // Step 1: Get the ParentId for the selected project
-    const parentIdResult = await pool.request().query(`
-      SELECT ParentId 
-      FROM Framework.BusinessUnit 
-      WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-      AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-      AND Id = ${projectId}
-    `);
+    const pool = await poolPromise4;
 
+    // Step 1: Get the ParentId for the selected project
+    const parentIdResult = await pool.request()
+      .input('projectId', projectId) // Parameterized query for security
+      .query(`
+        Select Id, Description ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
+(IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
+        AND Id = @projectId
+      `);
+
+
+    const pool5 = await poolPromise;
+    let parentId;
+
+    if (parentIdResult.recordset.length !== 0) {
+       parentId = parentIdResult?.recordset[0].ParentId;
+    }
     if (parentIdResult.recordset.length === 0) {
-      return res.status(404).send('ParentId not found for the selected project');
+
+      const parentIdResult2 = await pool5.request()
+      .input('projectId', projectId) // Parameterized query for security
+      .query(`select [Buid], [Id] ,[Description],[ParentId] FROM CompanyNameByBuId where Id = @projectId `);
+
+      if (parentIdResult2.recordset.length === 0) {
+        return res.status(404).json({ error: 'ParentId not found for the selected project' });
+      }else{
+        parentId = parentIdResult2?.recordset[0].Id;
+      } 
     }
 
-    const parentId = parentIdResult.recordset[0].ParentId;
+    console.log("parentId",parentId)
+    // console.log('parentId++',parentIdResult.recordset[0].ParentId)
 
-    // Step 2: Get the Company Name using the ParentId
-    const companyNameResult = await pool.request().query(`
-      SELECT Description AS Company_Name 
-      FROM Framework.BusinessUnit 
-      WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-      AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-      AND Id = ${parentId}
-    `);
+    // Step 2: Get the Company Name using the ParentId from CompanyNameByBuId table
+    const companyNameResult = await pool5.request()
+      .input('parentId', parentId)
+      .query(`
+        SELECT Description AS Company_Name 
+        FROM CompanyNameByBuId 
+        WHERE parentId = @parentId
+      `);
 
-    res.json(companyNameResult.recordset);
+    if (companyNameResult.recordset.length === 0) {
+      return res.status(404).json({ error: 'Company name not found for the given ParentId' });
+    }
+
+    res.json(companyNameResult.recordset[0]); // Return only the company name
+    // console.log('companyNameResult.recordset[0]',companyNameResult.recordset[0])
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching company name:', err);
     res.status(500).send('Server error');
   }
 };
@@ -161,16 +359,23 @@ const getAttendanceLogs = async (req, res) => {
 const approveLabour = async (req, res) => {
   try {
     const { projectId, deviceId } = req.body;
+    console.log('projectId, deviceId',req.body)
 
     if (!projectId || !deviceId) {
       return res.status(400).json({ message: 'ProjectID and DeviceID are required' });
     }
 
     // Query from the first database (dbConfig2) for the project
-    const pool2 = await poolPromise2;
+    const pool2 = await poolPromise4;
     const projectResult = await pool2.request()
       .input('ProjectID', sql.Int, projectId)
-      .query('SELECT Description FROM Framework.BusinessUnit WHERE id = @ProjectID');
+      // .query('SELECT Description FROM Framework.BusinessUnit WHERE id = @ProjectID');
+      .query(`SELECT Id, Description, Type, Email1, ParentId 
+      FROM Framework.BusinessUnit 
+      WHERE Type = 'B' 
+      AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
+      AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0) and Id = @ProjectID`);
+      
 
     // Query from the second database (dbConfig3) for the device
     const pool3 = await poolPromise3;
@@ -1258,11 +1463,20 @@ cron.schedule('08 01 * * *', async () => {
 const getAdminSiteTransferApproval = async (req, res) => {
   try {
     const pool = await poolPromise;
-    const result = await pool.request().query(`
-      SELECT * FROM AdminSiteTransferApproval`);
-    // if (result.recordset.length === 0) {
-    //   return res.status(404).json({ message: 'No records found' });
-    // }
+    const result = await pool.request().query(`SELECT 
+    A.*,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM [FinalizedSalaryPay] F
+            WHERE F.LabourID = A.LabourID
+              AND F.month = MONTH(A.transferDate)
+              AND F.year = YEAR(A.transferDate)
+        )
+        THEN 'true'
+        ELSE 'false'
+    END AS IsApproveDisable
+FROM [AdminSiteTransferApproval] A order by A.createdAt desc;`);
     res.json(result.recordset);
   } catch (err) {
     console.error(err);
@@ -1270,10 +1484,88 @@ const getAdminSiteTransferApproval = async (req, res) => {
   }
 };
 
+// const siteTransferRequestforAdmin = async (req, res) => {
+//   try {
+//     // 1) Grab the `labours` array from the request body
+//     const { labours } = req.body;
+//     console.log("req.body for transfer labour",req.body)
+
+//     // 2) If no labours array or empty, return an error
+//     if (!labours || !Array.isArray(labours) || labours.length === 0) {
+//       return res.status(400).json({ message: "No labours provided." });
+//     }
+
+//     // Get a pooled connection
+//     const pool = await poolPromise;
+
+//     // 3) Loop over each labour object
+//     for (const labour of labours) {
+//       const {
+//         userId,
+//         LabourID,
+//         name,
+//         currentSite,
+//         transferSite,
+//         currentSiteName,
+//         transferSiteName,
+//         transferDate,
+//         siteTransferBy,
+//       } = labour;
+
+//       // 4) Check required fields per labour
+//       //    (adjust as needed, e.g., if userId is also required, add that check)
+//       if (!LabourID || !currentSite || !transferSite) {
+//         return res.status(400).json({
+//           message: "All fields are required (LabourID, currentSite, transferSite).",
+//         });
+//       }
+
+//         const checkresult = await pool.request()
+//             .input('LabourID', sql.NVarChar, LabourID)
+//             .query(`
+//                 SELECT *
+//                 FROM AdminSiteTransferApproval
+//                 WHERE LabourID = @LabourID  and adminStatus = 'Pending' `);
+    
+//          if(checkresult.recordset.length > 0){
+//           return res.status(200).json({
+//             message: `LabourID ${LabourID} already has a pending approval in Admin SiteTransfer Approval.`,
+//           });
+//          };
+
+//       await pool.request()
+//           .input("userId", sql.Int, userId || null)
+//           .input("LabourID", sql.NVarChar(50), LabourID)
+//           .input("name", sql.NVarChar(255), name || null)
+//           .input("currentSite", sql.Int, currentSite)
+//           .input("transferSite", sql.Int, transferSite)
+//           .input("currentSiteName", sql.NVarChar(255), currentSiteName)
+//           .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+//           .input("transferDate", sql.Date, transferDate || null)
+//           .input("siteTransferBy", sql.NVarChar(50), siteTransferBy || null)
+//           .query(`
+//               INSERT INTO AdminSiteTransferApproval 
+//               (userId, LabourID, name, currentSite, transferSite, currentSiteName, transferSiteName, siteTransferBy, transferDate, adminStatus, isAdminApproval, isAdminReject)
+//               VALUES (@userId, @LabourID, @name, @currentSite, @transferSite, @currentSiteName, @transferSiteName, @siteTransferBy, @transferDate, 'Pending', 0, 0)
+//           `);
+//           }
+//           return res
+//           .status(201)
+//           .json({ message: "Transfer request submitted successfully." });
+//       } catch (error) {
+//         console.error("Error adding transfer request:", error);
+//         return res
+//           .status(500)
+//           .json({ message: "Failed to add transfer request.", error: error.message });
+//       }
+//     };
+
+
 const siteTransferRequestforAdmin = async (req, res) => {
   try {
     // 1) Grab the `labours` array from the request body
     const { labours } = req.body;
+    console.log("req.body for transfer labour", req.body);
 
     // 2) If no labours array or empty, return an error
     if (!labours || !Array.isArray(labours) || labours.length === 0) {
@@ -1282,6 +1574,10 @@ const siteTransferRequestforAdmin = async (req, res) => {
 
     // Get a pooled connection
     const pool = await poolPromise;
+
+    // Arrays to track successful transfers and errored labours
+    let successfulTransfers = [];
+    let errorLabours = [];
 
     // 3) Loop over each labour object
     for (const labour of labours) {
@@ -1298,44 +1594,169 @@ const siteTransferRequestforAdmin = async (req, res) => {
       } = labour;
 
       // 4) Check required fields per labour
-      //    (adjust as needed, e.g., if userId is also required, add that check)
       if (!LabourID || !currentSite || !transferSite) {
-        return res.status(400).json({
-          message: "All fields are required (LabourID, currentSite, transferSite).",
+        errorLabours.push({
+          LabourID,
+          error: "Missing required fields (LabourID, currentSite, transferSite).",
         });
+        continue;
       }
-      await pool.request()
-          .input("userId", sql.Int, userId || null)
-          .input("LabourID", sql.NVarChar(50), LabourID)
-          .input("name", sql.NVarChar(255), name || null)
-          .input("currentSite", sql.Int, currentSite)
-          .input("transferSite", sql.Int, transferSite)
-          .input("currentSiteName", sql.NVarChar(255), currentSiteName)
-          .input("transferSiteName", sql.NVarChar(255), transferSiteName)
-          .input("transferDate", sql.Date, transferDate || null)
-          .input("siteTransferBy", sql.NVarChar(50), siteTransferBy || null)
-          .query(`
-              INSERT INTO AdminSiteTransferApproval 
-              (userId, LabourID, name, currentSite, transferSite, currentSiteName, transferSiteName, siteTransferBy, transferDate, adminStatus, isAdminApproval, isAdminReject)
-              VALUES (@userId, @LabourID, @name, @currentSite, @transferSite, @currentSiteName, @transferSiteName, @siteTransferBy, @transferDate, 'Pending', 0, 0)
-          `);
-          }
-          return res
-          .status(201)
-          .json({ message: "Transfer request submitted successfully." });
-      } catch (error) {
-        console.error("Error adding transfer request:", error);
-        return res
-          .status(500)
-          .json({ message: "Failed to add transfer request.", error: error.message });
+
+      // 5) Validate that currentSiteName and transferSiteName are not the same.
+      if (currentSiteName === transferSiteName) {
+        errorLabours.push({
+          LabourID,
+          error: "currentSiteName and transferSiteName cannot be the same.",
+        });
+        continue;
       }
+
+      // 6) Check if a pending approval already exists for this labour
+      const pendingResult = await pool
+        .request()
+        .input("LabourID", sql.NVarChar, LabourID)
+        .query(`
+          SELECT *
+          FROM AdminSiteTransferApproval
+          WHERE LabourID = @LabourID AND adminStatus = 'Pending'
+        `);
+
+      if (pendingResult.recordset.length > 0) {
+        errorLabours.push({
+          LabourID,
+          error: "Pending approval already exists in Admin SiteTransfer Approval.",
+        });
+        continue;
+      }
+
+      // 7) Process the transfer request for the valid labour
+      await pool
+        .request()
+        .input("userId", sql.Int, userId || null)
+        .input("LabourID", sql.NVarChar(50), LabourID)
+        .input("name", sql.NVarChar(255), name || null)
+        .input("currentSite", sql.Int, currentSite)
+        .input("transferSite", sql.Int, transferSite)
+        .input("currentSiteName", sql.NVarChar(255), currentSiteName)
+        .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+        .input("transferDate", sql.Date, transferDate || null)
+        .input("siteTransferBy", sql.NVarChar(50), siteTransferBy || null)
+        .query(`
+          INSERT INTO AdminSiteTransferApproval 
+          (userId, LabourID, name, currentSite, transferSite, currentSiteName, transferSiteName, siteTransferBy, transferDate, adminStatus, isAdminApproval, isAdminReject)
+          VALUES (@userId, @LabourID, @name, @currentSite, @transferSite, @currentSiteName, @transferSiteName, @siteTransferBy, @transferDate, 'Pending', 0, 0)
+        `);
+
+      // Add this labour to the successfulTransfers array
+      successfulTransfers.push({ LabourID, name });
+    }
+
+    // 8) Separate pending approval errors from other errors
+    const pendingApprovalErrors = errorLabours.filter(
+      (item) => item.error === "Pending approval already exists in Admin SiteTransfer Approval."
+    );
+    const otherErrors = errorLabours.filter(
+      (item) => item.error === "Missing required fields (LabourID, currentSite, transferSite)."
+    );
+
+    const sameNameErrors = errorLabours.filter(
+      (item) => item.error === "currentSiteName and transferSiteName cannot be the same."
+    );
+
+    // Build counts for the response message
+  // Build counts for the response message
+const successCount = successfulTransfers.length;
+const pendingApprovalCount = pendingApprovalErrors.length;
+const otherErrorsCount = otherErrors.length;
+const sameNameErrorsCount = sameNameErrors.length;
+const totalErrors = errorLabours.length;
+
+// Initialize an array to store message lines
+let responseLines = [];
+
+if (totalErrors > 0) {
+  responseLines.push(`Transfer Request Summary:`);
+
+  if (successCount > 0) {
+    if (successCount === 1) {
+      responseLines.push(`\nTransfer request submitted successfully for Labour ID: ${successfulTransfers[0].LabourID} (${successfulTransfers[0].name})`);
+    } else {
+      responseLines.push(`\nTransfer request submitted successfully for ${successCount} labours.`);
+    }
+  }
+  
+  if (pendingApprovalCount > 0) {
+    if (pendingApprovalCount === 1) {
+      responseLines.push(`\nPending approval already exists for Labour ID: ${pendingApprovalErrors[0].LabourID}`);
+    } else {
+      responseLines.push(`\nPending approval already exists for ${pendingApprovalCount} labours.`);
+    }
+  }
+
+  if (sameNameErrorsCount > 0) {
+    if (sameNameErrorsCount === 1) {
+      responseLines.push(`\nCurrent site and transfer site cannot be the same for Labour ID: ${sameNameErrors[0].LabourID}`);
+    } else {
+      responseLines.push(`\nCurrent site and transfer site cannot be the same for ${sameNameErrorsCount} labours.`);
+    }
+  }
+
+  if (otherErrorsCount > 0) {
+    if (otherErrorsCount === 1) {
+      responseLines.push(`\nPlease try again. Contact admin for Labour ID: ${otherErrors[0].LabourID}`);
+    } else {
+      responseLines.push(`\nPlease try again. Contact admin for ${otherErrorsCount} labours.`);
+    }
+  }
+
+  responseMessage = responseLines.join("\n"); // Join all non-empty lines
+} else {
+  if (successCount === 1) {
+    responseMessage = `Transfer request submitted successfully for Labour ID: ${successfulTransfers[0].LabourID} (${successfulTransfers[0].name}).`;
+  } else {
+    responseMessage = `Transfer request submitted successfully for ${successCount} labours.`;
+  }
+}   
+
+    // Compose the response payload
+    const responsePayload = {
+      message: responseMessage,
+      summary: {
+        successfulTransfers: successCount,
+        pendingApprovalErrors: pendingApprovalCount,
+        sameNameErrors : sameNameErrorsCount,
+        otherErrors: otherErrorsCount,
+        totalErrors,
+        errorLabourIDs: errorLabours.map((item) => item.LabourID),
+      },
+      details: {
+        successfulTransfers,      
+        pendingApprovalErrors, 
+        sameNameErrors,    
+        otherErrors,   
+      },
     };
+
+    // 9) Respond with a 200 status if there were any errors (partial success) or 201 if all processed successfully
+    if (totalErrors > 0) {
+      return res.status(200).json(responsePayload);
+    } else {
+      return res.status(201).json(responsePayload);
+    }
+  } catch (error) {
+    console.error("Error adding transfer request:", error);
+    return res.status(500).json({
+      message: "Failed to add transfer request.",
+      error: error.message,
+    });
+  }
+};
 
 
 
 const approveSiteTransfer = async (req, res) => {
   try {
-    const { id } = req.query; // Extract `id` from query parameters.
+    const { id } = req.query;
 
     if (!id) {
       return res.status(400).json({ message: "ID is required." });
@@ -1345,7 +1766,7 @@ const approveSiteTransfer = async (req, res) => {
 
     // Fetch the approval details using `id`
     const approval = await pool.request()
-      .input("id", sql.NVarChar(50), id)
+      .input("id", sql.Int, id)
       .query(`
         SELECT * FROM AdminSiteTransferApproval
         WHERE id = @id AND adminStatus = 'Pending'
@@ -1355,16 +1776,7 @@ const approveSiteTransfer = async (req, res) => {
       return res.status(404).json({ message: "No pending approval found for the given ID." });
     }
 
-    const transferDetails = approval.recordset[0];
-
-    // Update admin approval status
-    await pool.request()
-      .input("id", sql.NVarChar(50), id)
-      .query(`
-        UPDATE AdminSiteTransferApproval
-        SET adminStatus = 'Approved', isAdminApproval = 1, updatedAt = GETDATE(), siteTransferApproveDate = GETDATE()
-        WHERE id = @id AND adminStatus = 'Pending'
-      `);
+    const transferDetails = approval.recordset[0];   
 
     // Call saveTransferData with the fetched details
     await saveTransferData({
@@ -1386,6 +1798,15 @@ const approveSiteTransfer = async (req, res) => {
       }),
     });
 
+     // Update admin approval status
+     await pool.request()
+     .input("id", sql.NVarChar(50), id)
+     .query(`
+       UPDATE AdminSiteTransferApproval
+       SET adminStatus = 'Approved', isAdminApproval = 1, updatedAt = GETDATE(), siteTransferApproveDate = GETDATE()
+       WHERE id = @id AND adminStatus = 'Pending'
+     `);
+
     // Log admin approval
     await saveLogToDatabaseSiteTransfer(
       transferDetails.userId,
@@ -1405,11 +1826,10 @@ const approveSiteTransfer = async (req, res) => {
 
 const rejectSiteTransfer = async (req, res) => {
   try {
-    const { id, rejectReason } = req.body; // Extract `id` and `rejectReason` from the request body.
-
-    if (!id) {
-      return res.status(400).json({ message: "ID is required." });
-    }
+    const { id, rejectReason } = req.body; 
+    // if (!id) {
+    //   return res.status(400).json({ message: "ID is required." });
+    // }
 
     const pool = await poolPromise;
 
@@ -1461,7 +1881,7 @@ const rejectSiteTransfer = async (req, res) => {
       "Rejected"
     );
 
-    res.status(200).json({ message: "Site transfer request rejected successfully." });
+    res.status(200).json({ message: "Site transfer request rejected successfully.", success:true });
   } catch (error) {
     console.error("Error rejecting site transfer:", error);
     res.status(500).json({ message: "Failed to reject site transfer.", error: error.message });
@@ -1751,7 +2171,7 @@ const saveTransferData = async (req, res) => {
   }
 };
 
-cron.schedule('28 12 * * *', async () => {
+cron.schedule('31 02 * * *', async () => {
   console.log('Running site transfer approval cron job at 01:08 AM');
 
   try {
@@ -1760,7 +2180,7 @@ cron.schedule('28 12 * * *', async () => {
     // Fetch pending approvals for the current date
     const pendingApprovals = await pool.request()
       .query(`
-        SELECT LabourID 
+        SELECT id, LabourID 
         FROM AdminSiteTransferApproval
         WHERE adminStatus = 'Pending' AND transferDate = CAST(GETDATE() AS DATE)
       `);
@@ -1776,7 +2196,7 @@ cron.schedule('28 12 * * *', async () => {
       try {
         // Call approveSiteTransfer for each pending LabourID
         await approveSiteTransfer(
-          { body: { LabourID: approval.LabourID } },
+          { query: { id: approval.id } },
           {
             status: (statusCode) => ({
               json: (response) => {
@@ -1818,6 +2238,535 @@ const fetchCachedLabours = async (req, res) => {
   }
 };
 
+const getWagesforInsentiveAdd = async (req, res) => {
+  try {
+    const { LabourID } = req.query; // Extract LabourID from query parameters
+    // console.log('req.query for wages --', req.query);
+
+    if (!LabourID) {
+      return res.status(400).json({ error: "LabourID is required" });
+    }
+
+    const pool = await poolPromise;
+    const result = await pool.request()
+      .input('LabourID', LabourID) // Use input binding to prevent SQL injection
+      .query(`
+        SELECT [PayStructure], [MonthlyWages], [FixedMonthlyWages], 'Approved' AS ApprovalStatusWages 
+        FROM [dbo].[LabourMonthlyWages] 
+        WHERE LabourID = @LabourID
+      `);
+
+    res.json(result.recordset);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+};
+
+
+
+// -----------------------------------------------------------------------       COMPANY TRANSFER FUCNTIONS START ----------------------------------------------------
+// -----------------------------------------------------------------------       COMPANY TRANSFER FUCNTIONS ----------------------------------------------------
+
+const saveCompanyTransferData = async (req, res) => {
+  try {
+    const {
+      userId,
+      LabourID,
+      name,
+      currentSite,
+      transferSite,
+      currentSiteName,
+      transferSiteName,
+      currentCompanyName,
+      transferCompanyName,
+      siteTransferBy,
+    } = req.body;
+
+    const pool = await poolPromise;
+
+    await pool.request()
+      .input("userId", sql.Int, userId)
+      .input("LabourID", sql.NVarChar(50), LabourID)
+      .input("name", sql.NVarChar(255), name)
+      .input("currentSite", sql.Int, currentSite)
+      .input("transferSite", sql.Int, transferSite)
+      .input("currentSiteName", sql.NVarChar(255), currentSiteName)
+      .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+      .input("currentCompanyName", sql.NVarChar(255), currentCompanyName)
+      .input("transferCompanyName", sql.NVarChar(255), transferCompanyName)
+      .input("siteTransferBy", sql.NVarChar(255), siteTransferBy)
+      .query(`
+        INSERT INTO [dbo].[API_TransferCompany] (
+          userId,
+          LabourID,
+          name,
+          currentSite,
+          transferSite,
+          currentSiteName,
+          transferSiteName,
+          currentCompanyName,
+          transferCompanyName,
+          siteTransferBy,
+          AdminStatus,
+          createdAt
+        )
+        VALUES (
+          @userId,
+          @LabourID,
+          @name,
+          @currentSite,
+          @transferSite,
+          @currentSiteName,
+          @transferSiteName,
+          @currentCompanyName,
+          @transferCompanyName,
+          @siteTransferBy,
+          'Approved',
+          GETDATE()
+        )
+      `);
+
+    return res.status(200).json({ message: "Company transfer data saved successfully." });
+  } catch (error) {
+    console.error("Error saving transfer data:", error);
+    return res.status(500).json({ message: "Error saving transfer data.", error: error.message });
+  }
+};
+
+
+/**
+ * Placeholder: Example function to log site/ company transfer events to a logs table.
+ */
+const saveLogToDatabaseCompanyTransfer = async (
+  userId,
+  LabourID,
+  actionType,
+  actionDescription,
+  status
+) => {
+  try {
+    const pool = await poolPromise;
+
+    await pool.request()
+      .input("userId", sql.Int, userId)
+      .input("LabourID", sql.NVarChar(50), LabourID)
+      .input("actionType", sql.NVarChar(100), actionType)
+      .input("actionDescription", sql.NVarChar(sql.MAX), actionDescription)
+      .input("status", sql.NVarChar(50), status)
+      .query(`
+        INSERT INTO [dbo].[CompanyTransferLogs] (
+          userId,
+          LabourID,
+          actionType,
+          actionDescription,
+          status,
+          createdAt
+        )
+        VALUES (
+          @userId,
+          @LabourID,
+          @actionType,
+          @actionDescription,
+          @status,
+          GETDATE()
+        )
+      `);
+
+    console.log("✅ Log inserted successfully:", {
+      userId,
+      LabourID,
+      actionType,
+      actionDescription,
+      status,
+    });
+  } catch (error) {
+    console.error("❌ Error saving log to DB:", error);
+  }
+};
+
+
+
+const getAdminCompanyTransferApproval = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT * FROM AdminCompanyTransferApproval
+    `);
+    return res.json(result.recordset);
+  } catch (err) {
+    console.error("Error in getAdminCompanyTransferApproval:", err);
+    return res.status(500).send("Server error");
+  }
+};
+
+/**
+ * POST to submit company-transfer requests for admin approval
+ */
+const companyTransferRequestforAdmin = async (req, res) => {
+  try {
+    const { labours } = req.body;
+    if (!labours || !Array.isArray(labours) || labours.length === 0) {
+      return res.status(400).json({ message: "No labours provided." });
+    }
+
+    const pool = await poolPromise;
+
+    for (const labour of labours) {
+      const {
+        userId,
+        LabourID,
+        name,
+        currentSite,
+        transferSite,
+        currentSiteName,
+        transferSiteName,
+        Business_Unit,          // new field (e.g., the selected project’s Business_Unit)
+        ComapanyDescription,     // new field
+        ParentId,                // new field
+        ComapanyID,              // new field
+        projectId,               // new field (the new site ID)
+        transferDate,
+        siteTransferBy,
+        transferCompanyName,
+        currentCompanyName
+      } = labour;
+
+      // Basic required fields check
+      if (!LabourID || !currentSite || !transferSite) {
+        return res.status(400).json({
+          message: "Required fields missing: LabourID, currentSite, transferSite."
+        });
+      }
+
+      // Insert new transfer request into AdminCompanyTransferApproval
+      await pool.request()
+        .input("userId", sql.Int, userId || null)
+        .input("LabourID", sql.NVarChar(50), LabourID)
+        .input("name", sql.NVarChar(255), name || null)
+        .input("currentSite", sql.Int, currentSite)
+        .input("transferSite", sql.Int, transferSite)
+        .input("currentSiteName", sql.NVarChar(255), currentSiteName)
+        .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+        // Use Business_Unit as both current and transfer company name if needed
+        .input("currentCompanyName", sql.NVarChar(255), currentCompanyName)
+        .input("transferCompanyName", sql.NVarChar(255), transferCompanyName)
+        .input("siteTransferBy", sql.NVarChar(50), siteTransferBy || null)
+        .input("transferDate", sql.Date, transferDate || null)
+        // New additional fields:
+        .input("Business_Unit", sql.NVarChar(255), Business_Unit)
+        .input("ComapanyDescription", sql.NVarChar(255), ComapanyDescription)
+        .input("ParentId", sql.Int, ParentId)
+        .input("ComapanyID", sql.NVarChar(50), ComapanyID)
+        .input("projectId", sql.Int, projectId)
+        .input("Date", sql.DateTime, new Date())
+        .query(`
+          INSERT INTO AdminCompanyTransferApproval (
+            userId,
+            LabourID,
+            name,
+            currentSite,
+            transferSite,
+            currentSiteName,
+            transferSiteName,
+            currentCompanyName,
+            transferCompanyName,
+            siteTransferBy,
+            transferDate,
+            Business_Unit,
+            ComapanyDescription,
+            ParentId,
+            ComapanyID,
+            projectId,
+            adminStatus,
+            isAdminApproval,
+            isAdminReject,
+            Date
+          )
+          VALUES (
+            @userId,
+            @LabourID,
+            @name,
+            @currentSite,
+            @transferSite,
+            @currentSiteName,
+            @transferSiteName,
+            @currentCompanyName,
+            @transferCompanyName,
+            @siteTransferBy,
+            @transferDate,
+            @Business_Unit,
+            @ComapanyDescription,
+            @ParentId,
+            @ComapanyID,
+            @projectId,
+            'Pending',
+            0,
+            0,
+            @Date
+          )
+        `);
+    }
+
+    return res.status(201).json({ message: "Transfer request submitted successfully." });
+  } catch (error) {
+    console.error("Error adding transfer request:", error);
+    return res.status(500).json({ message: "Failed to add transfer request.", error: error.message });
+  }
+};
+
+/**
+ * POST to approve a company transfer (ID in query params)
+ */
+const approveCompanyTransfer = async (req, res) => {
+  try {
+    const { id } = req.query;
+
+    if (!id) {
+      return res.status(400).json({ message: "ID is required." });
+    }
+
+    const pool = await poolPromise;
+
+    // Check pending request
+    const approval = await pool.request()
+      .input("id", sql.NVarChar(50), id)
+      .query(`
+        SELECT * 
+        FROM AdminCompanyTransferApproval
+        WHERE id = @id AND adminStatus = 'Pending'
+      `);
+
+    if (approval.recordset.length === 0) {
+      return res.status(404).json({ message: "No pending approval found for the given ID." });
+    }
+
+    const transferDetails = approval.recordset[0];
+
+    // Mark Approved
+    await pool.request()
+      .input("id", sql.NVarChar(50), id)
+      .query(`
+        UPDATE AdminCompanyTransferApproval
+        SET
+          adminStatus = 'Approved',
+          isAdminApproval = 1,
+          updatedAt = GETDATE(),
+          siteTransferApproveDate = GETDATE()
+        WHERE id = @id AND adminStatus = 'Pending'
+      `);
+
+    // Update labourOnboarding with the new site & company
+    await pool.request()
+      .input("LabourID", sql.NVarChar(50), transferDetails.LabourID)
+      .input("projectId", sql.Int, transferDetails.transferSite)
+      .input("companyName", sql.NVarChar(255), transferDetails.transferCompanyName)
+      .input("WorkingBu", sql.NVarChar(255), transferDetails.transferSiteName)
+      .input("businessUnit", sql.NVarChar(255), transferDetails.transferSiteName)
+      .input("location", sql.NVarChar(255), transferDetails.transferSiteName)
+      .input("isCompanyTransfer", sql.Bit, 1) 
+      .query(`
+        UPDATE labourOnboarding
+        SET
+          projectName = @projectId,
+          companyName = @companyName,
+          WorkingBu = @WorkingBu,
+          businessUnit = @businessUnit,
+          location = @location,
+           isCompanyTransfer = @isCompanyTransfer
+        WHERE LabourID = @LabourID and status = 'Approved'
+      `);
+
+    // 1) Save final transfer data in API_TransferCompany
+    await saveCompanyTransferData(
+      {
+        body: {
+          userId: transferDetails.userId,
+          LabourID: transferDetails.LabourID,
+          name: transferDetails.name,
+          currentSite: transferDetails.currentSite,
+          transferSite: transferDetails.transferSite,
+          currentSiteName: transferDetails.currentSiteName,
+          transferSiteName: transferDetails.transferSiteName,
+          currentCompanyName: transferDetails.currentCompanyName,
+          transferCompanyName: transferDetails.transferCompanyName,
+          siteTransferBy: transferDetails.siteTransferBy,
+        },
+      },
+      {
+        status: (statusCode) => ({
+          json: (response) => {
+            console.log("saveCompanyTransferData Response:", response);
+          },
+        }),
+      }
+    );
+
+    // 2) Log the approval
+    await saveLogToDatabaseSiteTransfer(
+      transferDetails.userId,
+      transferDetails.LabourID,
+      "Admin Approved",
+      `Company transfer approved for ${transferDetails.name} 
+       from ${transferDetails.currentCompanyName} 
+       to ${transferDetails.transferCompanyName}.`,
+      "Success"
+    );
+
+    return res
+      .status(200)
+      .json({ message: "Company transfer approved and processed successfully." });
+  } catch (error) {
+    console.error("Error approving Company transfer:", error);
+    return res.status(500).json({
+      message: "Failed to approve Company transfer.",
+      error: error.message,
+    });
+  }
+};
+
+
+/**
+ * POST to reject a company transfer
+ */
+const rejectCompanyTransfer = async (req, res) => {
+  try {
+    const { id, rejectReason } = req.body;
+// console.log("company transfer reject",req.body)
+    if (!id) {
+      return res.status(400).json({ message: "ID is required." });
+    }
+
+    const pool = await poolPromise;
+
+    // Check if there's a pending request for this ID
+    const approval = await pool.request()
+      .input("id", sql.Int, id)
+      .query(`
+        SELECT * FROM AdminCompanyTransferApproval
+        WHERE id = @id AND adminStatus = 'Pending'
+      `);
+
+    if (approval.recordset.length === 0) {
+      return res.status(404).json({ message: "No pending approval found for the given ID." });
+    }
+
+    const transferDetails = approval.recordset[0];
+
+    // Mark as Rejected
+    await pool.request()
+      .input("id", sql.Int, id)
+      .input("rejectReason", sql.NVarChar(sql.MAX), rejectReason || "No reason provided")
+      .query(`
+        UPDATE AdminCompanyTransferApproval
+        SET 
+          adminStatus = 'Rejected', 
+          isAdminReject = 1, 
+          updatedAt = GETDATE(), 
+          rejectionReason = @rejectReason,
+          companyTransferRejectDate = GETDATE()
+        WHERE id = @id AND adminStatus = 'Pending'
+      `);
+
+    // (Optional) If you have a table `API_TransferCompany` to update with the rejection reason:
+    await pool.request()
+      .input("LabourID", sql.NVarChar(50), transferDetails.LabourID)
+      .input("rejectReason", sql.NVarChar(sql.MAX), rejectReason || "No reason provided")
+      .query(`
+        UPDATE API_TransferCompany
+        SET rejectionReason = @rejectReason, updatedAt = GETDATE()
+        WHERE LabourID = @LabourID
+      `);
+
+    // Log admin rejection
+    await saveLogToDatabaseSiteTransfer(
+      transferDetails.userId,
+      transferDetails.LabourID,
+      "Admin Rejected",
+      `Company transfer request for LabourID ${transferDetails.LabourID} was rejected. Reason: ${rejectReason || "No reason provided"}`,
+      "Rejected"
+    );
+
+    return res.status(200).json({
+      message: "Company transfer request rejected successfully.",
+      success: true
+    });
+  } catch (error) {
+    console.error("Error rejecting Company transfer:", error);
+    return res.status(500).json({ 
+      message: "Failed to reject Company transfer.", 
+      error: error.message 
+    });
+  }
+};
+
+/**
+ * PUT to edit a pending request
+ */
+const editCompanyTransfer = async (req, res) => {
+  try {
+    const { LabourID, transferCompanyName, transferDate } = req.body;
+
+    if (!LabourID || !transferCompanyName) {
+      return res.status(400).json({ message: "LabourID and transferCompanyName are required." });
+    }
+
+    const pool = await poolPromise;
+
+    // Check if there's a pending record for this LabourID
+    const approval = await pool.request()
+      .input("LabourID", sql.NVarChar(50), LabourID)
+      .query(`
+        SELECT * FROM AdminCompanyTransferApproval
+        WHERE LabourID = @LabourID AND adminStatus = 'Pending'
+      `);
+
+    if (approval.recordset.length === 0) {
+      return res.status(404).json({
+        message: "No pending approval found for the given LabourID."
+      });
+    }
+
+    // Update the record
+    await pool.request()
+      .input("LabourID", sql.NVarChar(50), LabourID)
+      .input("transferCompanyName", sql.NVarChar(255), transferCompanyName)
+      .input("transferDate", sql.Date, transferDate)
+      .query(`
+        UPDATE AdminCompanyTransferApproval
+        SET
+          transferCompanyName = @transferCompanyName,
+          transferDate = @transferDate,
+          updatedAt = GETDATE()
+        WHERE LabourID = @LabourID AND adminStatus = 'Pending'
+      `);
+
+    // Log admin edit
+    await saveLogToDatabaseCompanyTransfer(
+      approval.recordset[0].userId,
+      LabourID,
+      "Admin Edited",
+      `Company transfer request for LabourID ${LabourID} was updated. 
+       New Company: ${transferCompanyName}, Transfer Date: ${transferDate}`,
+      "Edited"
+    );
+
+    return res.status(200).json({ message: "Company transfer request updated successfully." });
+  } catch (error) {
+    console.error("Error editing Company transfer:", error);
+    return res.status(500).json({ 
+      message: "Failed to edit Company transfer.", 
+      error: error.message 
+    });
+  }
+};
+
+
+
+// ------------------------------------------------------------------------------    COMPANY TRANSFER FUNCTION END -------------------------------------------------
+
+
+
 module.exports = {
   getProjectNames,
   getLabourCategories,
@@ -1849,7 +2798,14 @@ module.exports = {
   approveSiteTransfer,
   rejectSiteTransfer,
   editSiteTransfer,
+  getWagesforInsentiveAdd,
 
+  // ----------------------------------------------------------   
+  getAdminCompanyTransferApproval,
+  companyTransferRequestforAdmin,
+  approveCompanyTransfer,
+  rejectCompanyTransfer,
+  editCompanyTransfer
 };
 
 

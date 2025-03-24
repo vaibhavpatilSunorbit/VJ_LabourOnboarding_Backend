@@ -1,4 +1,4 @@
-const { saveUser, getAllUsers, findUserByEmail, updateUser, deleteUser } = require("../models/UserModel");
+const { saveUser, getAllUsers, findUserByEmail, updateUser, deleteUser, getLaboursMonthlyWages } = require("../models/UserModel");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const uuid = require("uuid");
@@ -58,7 +58,7 @@ async function loginUserController(req, res) {
       return res.status(401).json({ msg: "Invalid email or password" });
     }
 
-    const token = jwt.sign({ emailID: user.emailID, userType: user.userType }, secretKey, { expiresIn: '1h' });
+    const token = jwt.sign({ emailID: user.emailID, userType: user.userType, projectIds:user.assigned_projects , departmentIds:user.assigned_departments }, secretKey, { expiresIn: '1h' });
     res.status(200).json({ success: true,
       data: {
         id: user.id,
@@ -66,6 +66,8 @@ async function loginUserController(req, res) {
         emailID: user.emailID,
         accessPages: user.accessPages,
         userType: user.userType,
+        projectIds:user.assigned_projects , 
+        departmentIds:user.assigned_departments ,
       },
       token });
   } catch (err) {
@@ -75,40 +77,62 @@ async function loginUserController(req, res) {
 }
 
 async function updateUserController(req, res) {
-    try {
-        const { id, name, emailID, contactNo, userType, accessPages, plainPassword } = req.body;
-        console.log('Request body:', req.body);
-       
-        if (!id || !name || !emailID || !contactNo || !userType || !Array.isArray(accessPages)) {
-            return res.status(400).json({ msg: "All fields are required" });
-        }
+  try {
+      const { id, name, emailID, contactNo, userType, accessPages, plainPassword, selectedDeparmentsIds, selectedProjectIds } = req.body;
+      
+      console.log('Request body:', req.body); // Log request body
 
-        const numericId = parseInt(id, 10);
-        if (isNaN(numericId)) {
+      if (!id || !name || !emailID || !contactNo || !userType || !Array.isArray(accessPages)) {
+          return res.status(400).json({ msg: "All fields are required" });
+      }
+
+      const numericId = parseInt(id, 10);
+      if (isNaN(numericId)) {
           console.error("Invalid user ID:", id);
-            return res.status(400).json({ msg: "Invalid user ID" });
-        }
-        console.log('numericId',numericId)
+          return res.status(400).json({ msg: "Invalid user ID" });
+      }
 
-        let hashedPassword;
-        if (plainPassword) {
-            hashedPassword = await bcrypt.hash(plainPassword, 10);
-        }
-       
-        const updateResult = await updateUser(numericId, name, emailID, contactNo, userType, accessPages,  hashedPassword, plainPassword);
-        // const updateResult = await updateUser(numericId, { name, emailID, contactNo, userType, accessPages });
-        console.log('updateResult.result',updateResult)
-        if (updateResult.success) {
-            res.status(200).json({ msg: "User updated successfully", data: updateResult.result });
-           
-        } else {
-            res.status(500).json({ msg: "Failed to update user" }); 
-        }
-    } catch (err) {
-        console.error("Error updating user:", err);
-        res.status(500).json({ msg: "Internal Server Error" }); 
-    }
+      console.log('numericId:', numericId);
+
+      let hashedPassword;
+      if (plainPassword) {
+          hashedPassword = await bcrypt.hash(plainPassword, 10);
+      }
+
+      // Ensure project and department IDs are valid arrays before passing
+      const projectIds = Array.isArray(selectedProjectIds) ? selectedProjectIds : [];
+      const departmentIds = Array.isArray(selectedDeparmentsIds) ? selectedDeparmentsIds : [];
+
+      console.log("Projects to be updated:", projectIds);
+      console.log("Departments to be updated:", departmentIds);
+
+      const updateResult = await updateUser(
+          numericId,
+          name,
+          emailID,
+          contactNo,
+          userType,
+          accessPages,
+          hashedPassword,
+          plainPassword,
+          projectIds,  // Pass project IDs
+          departmentIds // Pass department IDs
+      );
+
+      console.log('updateResult.result:', updateResult);
+
+      if (updateResult.success) {
+          res.status(200).json({ msg: "User updated successfully", data: updateResult.result });
+      } else {
+          res.status(500).json({ msg: "Failed to update user" });
+      }
+  } catch (err) {
+      console.error("Error updating user:", err);
+      res.status(500).json({ msg: "Internal Server Error" });
+  }
 }
+
+
 
 async function deleteUserController(req, res) {
   try {
@@ -123,7 +147,19 @@ async function deleteUserController(req, res) {
     console.error("Error:", err);
     res.status(500).json({ msg: "Internal Server Error" });
   }
-}
+};
+
+
+const getLaboursMonthlyWagesTable = async (req, res) => {
+  try {
+      const { labourId } = req.query; 
+      const wages = await getLaboursMonthlyWages(labourId); 
+      res.status(200).json(wages);
+  } catch (error) {
+      console.error("Error fetching wages:", error);
+      res.status(500).json({ message: 'Error fetching wages', error });
+  }
+};
 
 module.exports = {
   saveUserController,
@@ -131,5 +167,6 @@ module.exports = {
   loginUserController,
   updateUserController,
   deleteUserController,
+  getLaboursMonthlyWagesTable,
 };
 
