@@ -23,7 +23,7 @@ router.get('/exportVariablePayexcelSheetWithBU', insentiveController.exportVaria
 router.get('/exportVariablePayExcel', insentiveController.exportVariablePayexcelSheet);
 
 router.post('/importVariablePay', upload.single('file'), insentiveController.importVariablePay);
-
+    
 // --------------------------------------------------   routes for salary generation process -----------------------------------
 router.post('/generateMonthlyPayroll', insentiveController.generateMonthlyPayroll);
 router.post('/generateMonthlyPayroll/:labourId', insentiveController.generateMonthlyPayrollForSingleLabour);
@@ -44,8 +44,9 @@ router.get('/payroll/finalizedSalaryDataByLabourID', insentiveController.getFina
 router.get('/payroll/finalizedSalaryData', insentiveController.getFinalizedSalaryData);
 router.get('/exportMonthlyPayrollExcel', insentiveController.exportMonthlyPayrollExcel);
 
-
-
+router.get('/exportMonthlyWagesExcel', insentiveController.exportMonthlyWagesExcel);
+router.get('/exportFixedWagesExcel', insentiveController.exportFixedWagesExcel);
+router.get('/exportWagesExcel', insentiveController.exportWagesexcelSheet);
 /**
  * 1) GET /api/payroll/eligibleLaboursForSalaryGeneration?month=12&year=2024
  *    Returns a list of labour IDs who have at least 1 day attendance

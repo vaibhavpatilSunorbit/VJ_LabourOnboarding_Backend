@@ -51,7 +51,7 @@ router.post('/upsertAttendance', labourController.upsertAttendance);
 router.put('/attendance/approve', labourController.approveAttendanceController);
 router.put('/attendance/reject', labourController.rejectAttendanceControllerAdmin);
 router.get('/LabourAttendanceApproval', labourController.LabourAttendanceApproval);
-router.put('/attendance/reject/:id', labourController.rejectAttendanceController);
+router.put('/attendance/rejectFromAdmin', labourController.rejectAttendanceController);
 router.get('/showAttendanceCalenderSingleLabour/:id', labourController.getAttendanceCalenderSingleLabour);
 
 
@@ -64,16 +64,22 @@ router.get('/wages', labourController.getLabourMonthlyWages);
 router.post('/upsertLabourMonthlyWages', labourController.upsertLabourMonthlyWages);
 router.get('/wages/adminApprovals', labourController.getWagesAdminApprovals);
 router.post('/wages/approvals', labourController.addWageApproval);
-router.get('/exportWagesExcel', labourController.exportWagesexcelSheet);
+router.post('/exportWagesExcel', labourController.exportWagesexcelSheet);
 router.post('/importWagesExcel', upload.single('file'), labourController.importWages);
 router.get('/getWagesAndLabourOnboardingJoin', labourController.getWagesAndLabourOnboardingJoincontroller);
 router.get('/searchLaboursFromWages', labourController.searchLaboursFromWages);  
+router.get('/searchLaboursFromVariableInput', labourController.searchLaboursFromVariableInput);  
+router.get('/searchAttendance', labourController.searchAttendance);  
+router.get('/searchLaboursFromSiteTransfer', labourController.searchLaboursFromSiteTransfer);  
 router.post('/admin/approveAttendanceController', labourController.approveAttendanceController);  
 router.post('/admin/rejectAttendanceControllerAdmin', labourController.rejectAttendanceControllerAdmin);  
 router.get('/checkExistingWages', labourController.checkExistingWagesController);
 router.post('/sendWagesForApproval', labourController.markWagesForApprovalController);
 router.put('/admin/approveWages', labourController.approveWagesControllerAdmin);
 router.put('/admin/rejectWages', labourController.rejectWagesControllerAdmin);
+
+router.get('/exportMonthlyWagesExcel', labourController.exportMonthlyWagesExcel);
+router.get('/exportFixedWagesExcel', labourController.exportFixedWagesExcel);
 
 // ------------------------------------------------------- IMP ROUTE AND GET USING VIEW DETAILS FOR LABOUR --------------------------------------------------
 router.get('/:id', labourController.getRecordById);
