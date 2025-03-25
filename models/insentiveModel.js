@@ -357,8 +357,8 @@ const getLabourMonthlyWages = async (LabourID) => {
             ORDER BY LabourID ASC
         `);
     // Return the latest record (last element) if available, otherwise null.
-    return result.recordset && result.recordset.length 
-        ? result.recordset[result.recordset.length - 1] 
+    return result.recordset && result.recordset.length
+        ? result.recordset[result.recordset.length - 1]
         : null;
 };
 
@@ -580,8 +580,8 @@ async function rejectAdminVariablePay(VariablePayId, Remarks) {
                 WHERE VariablePayId = @VariablePayId
             `);
         await pool.request()
-        .input('VariablePayId', sql.Int, approvalData.VariablePayId)
-        .input('Remarks', sql.NVarChar, Remarks || null)
+            .input('VariablePayId', sql.Int, approvalData.VariablePayId)
+            .input('Remarks', sql.NVarChar, Remarks || null)
             .query(`
     UPDATE [VariablePayAdminApprovals]
     SET ApprovalStatusPay = 'Rejected',
@@ -1742,7 +1742,7 @@ async function getWageInfoForLabour(labourId, month, year) {
         const lastDayOfMonth = new Date(Date.UTC(year, month, 0)); // e.g. for (2025,1) => Jan-31-2025
 
         // Start of the target month
-        const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1)); 
+        const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1));
 
         // 1) Fetch all wages that:
         //    - Are approved (isApprovalDoneAdmin = 1)
@@ -2366,29 +2366,29 @@ async function calculateTotalOvertime(labourId, month, year) {
         if (!result.recordset || result.recordset.length === 0) {
             throw new Error('No data found for the given inputs.');
         }
-        let TotalOvertime=0;
-        for(let i=0; i<result.recordset.length; i++){
-            if(result.recordset[i].OvertimeManually === null){
-                result.recordset[i].OvertimeManually=result.recordset[i].Overtime;
+        let TotalOvertime = 0;
+        for (let i = 0; i < result.recordset.length; i++) {
+            if (result.recordset[i].OvertimeManually === null) {
+                result.recordset[i].OvertimeManually = result.recordset[i].Overtime;
             }
-            if(result.recordset[i].OvertimeManually>4){
-                result.recordset[i].OvertimeManually=4
+            if (result.recordset[i].OvertimeManually > 4) {
+                result.recordset[i].OvertimeManually = 4
             }
-            if(result.recordset[i].Overtime>4){
-                result.recordset[i].Overtime=4
+            if (result.recordset[i].Overtime > 4) {
+                result.recordset[i].Overtime = 4
             }
             // console.log("Overtime",result.recordset[i].Overtime)
             // console.log("OvertimeManually",result.recordset[i].OvertimeManually)
-            const formattedOverTime=formatTotalOvertime(result.recordset[i].Overtime)
-            const formattedOvertimeManually=formatTotalOvertime(result.recordset[i].OvertimeManually)
+            const formattedOverTime = formatTotalOvertime(result.recordset[i].Overtime)
+            const formattedOvertimeManually = formatTotalOvertime(result.recordset[i].OvertimeManually)
 
             // console.log("formattedOverTime",formattedOverTime)
             // console.log("formattedOvertimeManually",formattedOvertimeManually)
-            TotalOvertime+=Math.min(formattedOvertimeManually,formattedOverTime)
+            TotalOvertime += Math.min(formattedOvertimeManually, formattedOverTime)
         }
         // console.log("TotalOvertime", TotalOvertime)     
-        const cappedOvertime=TotalOvertime
-        
+        const cappedOvertime = TotalOvertime
+
         // const { TotalOvertime = 0, TotalOvertimeManually = 0 } = result.recordset[0] || {};
         // console.log('TotalOvertime',TotalOvertime, 'TotalOvertimeManually',TotalOvertimeManually)
         // const cappedOvertime = Math.min(TotalOvertime || 0, TotalOvertimeManually || 0, 120);
@@ -2423,7 +2423,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
     try {
         // 1️⃣ **Fetch Attendance Summary**
         const attendance = await getAttendanceSummaryForLabour(labourId, month, year);
-       
+
         const {
             presentDays = 0,
             absentDays = 0,
@@ -2460,7 +2460,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
         if (typeof workingHours === 'number') {
             parsedWorkingHours = workingHours > 0 ? workingHours : 8;
         } else if (typeof workingHours === 'string') {
-            const match = workingHours.match(/\d+/); 
+            const match = workingHours.match(/\d+/);
             if (match) {
                 const hoursNum = parseInt(match[0], 10);
                 if (!isNaN(hoursNum) && hoursNum > 0) {
@@ -2498,11 +2498,11 @@ async function calculateSalaryForLabour(labourId, month, year) {
 
         // 5️⃣ Extract the "most recent" wage slice
         const latestSlice = wageBreakdown[wageBreakdown.length - 1] || {};
-        const wageType         = latestSlice.payStructure || "-";
-        const dailyWageRate    = latestSlice.dailyWages || 0;
-        const monthlySalary    = latestSlice.monthlyWages || 0;
+        const wageType = latestSlice.payStructure || "-";
+        const dailyWageRate = latestSlice.dailyWages || 0;
+        const monthlySalary = latestSlice.monthlyWages || 0;
         const fixedMonthlyWage = latestSlice.fixedMonthlyWages || 0;
-        const weeklyOffDays    = latestSlice.weeklyOff || 0;
+        const weeklyOffDays = latestSlice.weeklyOff || 0;
 
         // ------------------------------------------------------
         //              SALARY CALCULATION
@@ -2609,7 +2609,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
             labourId,
             month,
             year,
-            IsWagesApproved : wagesInfo ? true : false,
+            IsWagesApproved: wagesInfo ? true : false,
             // Attendance
             attendance: {
                 presentDays,
@@ -2695,7 +2695,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
 //         // 1️⃣ **Fetch Attendance Summary**
 //         const attendance = await getAttendanceSummaryForLabour(labourId, month, year);
 
-       
+
 //         const wagesInfo = await getWageInfoForLabour(labourId, month, year);
 
 //         // 3️⃣ **Fetch Variable Pay** (Advances, Debits, Incentives)
@@ -2749,7 +2749,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
 //             wageBreakdown = [],
 //             workingHours = 8 
 //         } = wagesInfo;
-        
+
 //         let parsedWorkingHours = 8; // fallback
 //         if (typeof workingHours === 'number') {
 //             parsedWorkingHours = workingHours > 0 ? workingHours : 8;
@@ -2929,7 +2929,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
 //             isNegativeSalary = true;
 //             // Option A: Set netPay to 0 and keep the flag
 //             netPay = 0;
-            
+
 //             // Option B (Alternate):
 //             // Return early or provide a special message
 //             // return {
@@ -3008,9 +3008,9 @@ async function calculateSalaryForLabour(labourId, month, year) {
 
 // --------------------------------------- IMP CODE START BELOW --------------------------
 
- // // Calculate net salary for a single labour for the given month/year.
- // // Returns an object with the final breakdown.
- 
+// // Calculate net salary for a single labour for the given month/year.
+// // Returns an object with the final breakdown.
+
 // async function calculateSalaryForLabour(labourId, month, year) {
 //     try {
 //         // 1️⃣ **Fetch Attendance Summary**
@@ -3554,7 +3554,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
 //                 // Helper to truncate long strings
 //                 const truncateString = (str, num) =>
 //                     (str && str.length > num ? str.slice(0, num) : str || "");
-                
+
 //                 const attendance = salaryDetail.attendance || {
 //                     presentDays : 0,
 //             absentDays : 0,
@@ -3755,55 +3755,55 @@ async function generateMonthlyPayroll(month, year) {
                 };
 
                 const truncateString = (str, num) =>
-                                        (str && str.length > num ? str.slice(0, num) : str || "");
+                    (str && str.length > num ? str.slice(0, num) : str || "");
 
-                if(salaryDetail.IsWagesApproved){
+                if (salaryDetail.IsWagesApproved) {
                     await pool.request()
-                    .input('labourId', sql.NVarChar, salaryDetail.labourId)
-                    .input('month', sql.Int, month)
-                    .input('year', sql.Int, year)
-                    .input('wageType', sql.NVarChar, salaryDetail.wageType)
-                    .input('dailyWageRate', sql.Decimal(18, 2), salaryDetail.dailyWageRate)
-                    .input('fixedMonthlyWage', sql.Decimal(18, 2), salaryDetail.fixedMonthlyWage)
-                    .input('presentDays', sql.Int, attendance.presentDays || 0)
-                    .input('absentDays', sql.Int, attendance.absentDays)
-                    .input('halfDays', sql.Int, attendance.halfDays)
-                    .input('missPunchDays', sql.Int, attendance.missPunchDays)
-                    .input('normalOvertimeCount', sql.Int, attendance.normalOvertimeCount)
-                    .input('holidayOvertimeCount', sql.Int, attendance.holidayOvertimeCount)
-                    .input('totalHolidaysInMonth', sql.Int, attendance.totalHolidaysInMonth)
-                    .input('holidayOvertimePay', sql.Decimal(18, 2), salaryDetail.holidayOvertimePay)
-                    .input('holidayOvertimeHours', sql.Decimal(18, 2), attendance.holidayOvertimeHours)
-                    .input('holidayOvertimeWages', sql.Decimal(18, 2), attendance.holidayOvertimeWages)
-                    .input('cappedOvertime', sql.Decimal(18, 2), salaryDetail.cappedOvertime)
-                    .input('basicSalary', sql.Decimal(18, 2), salaryDetail.baseWage)
-                    .input('previousWageAmount', sql.Decimal(18, 2), salaryDetail.previousWageAmount)
-                    .input('totalAttendanceDeductions', sql.Decimal(18, 2), salaryDetail.totalAttendanceDeductions)
-                    .input('overtimePay', sql.Decimal(18, 2), salaryDetail.overtimePay)
-                    .input('weeklyOffPay', sql.Decimal(18, 2), salaryDetail.weeklyOffPay)
-                    .input('bonuses', sql.Decimal(18, 2), salaryDetail.bonuses)
-                    .input('totalDeductions', sql.Decimal(18, 2), salaryDetail.totalDeductions)
-                    .input('grossPay', sql.Decimal(18, 2), salaryDetail.grossPay)
-                    .input('netPay', sql.Decimal(18, 2), salaryDetail.netPay)
+                        .input('labourId', sql.NVarChar, salaryDetail.labourId)
+                        .input('month', sql.Int, month)
+                        .input('year', sql.Int, year)
+                        .input('wageType', sql.NVarChar, salaryDetail.wageType)
+                        .input('dailyWageRate', sql.Decimal(18, 2), salaryDetail.dailyWageRate)
+                        .input('fixedMonthlyWage', sql.Decimal(18, 2), salaryDetail.fixedMonthlyWage)
+                        .input('presentDays', sql.Int, attendance.presentDays || 0)
+                        .input('absentDays', sql.Int, attendance.absentDays)
+                        .input('halfDays', sql.Int, attendance.halfDays)
+                        .input('missPunchDays', sql.Int, attendance.missPunchDays)
+                        .input('normalOvertimeCount', sql.Int, attendance.normalOvertimeCount)
+                        .input('holidayOvertimeCount', sql.Int, attendance.holidayOvertimeCount)
+                        .input('totalHolidaysInMonth', sql.Int, attendance.totalHolidaysInMonth)
+                        .input('holidayOvertimePay', sql.Decimal(18, 2), salaryDetail.holidayOvertimePay)
+                        .input('holidayOvertimeHours', sql.Decimal(18, 2), attendance.holidayOvertimeHours)
+                        .input('holidayOvertimeWages', sql.Decimal(18, 2), attendance.holidayOvertimeWages)
+                        .input('cappedOvertime', sql.Decimal(18, 2), salaryDetail.cappedOvertime)
+                        .input('basicSalary', sql.Decimal(18, 2), salaryDetail.baseWage)
+                        .input('previousWageAmount', sql.Decimal(18, 2), salaryDetail.previousWageAmount)
+                        .input('totalAttendanceDeductions', sql.Decimal(18, 2), salaryDetail.totalAttendanceDeductions)
+                        .input('overtimePay', sql.Decimal(18, 2), salaryDetail.overtimePay)
+                        .input('weeklyOffPay', sql.Decimal(18, 2), salaryDetail.weeklyOffPay)
+                        .input('bonuses', sql.Decimal(18, 2), salaryDetail.bonuses)
+                        .input('totalDeductions', sql.Decimal(18, 2), salaryDetail.totalDeductions)
+                        .input('grossPay', sql.Decimal(18, 2), salaryDetail.grossPay)
+                        .input('netPay', sql.Decimal(18, 2), salaryDetail.netPay)
 
-                    // Variable Pay
-                    .input('advance', sql.Decimal(18, 2), variablePay.advance)
-                    .input('advanceRemarks', sql.NVarChar, truncateString(variablePay.advanceRemarks, 255))
-                    .input('debit', sql.Decimal(18, 2), variablePay.debit)
-                    .input('debitRemarks', sql.NVarChar, truncateString(variablePay.debitRemarks, 255))
-                    .input('incentive', sql.Decimal(18, 2), variablePay.incentive)
-                    .input('incentiveRemarks', sql.NVarChar, truncateString(variablePay.incentiveRemarks, 255))
-                    .input('id', sql.Int, labourDetails.id)
-                    .input('name', sql.NVarChar, labourDetails.name)
-                    .input('businessUnit', sql.NVarChar, labourDetails.businessUnit)
-                    .input('projectName', sql.Int, labourDetails.projectName)
-                    .input('departmentName', sql.NVarChar, labourDetails.departmentName)
-                    .input('department', sql.Int, labourDetails.department)
-                    .input('aadhaarNumber', sql.NVarChar(15), labourDetails.aadhaarNumber)
-                    .input('accountNumber', sql.NVarChar(20), labourDetails.accountNumber)
-                    .input('ifscCode', sql.Int, labourDetails.ifscCode)
+                        // Variable Pay
+                        .input('advance', sql.Decimal(18, 2), variablePay.advance)
+                        .input('advanceRemarks', sql.NVarChar, truncateString(variablePay.advanceRemarks, 255))
+                        .input('debit', sql.Decimal(18, 2), variablePay.debit)
+                        .input('debitRemarks', sql.NVarChar, truncateString(variablePay.debitRemarks, 255))
+                        .input('incentive', sql.Decimal(18, 2), variablePay.incentive)
+                        .input('incentiveRemarks', sql.NVarChar, truncateString(variablePay.incentiveRemarks, 255))
+                        .input('id', sql.Int, labourDetails.id)
+                        .input('name', sql.NVarChar, labourDetails.name)
+                        .input('businessUnit', sql.NVarChar, labourDetails.businessUnit)
+                        .input('projectName', sql.Int, labourDetails.projectName)
+                        .input('departmentName', sql.NVarChar, labourDetails.departmentName)
+                        .input('department', sql.Int, labourDetails.department)
+                        .input('aadhaarNumber', sql.NVarChar(15), labourDetails.aadhaarNumber)
+                        .input('accountNumber', sql.NVarChar(20), labourDetails.accountNumber)
+                        .input('ifscCode', sql.Int, labourDetails.ifscCode)
 
-                    .query(`
+                        .query(`
               INSERT INTO [dbo].[FinalizedSalaryPay] (
                   LabourID, month, year, WageType, dailyWageRate, fixedMonthlyWage,
                   PresentDays, AbsentDays, HalfDays, missPunchDays, normalOvertimeCount, holidayOvertimeCount,
@@ -3823,9 +3823,9 @@ async function generateMonthlyPayroll(month, year) {
                   @id, @name, @businessUnit, @projectName, @departmentName, @department, @aadhaarNumber, @accountNumber, @ifscCode)
               `);
 
-                console.log(`✅ Inserted payroll for labourId: ${labour.labourId}`);
+                    console.log(`✅ Inserted payroll for labourId: ${labour.labourId}`);
                 }
-                
+
             } catch (error) {
                 console.error(`❌ Failed payroll for labourId: ${labour.labourId}`, error);
                 failedLabourIds.push(labour.labourId);
@@ -4259,21 +4259,21 @@ async function getWagesByDateRange(projectName, payStructure, startDate, endDate
       FROM LatestWages
       WHERE RowNum = 1
     `;
-  
+
     const request = pool.request();
     request.input('projectName', sql.VarChar, projectName);
     request.input('payStructure', sql.VarChar, payStructure || null);
     request.input('startDate', sql.Date, startDate);
     request.input('endDate', sql.Date, endDate);
-  
+
     // console.log("Executing SQL Query:", query);
     const result = await request.query(query);
     return result.recordset;
-  }
-  
-  
-  
-  
+}
+
+
+
+
 
 
 

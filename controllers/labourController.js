@@ -8,12 +8,12 @@ const axios = require('axios')
 const multer = require('multer');
 const { upload } = require('../server');
 const xml2js = require('xml2js');
-const labourModel = require('../models/labourModel');        
+const labourModel = require('../models/labourModel');
 const cron = require('node-cron');
 const logger = require('../logger'); // Assuming logger is defined in logger.js   
 const { createLogger, format, transports } = require('winston');
-const { isHoliday } = require('../models/labourModel');    
-const xlsx = require('xlsx');        
+const { isHoliday } = require('../models/labourModel');
+const xlsx = require('xlsx');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 // const baseUrl = 'http://localhost:4000/uploads/';
@@ -65,7 +65,7 @@ async function handleCheckAadhaar(req, res) {
 
         if (labourRecords && labourRecords.length > 0) {
             // Check if any record matches specific conditions
-            const resubmittedRecord = labourRecords.find(record => 
+            const resubmittedRecord = labourRecords.find(record =>
                 (record.status === 'Resubmitted' && record.isApproved === 3) ||
                 (record.status === 'Disable' && record.isApproved === 4)
             );
@@ -185,10 +185,10 @@ async function createRecord(req, res) {
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, labourCategoryId } = req.body;
 
-            const finalOnboardName = Array.isArray(OnboardName) ? OnboardName[0] : OnboardName;
+        const finalOnboardName = Array.isArray(OnboardName) ? OnboardName[0] : OnboardName;
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files;
-        console.log('Received IDs:', {projectName, departmentId, designationId, labourCategoryId });
+        console.log('Received IDs:', { projectName, departmentId, designationId, labourCategoryId });
         // Validate file fields
         if (!photoSrc || !uploadIdProof) {
             return res.status(400).json({ msg: 'All file fields are required' });
@@ -282,7 +282,7 @@ async function createRecord(req, res) {
 `);
 
         const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
-// console.log('companyNameFromDb++',companyNameFromDb)
+        // console.log('companyNameFromDb++',companyNameFromDb)
         if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
             salaryBu = `${companyNameFromDb} - HO`;
         } else {
@@ -364,16 +364,16 @@ async function createRecordUpdate(req, res) {
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
         } = req.body;
 
-        let finalOnboardName = Array.isArray(OnboardName) 
-        ? OnboardName.filter(name => name && name.trim() !== '').pop() 
-        : OnboardName;
+        let finalOnboardName = Array.isArray(OnboardName)
+            ? OnboardName.filter(name => name && name.trim() !== '').pop()
+            : OnboardName;
 
         if (!finalOnboardName || finalOnboardName.trim() === '') {
             console.error('OnboardName is missing or empty.');
             return res.status(400).json({ msg: 'OnboardName is required.' });
         }
-finalOnboardName = finalOnboardName.toUpperCase();
-        
+        finalOnboardName = finalOnboardName.toUpperCase();
+
         if (!finalOnboardName || finalOnboardName.trim() === '') {
             console.error('OnboardName is missing or empty.');
             return res.status(400).json({ msg: 'OnboardName is required.' });
@@ -403,7 +403,7 @@ finalOnboardName = finalOnboardName.toUpperCase();
 
         const safeDepartmentId = String(departmentId);
         const safeDesignationId = String(designationId);
-        const safeProjectName = isNaN(projectName) ? projectName : String(projectName); 
+        const safeProjectName = isNaN(projectName) ? projectName : String(projectName);
 
         //console.log('Converted Values:', {
         //     safeProjectName,
@@ -590,22 +590,22 @@ async function updateRecord(req, res) {
 
         // Extract fields from request body
         const {
-           id, LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
+            id, LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
         } = req.body;
 
         //console.log('LabourID from request body:', LabourID);
-        let finalOnboardName = Array.isArray(OnboardName) 
-        ? OnboardName.filter(name => name && name.trim() !== '').pop() 
-        : OnboardName;
+        let finalOnboardName = Array.isArray(OnboardName)
+            ? OnboardName.filter(name => name && name.trim() !== '').pop()
+            : OnboardName;
 
         if (!finalOnboardName || finalOnboardName.trim() === '') {
             console.error('OnboardName is missing or empty.');
             return res.status(400).json({ msg: 'OnboardName is required.' });
         }
-finalOnboardName = finalOnboardName.toUpperCase();
+        finalOnboardName = finalOnboardName.toUpperCase();
 
         //console.log('Cleaned OnboardName:', finalOnboardName);
         // Check if LabourID exists
@@ -835,15 +835,15 @@ async function updateRecordWithDisable(req, res) {
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, isResubmit
         } = req.body;
 
-        let finalOnboardName = Array.isArray(OnboardName) 
-        ? OnboardName.filter(name => name && name.trim() !== '').pop() 
-        : OnboardName;
+        let finalOnboardName = Array.isArray(OnboardName)
+            ? OnboardName.filter(name => name && name.trim() !== '').pop()
+            : OnboardName;
 
         if (!finalOnboardName || finalOnboardName.trim() === '') {
             console.error('OnboardName is missing or empty.');
             return res.status(400).json({ msg: 'OnboardName is required.' });
         }
-finalOnboardName = finalOnboardName.toUpperCase();
+        finalOnboardName = finalOnboardName.toUpperCase();
         //console.log('Cleaned OnboardName Resubmitted button:', finalOnboardName);
         if (!LabourID || !isResubmit) {
             console.error('LabourID is missing from request body.');
@@ -871,7 +871,7 @@ finalOnboardName = finalOnboardName.toUpperCase();
 
         const safeDepartmentId = String(departmentId);
         const safeDesignationId = String(designationId);
-        const safeProjectName = isNaN(projectName) ? projectName : String(projectName); 
+        const safeProjectName = isNaN(projectName) ? projectName : String(projectName);
 
         // console.log('Converted Values:', {
         //     safeProjectName,
@@ -902,7 +902,7 @@ finalOnboardName = finalOnboardName.toUpperCase();
             }
             return null; // No data available
         };
-        
+
 
         const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
         const backImageUrl = processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
@@ -1344,7 +1344,7 @@ async function editbuttonLabour(req, res) {
 async function esslapi(req, res) {
     try {
         const approvedLaboursXml = req.body; // This is the XML body from your request
-        
+
         // Parse the incoming XML to extract relevant values
         const parser = new xml2js.Parser({ explicitArray: false });
         const approvedLabours = await parser.parseStringPromise(approvedLaboursXml);
@@ -1487,7 +1487,7 @@ async function updateHideResubmitLabour(req, res) {
 
         // Call the model function to update hideResubmit
         const updated = await labourModel.updateHideResubmit(id, hideResubmit);
-        
+
         if (updated === 0) {
             return res.status(404).json({ error: 'Record not found' });
         }
@@ -1779,19 +1779,19 @@ async function runDailyAttendanceCron() {
         console.log('Calling processLaboursAttendance function...');
         await processLaboursAttendance(formattedYesterday);
         console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
-     // Update attendance summary for all approved laborers
-     const approvedLabours = await labourModel.getAllApprovedLabours();
-     for (let labour of approvedLabours) {
-         const { labourId } = labour;
-         await labourModel.insertOrUpdateLabourAttendanceSummary(labourId, formattedYesterday);
-     }
+        // Update attendance summary for all approved laborers
+        const approvedLabours = await labourModel.getAllApprovedLabours();
+        for (let labour of approvedLabours) {
+            const { labourId } = labour;
+            await labourModel.insertOrUpdateLabourAttendanceSummary(labourId, formattedYesterday);
+        }
 
-     console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
-     cronLogger.info(`Cron job completed successfully for Date: ${formattedYesterday}`);
- } catch (error) {
-     console.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
-     cronLogger.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
- }
+        console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
+        cronLogger.info(`Cron job completed successfully for Date: ${formattedYesterday}`);
+    } catch (error) {
+        console.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
+        cronLogger.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
+    }
 }
 
 
@@ -2266,7 +2266,7 @@ async function getAllLaboursAttendance(req, res) {
             const halfDayHours = shiftHours === 9 ? 4.5 : 4;
 
             let presentDays = 0, halfDays = 0, missPunchDays = 0, absentDays = 0;
-            let totalOvertimeHours = 0, roundOffTotalOvertime = 0 ,PayrollCalRoundoffTotalOvertime=0;
+            let totalOvertimeHours = 0, roundOffTotalOvertime = 0, PayrollCalRoundoffTotalOvertime = 0;
             let totalManualOvertimeManually = 0;
             let monthlyAttendance = [];
 
@@ -3323,45 +3323,45 @@ cron.schedule('47 11 * * *', async () => {
 //             const currentDate = new Date();
 //             const currentMonth = currentDate.getMonth() + 1;
 //             const currentYear = currentDate.getFullYear();
-    
+
 //             const approvedLabours = await labourModel.getAllApprovedLabours();
 //             const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
 //             const results = [];
-    
+
 //             for (let i = 0; i < approvedLabours.length; i++) {
 //                 const { labourId, workingHours } = approvedLabours[i];
 //                 cronLogger.info(`Fetching attendance for labour ID: ${labourId}`);
 //                 const labourAttendance = await labourModel.getAttendanceByLabourId(labourId, currentMonth, currentYear);
 //                 // cronLogger.info(`Fetched attendance for labour ID ${labourId}:`, { labourAttendance });
-    
+
 //                 const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
 //                 const halfDayHours = shiftHours === 9 ? 4.5 : 4;
 //                 const maxOvertimeHours = 120;
 //                 let presentDays = 0;
 //                 let totalOvertimeHours = 0;
 //                 let monthlyAttendance = [];
-    
+
 //                 for (let day = 1; day <= daysInMonth; day++) {
 //                     const date = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 //                     const punchesForDay = labourAttendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
-    
+
 //                     if (punchesForDay.length > 0) {
 //                         punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
-    
+
 //                         const firstPunch = punchesForDay[0].punch_time;
 //                         const lastPunch = punchesForDay[punchesForDay.length - 1].punch_time;
-    
+
 //                         const totalHours = calculateHoursWorked(punchesForDay[0].punch_date, firstPunch, lastPunch);
 //                         let overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
-    
+
 //                         // Apply half-day logic
 //                         if (totalHours > halfDayHours && totalHours < shiftHours) {
 //                             overtime = 0; // No overtime if hours are between half-day and full shift
 //                         }
-    
+
 //                         presentDays++;
 //                         totalOvertimeHours += overtime;
-    
+
 //                         monthlyAttendance.push({
 //                             date,
 //                             firstPunch: `${date}T${firstPunch.toISOString().split('T')[1]}`,
@@ -3379,10 +3379,10 @@ cron.schedule('47 11 * * *', async () => {
 //                         });
 //                     }
 //                 }
-    
+
 //                 // Cap the total overtime hours to the maximum allowed
 //                 totalOvertimeHours = Math.min(totalOvertimeHours, maxOvertimeHours);
-    
+
 //                 const calculatedAttendance = {
 //                     labourId,
 //                     totalDays: daysInMonth,
@@ -3391,25 +3391,25 @@ cron.schedule('47 11 * * *', async () => {
 //                     shift: workingHours,
 //                     monthlyAttendance
 //                 };
-    
+
 //                 cronLogger.info('Calculated attendance for labour ID:', { labourId, calculatedAttendance });
 //                 //console.log('Calculated attendance for labour ID newly attendance:', labourId, calculatedAttendance);
-    
+
 //                 results.push(calculatedAttendance);
 //             }
-    
+
 //             // Log the calculated attendance for all labours
 //             cronLogger.info('Calculated attendance for all approved labours:', { results });
-    
+
 //             cronLogger.info('Completed fetching attendance for all approved labours:', { results });
-    
+
 //             // Cache the results
 //             cachedAttendance = results;
 //         } catch (err) {
 //             cronLogger.error('Error during cron job to fetch attendance data', err);
 //         }
 //     });
-    
+
 // -------------------------------------------------  IMP  END --------------------------
 
 
@@ -3630,20 +3630,20 @@ async function getAttendanceDetailsForSingleLabour(req, res) {
 async function getAttendanceCalenderSingleLabour(req, res) {
     const { id: labourId } = req.params;
     const { month, year } = req.query;
-  
+
     if (!labourId || !month || !year) {
-      return res.status(400).json({ message: 'Labour ID, Month, and Year are required' });
+        return res.status(400).json({ message: 'Labour ID, Month, and Year are required' });
     }
-  
+
     try {
-      const details = await labourModel.showAttendanceCalenderSingleLabour(labourId, month, year);
-      res.status(200).json(details);
+        const details = await labourModel.showAttendanceCalenderSingleLabour(labourId, month, year);
+        res.status(200).json(details);
     } catch (error) {
-      console.error('Error fetching attendance details for a single labour:', error);
-      res.status(500).json({ message: 'Error fetching attendance details' });
+        console.error('Error fetching attendance details for a single labour:', error);
+        res.status(500).json({ message: 'Error fetching attendance details' });
     }
-  };
-  
+};
+
 
 async function saveAttendance(req, res) {
     const { labourId, month, year, attendance } = req.body;
@@ -3738,17 +3738,17 @@ async function upsertAttendance(req, res) {
         });
     }
 
-const pool = await poolPromise;
+    const pool = await poolPromise;
     const checkAdminApproval = await pool.request()
-    .input('labourId', sql.NVarChar, labourId)
-    .input('AttendanceId', sql.Int, AttendanceId)
-    .query(`
+        .input('labourId', sql.NVarChar, labourId)
+        .input('AttendanceId', sql.Int, AttendanceId)
+        .query(`
         SELECT *
         FROM [LabourAttendanceApproval]
         WHERE LabourID = @labourId AND AttendanceId = @AttendanceId AND ApprovalStatus = 'Pending'
     `);
 
-    if(checkAdminApproval.recordset.length > 0){
+    if (checkAdminApproval.recordset.length > 0) {
         return res.status(400).json({
             message: 'Attendance is Already Pending with Admin Approval.',
         });
@@ -3775,17 +3775,17 @@ const pool = await poolPromise;
             ? onboardName.filter((name) => name !== 'null' && name.trim() !== '')[0]
             : onboardName;
 
-            const timesUpdated = await labourModel.getTimesUpdateForMonth(labourId, date);
+        const timesUpdated = await labourModel.getTimesUpdateForMonth(labourId, date);
 
-            if (AttendanceStatus !== "MP") {
-                await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff);
-                return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
-            };
+        if (AttendanceStatus !== "MP") {
+            await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff);
+            return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
+        };
 
-            if (AttendanceStatus === "MP" && timesUpdated >= 3) {
-                await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff);
-                return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
-            };
+        if (AttendanceStatus === "MP" && timesUpdated >= 3) {
+            await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff);
+            return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
+        };
 
         // Call the model to perform upsert
         await labourModel.upsertAttendance({
@@ -3797,7 +3797,7 @@ const pool = await poolPromise;
             remarkManually,
             workingHours,
             onboardName: finalOnboardName,
-            editUserName: finalOnboardName, 
+            editUserName: finalOnboardName,
             markWeeklyOff,
         });
 
@@ -3901,7 +3901,7 @@ const exportAttendance = async (req, res) => {
     }
 };
 
-  const importAttendance = async (req, res) => {
+const importAttendance = async (req, res) => {
     try {
         const workbook = xlsx.readFile(req.file.path);
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -3944,20 +3944,20 @@ const exportAttendance = async (req, res) => {
         }
 
         // After updating/inserting, update LabourAttendanceSummary overtime totals.
-    // Group by LabourId and SelectedMonth (derived from Date as YYYY-MM)
-    const groups = {};
-    validData.forEach((row) => {
-      const labourId = row.LabourId;
-      // Extract "YYYY-MM" from the date string ("YYYY-MM-DD")
-      const selectedMonth = row.Date.substring(0, 7);
-      const key = `${labourId}_${selectedMonth}`;
-      groups[key] = { labourId, selectedMonth };
-    });
+        // Group by LabourId and SelectedMonth (derived from Date as YYYY-MM)
+        const groups = {};
+        validData.forEach((row) => {
+            const labourId = row.LabourId;
+            // Extract "YYYY-MM" from the date string ("YYYY-MM-DD")
+            const selectedMonth = row.Date.substring(0, 7);
+            const key = `${labourId}_${selectedMonth}`;
+            groups[key] = { labourId, selectedMonth };
+        });
 
-    // Iterate over each group and update summary overtime totals
-    for (const key in groups) {
-      await labourModel.updateTotalOvertimeHours(groups[key].labourId, groups[key].selectedMonth);
-    }
+        // Iterate over each group and update summary overtime totals
+        for (const key in groups) {
+            await labourModel.updateTotalOvertimeHours(groups[key].labourId, groups[key].selectedMonth);
+        }
 
         res.send({
             message: 'Data imported successfully',
@@ -3986,9 +3986,9 @@ async function LabourAttendanceApproval(req, res) {
 //       const workbook = xlsx.readFile(req.file.path);
 //       const sheet = workbook.Sheets[workbook.SheetNames[0]];
 //       const data = xlsx.utils.sheet_to_json(sheet);
-  
+
 //       //console.log('Excel data loaded:', data);
-  
+
 //       // Convert Excel date serial to valid date string
 //       const convertExcelDate = (serial) => {
 //         const utcDays = Math.floor(serial - 25569);
@@ -3996,33 +3996,33 @@ async function LabourAttendanceApproval(req, res) {
 //         const dateInfo = new Date(utcValue * 1000);
 //         return dateInfo.toISOString().split('T')[0]; // Format YYYY-MM-DD
 //       };
-  
+
 //       // Normalize data
 //       const validData = data.map((row) => ({
 //         ...row,
 //         Date: typeof row.Date === 'number' ? convertExcelDate(row.Date) : row.Date,
 //       }));
-  
+
 //       //console.log('Normalized data:', validData);
-  
+
 //       // Match rows
 //       const { matchedRows, unmatchedRows } = await labourModel.getMatchedRows(validData);
-  
+
 //       //console.log('Matched rows:', matchedRows);
 //       //console.log('Unmatched rows:', unmatchedRows);
-  
+
 //       // Update matched rows
 //       if (matchedRows.length > 0) {
 //         await labourModel.updateMatchedRows(matchedRows);
 //         //console.log(`${matchedRows.length} rows updated successfully.`);
 //       }
-  
+
 //       // Insert unmatched rows
 //       if (unmatchedRows.length > 0) {
 //         await labourModel.insertUnmatchedRows(unmatchedRows);
 //         //console.log(`${unmatchedRows.length} rows inserted successfully.`);
 //       }
-  
+
 //       res.send({
 //         message: 'Data imported successfully',
 //         matchedRows: matchedRows.length,
@@ -4033,7 +4033,7 @@ async function LabourAttendanceApproval(req, res) {
 //       res.status(500).send({ message: error.message });
 //     }
 //   };
-  
+
 // ---------------------------------       end imp changes 06-12-2024-----------------------
 
 // --------------------------------------------------    LABOUR WAGES MODULE 20-12-2024  ----------------------------------------------------
@@ -4081,9 +4081,9 @@ const upsertLabourMonthlyWages = async (req, res) => {
 
         if (result && result.WageID) {
             return res.status(200).json({ WageID: result.WageID, message: 'Wages upserted successfully' });
-        } else if(result && !result.success) {
+        } else if (result && !result.success) {
             return res.status(200).json({ message: result.message });
-        }else{
+        } else {
             return res.status(500).json({ message: 'Failed to upsert wages' });
         }
 
@@ -4153,7 +4153,7 @@ const markWagesForApprovalController = async (req, res) => {
     try {
         const payload = req.body;
         const { wageId, labourId, dailyWages, perHourWages, monthlyWages, yearlyWages, effectiveDate, fixedMonthlyWages, weeklyOff, payStructure, wagesEditedBy, remarks } = payload;
-// console.log('payload for wages new 55',payload)
+        // console.log('payload for wages new 55',payload)
         if (!wageId || !labourId || !payStructure) {
             return res.status(400).json({ message: 'Wage ID, Labour ID, and Pay Structure are required' });
         }
@@ -4216,7 +4216,7 @@ const handleApproval = async (req, res) => {
 
 async function approveWagesControllerAdmin(req, res) {
     const { ApprovalID } = req.query;
-    console.log('id___approveWagesControllerAdmin',ApprovalID)
+    console.log('id___approveWagesControllerAdmin', ApprovalID)
     if (!ApprovalID) {
         return res.status(400).json({ message: 'WageID is required.' });
     }
@@ -4306,59 +4306,59 @@ const addWageApproval = async (req, res) => {
 
 const exportWagesexcelSheet = async (req, res) => {
     try {
-      let { projectName, month, payStructure } = req.query;
-  
-      if (!month) {
-        return res.status(400).json({ message: 'Missing required parameter: month' });
-      }
-  
-      // Use "all" if projectName is missing or empty.
-      if (!projectName || projectName.trim() === "") {
-        projectName = "all";
-      }
-  
-      // Calculate the date range for the given month.
-      const startDate = `${month}-01`;
-      const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
-        .toISOString()
-        .split('T')[0];
-  
-  
-      // Fetch wages data (or approved onboarding rows if no matching wages).
-      const wagesData = await labourModel.getWagesByDateRange(projectName, payStructure, startDate, endDate);
-  
-      // Create the Excel workbook.
-      const workbook = xlsx.utils.book_new();
-      const worksheet = xlsx.utils.json_to_sheet(wagesData);
-      xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
-  
-      // Set the file name.
-      const fileName = projectName === "all"
-        ? `Approved_Labours_${month}.xlsx`
-        : `Wages_${projectName}_${month}.xlsx`;
-  
-      res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.send(xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+        let { projectName, month, payStructure } = req.query;
+
+        if (!month) {
+            return res.status(400).json({ message: 'Missing required parameter: month' });
+        }
+
+        // Use "all" if projectName is missing or empty.
+        if (!projectName || projectName.trim() === "") {
+            projectName = "all";
+        }
+
+        // Calculate the date range for the given month.
+        const startDate = `${month}-01`;
+        const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
+            .toISOString()
+            .split('T')[0];
+
+
+        // Fetch wages data (or approved onboarding rows if no matching wages).
+        const wagesData = await labourModel.getWagesByDateRange(projectName, payStructure, startDate, endDate);
+
+        // Create the Excel workbook.
+        const workbook = xlsx.utils.book_new();
+        const worksheet = xlsx.utils.json_to_sheet(wagesData);
+        xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
+
+        // Set the file name.
+        const fileName = projectName === "all"
+            ? `Approved_Labours_${month}.xlsx`
+            : `Wages_${projectName}_${month}.xlsx`;
+
+        res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
     } catch (error) {
-      console.error('Error exporting Wages:', error);
-      res.status(500).json({ message: 'Error exporting Wages data.' });
+        console.error('Error exporting Wages:', error);
+        res.status(500).json({ message: 'Error exporting Wages data.' });
     }
-  };
-  
-  // Optionally preset payStructure for dedicated endpoints.
-  const exportMonthlyWagesExcel = async (req, res) => {
+};
+
+// Optionally preset payStructure for dedicated endpoints.
+const exportMonthlyWagesExcel = async (req, res) => {
     req.query.payStructure = 'Monthly Wages';
     exportWagesexcelSheet(req, res);
-  };
-  
-  const exportFixedWagesExcel = async (req, res) => {
+};
+
+const exportFixedWagesExcel = async (req, res) => {
     req.query.payStructure = 'Fix Monthly Wages';
     exportWagesexcelSheet(req, res);
-  };
-  
+};
 
-  
+
+
 
 /**
  * Converts an Excel serial date to a JavaScript Date object.
@@ -4405,7 +4405,7 @@ const importWages = async (req, res) => {
         }
 
         fs.unlinkSync(filePath); // Clean up uploaded file
-         //console.log(' errors===errors',errors)
+        //console.log(' errors===errors',errors)
         if (errors.length > 0) {
             // Generate error Excel file
             const errorWorkbook = xlsx.utils.book_new();
@@ -4438,15 +4438,15 @@ const importWages = async (req, res) => {
 
 const getWagesAndLabourOnboardingJoincontroller = async (req, res) => {
     try {
-      // Get filters from query parameters (e.g., ?ProjectID=...&DepartmentID=...)
-      const filters = req.query;
-      const joinWagesLabour = await labourModel.getWagesAndLabourOnboardingJoin(filters);
-      res.status(200).json(joinWagesLabour);
+        // Get filters from query parameters (e.g., ?ProjectID=...&DepartmentID=...)
+        const filters = req.query;
+        const joinWagesLabour = await labourModel.getWagesAndLabourOnboardingJoin(filters);
+        res.status(200).json(joinWagesLabour);
     } catch (error) {
-      console.error('Error fetching data:', error);
-      res.status(500).json({ message: 'Error fetching data', error });
+        console.error('Error fetching data:', error);
+        res.status(500).json({ message: 'Error fetching data', error });
     }
-  };
+};
 
 async function searchLaboursFromWages(req, res) {
     const { q } = req.query;

@@ -1,5 +1,5 @@
 
-const {poolPromise} = require("../config/dbConfig");
+const { poolPromise } = require("../config/dbConfig");
 const sql = require('mssql');
 const bcrypt = require("bcrypt");
 
@@ -26,7 +26,7 @@ async function saveUser(name, CreatedAt, emailID, pasword, plainPassword, userTy
       .input("name", name)
       .input("CreatedAt", CreatedAt)
       .input("emailID", emailID)
-      .input("pasword", pasword) 
+      .input("pasword", pasword)
       .input("plainPassword", plainPassword)
       .input("userType", userType)
       .input("userToken", userToken)
@@ -60,78 +60,78 @@ async function findUserByEmail(emailID) {
 
 async function updateUser(id, name, emailID, contactNo, userType, accessPages, hashedPassword, plainPassword, assignedProjects, assignedDepartments) {
   try {
-      const pool = await poolPromise;
-      const transaction = pool.transaction();
-      await transaction.begin();
+    const pool = await poolPromise;
+    const transaction = pool.transaction();
+    await transaction.begin();
 
-      console.log("Updating user with values:", {
-        id, name, emailID, contactNo, userType, accessPages, assignedProjects, assignedDepartments
-      });
+    console.log("Updating user with values:", {
+      id, name, emailID, contactNo, userType, accessPages, assignedProjects, assignedDepartments
+    });
 
-      // **Step 1: Remove existing assigned projects & departments**
-      await transaction.request()
-          .input('id', id)
-          .query(`
+    // **Step 1: Remove existing assigned projects & departments**
+    await transaction.request()
+      .input('id', id)
+      .query(`
               UPDATE Users_New 
               SET assigned_projects = NULL, assigned_departments = NULL 
               WHERE id = @id
           `);
 
-      console.log("Existing assigned projects & departments removed.");
+    console.log("Existing assigned projects & departments removed.");
 
-      // **Step 2: Insert new assigned projects & departments**
-      await transaction.request()
-          .input('id', id)
-          .input('assignedProjects', JSON.stringify(assignedProjects)) // Store array as JSON
-          .input('assignedDepartments', JSON.stringify(assignedDepartments))
-          .query(`
+    // **Step 2: Insert new assigned projects & departments**
+    await transaction.request()
+      .input('id', id)
+      .input('assignedProjects', JSON.stringify(assignedProjects)) // Store array as JSON
+      .input('assignedDepartments', JSON.stringify(assignedDepartments))
+      .query(`
               UPDATE Users_New 
               SET assigned_projects = @assignedProjects, assigned_departments = @assignedDepartments 
               WHERE id = @id
           `);
 
-      console.log("New assigned projects & departments inserted.");
+    console.log("New assigned projects & departments inserted.");
 
-      // **Step 3: Update User Details**
-      let query = `
+    // **Step 3: Update User Details**
+    let query = `
           UPDATE Users_New
           SET name = @name, emailID = @emailID, contactNo = @contactNo, userType = @userType, 
               accessPages = @accessPages
       `;
 
-      if (hashedPassword) {
-          query += `, pasword = @pasword, plainPassword = @plainPassword`;
-      }
-      query += ` WHERE id = @id`;
+    if (hashedPassword) {
+      query += `, pasword = @pasword, plainPassword = @plainPassword`;
+    }
+    query += ` WHERE id = @id`;
 
-      const request = transaction.request()
-          .input('id', id)
-          .input('name', name)
-          .input('emailID', emailID)
-          .input('contactNo', contactNo)
-          .input('userType', userType)
-          .input('accessPages', JSON.stringify(accessPages)); // Ensure JSON is properly stored
+    const request = transaction.request()
+      .input('id', id)
+      .input('name', name)
+      .input('emailID', emailID)
+      .input('contactNo', contactNo)
+      .input('userType', userType)
+      .input('accessPages', JSON.stringify(accessPages)); // Ensure JSON is properly stored
 
-      if (hashedPassword) {
-          request.input('pasword', hashedPassword)
-              .input('plainPassword', plainPassword);
-      }
+    if (hashedPassword) {
+      request.input('pasword', hashedPassword)
+        .input('plainPassword', plainPassword);
+    }
 
-      console.log("Executing SQL Query:", query);
-      
-      const result = await request.query(query);
-      await transaction.commit();
+    console.log("Executing SQL Query:", query);
 
-      if (result.rowsAffected[0] > 0) {
-          console.log("User update successful:", result.recordset);
-          return { success: true, result: result.recordset };
-      } else {
-          console.log("No rows affected in the update.");
-          return { success: false, message: "No rows affected" };
-      }
+    const result = await request.query(query);
+    await transaction.commit();
+
+    if (result.rowsAffected[0] > 0) {
+      console.log("User update successful:", result.recordset);
+      return { success: true, result: result.recordset };
+    } else {
+      console.log("No rows affected in the update.");
+      return { success: false, message: "No rows affected" };
+    }
   } catch (error) {
-      console.error("Error occurred while updating user:", error);
-      throw error;
+    console.error("Error occurred while updating user:", error);
+    throw error;
   }
 }
 
@@ -154,13 +154,13 @@ async function deleteUser(id) {
 const getLaboursMonthlyWages = async (labourId = null) => {
   const pool = await poolPromise;
   let query = `SELECT * FROM LabourMonthlyWages`;
-  
+
   if (labourId) {
-      query += ` WHERE LabourID = @labourId ORDER BY CreatedAt DESC`;
+    query += ` WHERE LabourID = @labourId ORDER BY CreatedAt DESC`;
   }
   const request = pool.request();
   if (labourId) {
-      request.input("labourId", labourId);
+    request.input("labourId", labourId);
   }
   const result = await request.query(query);
   return result.recordset;

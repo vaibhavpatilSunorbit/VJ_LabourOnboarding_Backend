@@ -7,12 +7,12 @@ const axios = require('axios')
 const multer = require('multer');
 const { upload } = require('../server');
 const xml2js = require('xml2js');
-const labourModel = require('../models/insentiveModel');        
+const labourModel = require('../models/insentiveModel');
 const cron = require('node-cron');
 const logger = require('../logger'); // Assuming logger is defined in logger.js   
 const { createLogger, format, transports } = require('winston');
-const { isHoliday } = require('../models/labourModel');    
-const xlsx = require('xlsx'); 
+const { isHoliday } = require('../models/labourModel');
+const xlsx = require('xlsx');
 
 
 async function getAllLabours(req, res) {
@@ -33,7 +33,7 @@ async function createRecord(req, res) {
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, labourCategoryId } = req.body;
 
-            const finalOnboardName = Array.isArray(OnboardName) ? OnboardName[0] : OnboardName;
+        const finalOnboardName = Array.isArray(OnboardName) ? OnboardName[0] : OnboardName;
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files;
         //console.log('Received IDs:', { departmentId, designationId, labourCategoryId });
@@ -283,7 +283,7 @@ const getVariablePayAndLabourOnboardingJoincontroller = async (req, res) => {
 const upsertLabourVariablePay = async (req, res) => {
     try {
         const payload = req.body;
-console.log('payload}}}}==',payload)
+        console.log('payload}}}}==', payload)
         // Check that LabourID and Pay Structure are provided
         if (!payload.LabourID || !payload.payStructure) {
             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
@@ -291,53 +291,53 @@ console.log('payload}}}}==',payload)
 
         // First, check if labour wages record exists
         const existingvariablePay = await labourModel.checkExistingVariablePay(payload.LabourID);
-        console.log('existingvariablePay ++',existingvariablePay)
+        console.log('existingvariablePay ++', existingvariablePay)
 
         if (existingvariablePay && existingvariablePay !== undefined && existingvariablePay !== null) {
             if (existingvariablePay.ApprovalStatusPay === "AdminPending") {
                 return res.status(400).json({ message: `Labour ${existingvariablePay.LabourID} Variable Pay Already With Admin Pending` });
             }
-    
+
             // If an incentive is provided, perform the incentive check
             if (payload.payStructure === 'Incentive') {
-               console.log('payload.payStructure.Incentive',payload.payStructure.Incentive)
+                console.log('payload.payStructure.Incentive', payload.payStructure.Incentive)
                 const wagesRecord = await labourModel.getLabourMonthlyWages(payload.LabourID);
                 if (!wagesRecord) {
                     // This ensures that if no wages record exists in the LabourMonthlyWages table, 
                     // we throw an error as well.
                     return res.status(400).json({ message: 'Labour wages are not added' });
                 }
-                
+
                 const allowedMonthlyWage = wagesRecord.FixedMonthlyWages || wagesRecord.MonthlyWages;
                 if (payload.payStructure.Incentive > allowedMonthlyWage) {
                     return res.status(400).json({ message: 'Incentive cannot be greater than monthly wages' });
                 }
             }
-    
+
             await labourModel.upsertLabourVariablePay(payload);
             return res.status(200).json({ message: 'VariablePay updated successfully.' });
-        }else{
-          // If an incentive is provided, perform the incentive check
-          if (payload.payStructure === 'Incentive') {
-            console.log('payload.payStructure.Incentive',payload.payStructure.Incentive)
-             const wagesRecord = await labourModel.getLabourMonthlyWages(payload.LabourID);
-             if (!wagesRecord) {
-                 // This ensures that if no wages record exists in the LabourMonthlyWages table, 
-                 // we throw an error as well.
-                 return res.status(400).json({ message: 'Labour wages are not added' });
-             }
-             
-             const allowedMonthlyWage = wagesRecord.FixedMonthlyWages || wagesRecord.MonthlyWages;
-             if (payload.payStructure.Incentive > allowedMonthlyWage) {
-                 return res.status(400).json({ message: 'Incentive cannot be greater than monthly wages' });
-             }
-         }
- 
-         await labourModel.upsertLabourVariablePay(payload);
-         return res.status(200).json({ message: 'VariablePay updated successfully.' });
+        } else {
+            // If an incentive is provided, perform the incentive check
+            if (payload.payStructure === 'Incentive') {
+                console.log('payload.payStructure.Incentive', payload.payStructure.Incentive)
+                const wagesRecord = await labourModel.getLabourMonthlyWages(payload.LabourID);
+                if (!wagesRecord) {
+                    // This ensures that if no wages record exists in the LabourMonthlyWages table, 
+                    // we throw an error as well.
+                    return res.status(400).json({ message: 'Labour wages are not added' });
+                }
+
+                const allowedMonthlyWage = wagesRecord.FixedMonthlyWages || wagesRecord.MonthlyWages;
+                if (payload.payStructure.Incentive > allowedMonthlyWage) {
+                    return res.status(400).json({ message: 'Incentive cannot be greater than monthly wages' });
+                }
+            }
+
+            await labourModel.upsertLabourVariablePay(payload);
+            return res.status(200).json({ message: 'VariablePay updated successfully.' });
         }
-       
-        
+
+
     } catch (error) {
         console.error('Error updating VariablePay:', error);
         res.status(500).json({ message: 'Error updating VariablePay', error });
@@ -376,7 +376,7 @@ const markVariablePayForApprovalController = async (req, res) => {
     try {
         const payload = req.body;
         const { payId, LabourID, payAddedBy, variablePay, variablePayRemark, payStructure, effectiveDate, userId, name } = payload;
-//console.log('payload variablePay',payload)
+        //console.log('payload variablePay',payload)
         if (!LabourID || !payStructure) {
             return res.status(400).json({ message: 'Labour ID, and Pay Structure are required' });
         }
@@ -443,7 +443,7 @@ const getVariablePayAdminApprovals = async (req, res) => {
 const exportVariablePayexcelSheetWithBU = async (req, res) => {
     try {
         const { projectName, startDate } = req.query;
-console.log('projectName, startDate ,',req.query)
+        console.log('projectName, startDate ,', req.query)
         if (!startDate) {
             return res.status(400).json({ message: 'Missing required parameter: startDate' });
         }
@@ -588,7 +588,7 @@ const importVariablePay = async (req, res) => {
             return res.status(400).json({ message: 'No file uploaded' });
         }
 
-        const wagesEditedBy  = req.body.wagesEditedBy || 'System';
+        const wagesEditedBy = req.body.wagesEditedBy || 'System';
         const filePath = req.file.path;
 
         // Read the Excel file
@@ -634,7 +634,7 @@ const importVariablePay = async (req, res) => {
                     LabourID: row.LabourID || '',
                     PayStructure: row.PayStructure || '',
                     VariablePayAmount: row.VariablePayAmount || '',
-                    WagesEditedBy: row.payAddedBy  || '',
+                    WagesEditedBy: row.payAddedBy || '',
                     Error: error.message,
                     RowNumber: index + 2 // Assuming header is at row 1
                 });
@@ -838,7 +838,7 @@ async function calculateSingleLabourAPI(req, res) {
  */
 async function generateMonthlyPayrollAPI(req, res) {
     try {
-        const { month, year } = req.body; 
+        const { month, year } = req.body;
         if (!month || !year) {
             return res.status(400).json({ message: 'month and year are required.' });
         }
@@ -899,8 +899,8 @@ async function getOvertimeMonthlyAPI(req, res) {
         }
 
         const TotalOvertime = await labourModel.calculateTotalOvertime(
-            labourId, 
-            parseInt(month), 
+            labourId,
+            parseInt(month),
             parseInt(year)
         );
 
@@ -919,7 +919,7 @@ async function getOvertimeMonthlyAPI(req, res) {
 async function getSalaryGenerationDataAPIAllLabours(req, res) {
     try {
         const { month, year, labourIds } = req.query;
-// console.log('req.query for slarygeneration',req.query)
+        // console.log('req.query for slarygeneration',req.query)
         if (!month || !year) {
             return res.status(400).json({ message: 'Month and year are required.' });
         }
@@ -931,7 +931,7 @@ async function getSalaryGenerationDataAPIAllLabours(req, res) {
         const salaryData = await Promise.all(
             eligibleLabours.map(async (labour) => {
                 const labourId = labour.labourId;
-                
+
                 // Calculate full salary details using calculateSalaryForLabour function
                 const salaryDetails = await labourModel.calculateSalaryForLabour(labourId, parseInt(month), parseInt(year)) || {};
                 if (!salaryDetails || salaryDetails.message) {
@@ -942,7 +942,7 @@ async function getSalaryGenerationDataAPIAllLabours(req, res) {
                     month: parseInt(month),
                     year: parseInt(year),
                     ...salaryDetails,
-                   
+
                 };
             })
         );
@@ -1023,45 +1023,45 @@ async function getSalaryGenerationDataAPI(req, res) {
 
 async function deletePayrollController(req, res) {
     try {
-      // 📝 You can decide how to pass parameters:
-      // Option A: via query params: req.query.month, req.query.year, etc.
-      // Option B: via body: req.body.month, req.body.year, etc.
-      // Option C: via URL params: req.params.month, req.params.year, etc.
-  
-      // Example: We'll assume the user passes them in the request body
-      const { month, year, labourIds } = req.body;
-  
-      // Simple validation
-      if (!month || !year) {
-        return res.status(400).json({
-          success: false,
-          message: 'month and year are required.'
+        // 📝 You can decide how to pass parameters:
+        // Option A: via query params: req.query.month, req.query.year, etc.
+        // Option B: via body: req.body.month, req.body.year, etc.
+        // Option C: via URL params: req.params.month, req.params.year, etc.
+
+        // Example: We'll assume the user passes them in the request body
+        const { month, year, labourIds } = req.body;
+
+        // Simple validation
+        if (!month || !year) {
+            return res.status(400).json({
+                success: false,
+                message: 'month and year are required.'
+            });
+        }
+
+        // labourIds is optional; default to []
+        const ids = labourIds && Array.isArray(labourIds) ? labourIds : [];
+
+        // Call model function
+        const result = await labourModel.deleteMonthlyPayrollData(month, year, ids);
+
+        return res.status(200).json({
+            success: true,
+            data: result,
+            deletedRecords: result.rowsAffected,
         });
-      }
-  
-      // labourIds is optional; default to []
-      const ids = labourIds && Array.isArray(labourIds) ? labourIds : [];
-  
-      // Call model function
-      const result = await labourModel.deleteMonthlyPayrollData(month, year, ids);
-  
-      return res.status(200).json({
-        success: true,
-        data: result,
-        deletedRecords: result.rowsAffected,
-      });
     } catch (error) {
-      console.error('❌ Controller error - deletePayrollController:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Internal server error while deleting payroll data.',
-        error: error.message
-      });
+        console.error('❌ Controller error - deletePayrollController:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error while deleting payroll data.',
+            error: error.message
+        });
     }
-  }
+}
 
 
-  async function getFinalizedSalaryData(req, res) {
+async function getFinalizedSalaryData(req, res) {
     try {
         const { month, year } = req.query;
 
@@ -1096,7 +1096,7 @@ async function deletePayrollController(req, res) {
 }
 
 
-  async function getFinalizedSalaryDataByLabourID(req, res) {
+async function getFinalizedSalaryDataByLabourID(req, res) {
     try {
         const { labourId, month, year } = req.query;
 
@@ -1150,7 +1150,7 @@ async function exportMonthlyPayrollExcel(req, res) {
         const headers = [
             'LabourID', 'Name', 'Business Unit', 'Department Name',
             'Wage Type', 'Daily Wage Rate', 'Fixed Monthly Wage', 'Present Days', 'Absent Days', 'Half Days',
-            'Basic Salary', 'Overtime Pay', 'Weekly Off Pay','Total Deductions', 'Gross Pay', 'Net Pay',
+            'Basic Salary', 'Overtime Pay', 'Weekly Off Pay', 'Total Deductions', 'Gross Pay', 'Net Pay',
             'Advance', 'Advance Remarks', 'Debit', 'Debit Remarks', 'Incentive', 'Incentive Remarks', 'Month', 'Year'
         ];
 
@@ -1158,7 +1158,7 @@ async function exportMonthlyPayrollExcel(req, res) {
         const excelData = payrollData.map(item => [
             item.LabourID, item.name, item.businessUnit, item.departmentName,
             item.wageType, item.dailyWageRate, item.fixedMonthlyWage, item.presentDays, item.absentDays, item.halfDays,
-            item.basicSalary, item.overtimePay, item.weeklyOffPay,item.totalDeductions, item.grossPay, item.netPay,
+            item.basicSalary, item.overtimePay, item.weeklyOffPay, item.totalDeductions, item.grossPay, item.netPay,
             item.advance, item.advanceRemarks, item.debit, item.debitRemarks, item.incentive, item.incentiveRemarks, item.month, item.year
         ]);
 
@@ -1184,61 +1184,61 @@ async function exportMonthlyPayrollExcel(req, res) {
         res.status(500).json({ message: "Error exporting Monthly Payroll data." });
     }
 };
-  
+
 const exportWagesexcelSheet = async (req, res) => {
     try {
-      let { projectName, month, payStructure } = req.query;
-  
-      if (!month) {
-        return res.status(400).json({ message: 'Missing required parameter: month' });
-      }
-  
-      // Use "all" if projectName is missing or empty.
-      if (!projectName || projectName.trim() === "") {
-        projectName = "all";
-      }
-  
-      // Calculate the date range for the given month.
-      const startDate = `${month}-01`;
-      const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
-        .toISOString()
-        .split('T')[0];
-  
-    //   console.log(`Fetching wages for projectName: ${projectName}, payStructure: ${payStructure}, startDate: ${startDate}, endDate: ${endDate}`);
-  
-      // Fetch wages data (or approved onboarding rows if no matching wages).
-      const wagesData = await labourModel.getWagesByDateRange(projectName, payStructure, startDate, endDate);
-  
-      // Create the Excel workbook.
-      const workbook = xlsx.utils.book_new();
-      const worksheet = xlsx.utils.json_to_sheet(wagesData);
-      xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
-  
-      // Set the file name.
-      const fileName = projectName === "all"
-        ? `Approved_Labours_${month}.xlsx`
-        : `Wages_${projectName}_${month}.xlsx`;
-  
-      // Use res.attachment to set the header only once.
-      res.attachment(fileName);
-      res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.send(xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+        let { projectName, month, payStructure } = req.query;
+
+        if (!month) {
+            return res.status(400).json({ message: 'Missing required parameter: month' });
+        }
+
+        // Use "all" if projectName is missing or empty.
+        if (!projectName || projectName.trim() === "") {
+            projectName = "all";
+        }
+
+        // Calculate the date range for the given month.
+        const startDate = `${month}-01`;
+        const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
+            .toISOString()
+            .split('T')[0];
+
+        //   console.log(`Fetching wages for projectName: ${projectName}, payStructure: ${payStructure}, startDate: ${startDate}, endDate: ${endDate}`);
+
+        // Fetch wages data (or approved onboarding rows if no matching wages).
+        const wagesData = await labourModel.getWagesByDateRange(projectName, payStructure, startDate, endDate);
+
+        // Create the Excel workbook.
+        const workbook = xlsx.utils.book_new();
+        const worksheet = xlsx.utils.json_to_sheet(wagesData);
+        xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
+
+        // Set the file name.
+        const fileName = projectName === "all"
+            ? `Approved_Labours_${month}.xlsx`
+            : `Wages_${projectName}_${month}.xlsx`;
+
+        // Use res.attachment to set the header only once.
+        res.attachment(fileName);
+        res.type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.send(xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
     } catch (error) {
-      console.error('Error exporting Wages:', error);
-      res.status(500).json({ message: 'Error exporting Wages data.' });
+        console.error('Error exporting Wages:', error);
+        res.status(500).json({ message: 'Error exporting Wages data.' });
     }
-  };
-  
-  // Optionally preset payStructure for dedicated endpoints.
-  const exportMonthlyWagesExcel = async (req, res) => {
+};
+
+// Optionally preset payStructure for dedicated endpoints.
+const exportMonthlyWagesExcel = async (req, res) => {
     req.query.payStructure = 'Monthly Wages';
     exportWagesexcelSheet(req, res);
-  };
-  
-  const exportFixedWagesExcel = async (req, res) => {
+};
+
+const exportFixedWagesExcel = async (req, res) => {
     req.query.payStructure = 'Fix Monthly Wages';
     exportWagesexcelSheet(req, res);
-  };
+};
 
 
 
@@ -1261,7 +1261,7 @@ module.exports = {
     exportVariablePayexcelSheetWithBU,
     exportVariablePayexcelSheet,
     importVariablePay,
-// ------------------------------------------------------   salary generation process -----------------------------------
+    // ------------------------------------------------------   salary generation process -----------------------------------
     generateMonthlyPayroll,
     generateMonthlyPayrollForSingleLabour,
     getEligibleLaboursAPI,
