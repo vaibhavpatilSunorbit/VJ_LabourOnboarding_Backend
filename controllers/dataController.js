@@ -2,7 +2,7 @@ const cron = require('node-cron');
 const axios = require('axios');
 const logger = require('../logger')
 const { sql, poolPromise2 } = require('../config/dbConfig2');
-const {  poolPromise4 } = require('../config/dbConfigSCPL');
+const { poolPromise4 } = require('../config/dbConfigSCPL');
 const { poolPromise3 } = require('../config/dbConfig3');
 const { poolPromise } = require('../config/dbConfig');
 const xml2js = require("xml2js")
@@ -163,7 +163,7 @@ const getDesignations = async (req, res) => {
 //   const projectId = req.params.projectId;
 //   try {
 //     const pool = await poolPromise2;
-    
+
 //     // Step 1: Get the ParentId for the selected project
 //     const parentIdResult = await pool.request().query(`
 //       SELECT ParentId 
@@ -265,7 +265,7 @@ const getDesignations = async (req, res) => {
 
 const getCompanyNamesByProjectId = async (req, res) => {
   const projectId = req.params.projectId;
-  
+
   try {
     const pool = await poolPromise4;
 
@@ -283,22 +283,22 @@ const getCompanyNamesByProjectId = async (req, res) => {
     let parentId;
 
     if (parentIdResult.recordset.length !== 0) {
-       parentId = parentIdResult?.recordset[0].ParentId;
+      parentId = parentIdResult?.recordset[0].ParentId;
     }
     if (parentIdResult.recordset.length === 0) {
 
       const parentIdResult2 = await pool5.request()
-      .input('projectId', projectId) // Parameterized query for security
-      .query(`select [Buid], [Id] ,[Description],[ParentId] FROM CompanyNameByBuId where Id = @projectId `);
+        .input('projectId', projectId) // Parameterized query for security
+        .query(`select [Buid], [Id] ,[Description],[ParentId] FROM CompanyNameByBuId where Id = @projectId `);
 
       if (parentIdResult2.recordset.length === 0) {
         return res.status(404).json({ error: 'ParentId not found for the selected project' });
-      }else{
+      } else {
         parentId = parentIdResult2?.recordset[0].Id;
-      } 
+      }
     }
 
-    console.log("parentId",parentId)
+    console.log("parentId", parentId)
     // console.log('parentId++',parentIdResult.recordset[0].ParentId)
 
     // Step 2: Get the Company Name using the ParentId from CompanyNameByBuId table
@@ -359,7 +359,7 @@ const getAttendanceLogs = async (req, res) => {
 const approveLabour = async (req, res) => {
   try {
     const { projectId, deviceId } = req.body;
-    console.log('projectId, deviceId',req.body)
+    console.log('projectId, deviceId', req.body)
 
     if (!projectId || !deviceId) {
       return res.status(400).json({ message: 'ProjectID and DeviceID are required' });
@@ -375,7 +375,7 @@ const approveLabour = async (req, res) => {
       WHERE Type = 'B' 
       AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
       AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0) and Id = @ProjectID`);
-      
+
 
     // Query from the second database (dbConfig3) for the device
     const pool3 = await poolPromise3;
@@ -429,7 +429,7 @@ const getProjectDeviceStatus = async (req, res) => {
         WHERE pds.[ProjectID] = @ProjectName
         AND lob.[projectName] = @ProjectName
       `);
-    
+
     if (result.recordset.length === 0) {
       return res.status(404).json({ message: 'Serial number not found' });
     }
@@ -564,7 +564,7 @@ const addFvEmpId = async (req, res) => {
 
 
 const fetchDynamicData = async (req, res) => {
-  const { businessUnitDesc, workingHours  } = req.query;
+  const { businessUnitDesc, workingHours } = req.query;
 
   console.log('Received query parameters:', { businessUnitDesc, workingHours });
 
@@ -579,7 +579,7 @@ const fetchDynamicData = async (req, res) => {
     let parentResult;
     let ledgerResult;
     let bankIdResult;
-    if(businessUnitQueryResult.recordset.length > 0){
+    if (businessUnitQueryResult.recordset.length > 0) {
       const frameworkQuery = `SELECT * FROM Framework.BusinessUnit Where Id = ${result.ParentId}`;
       const frameworkUnit = await pool.request().query(frameworkQuery);
       parentResult = frameworkUnit.recordset[0];
@@ -593,21 +593,21 @@ const fetchDynamicData = async (req, res) => {
       const paymentBankId = `select Id from [Payroll].[Bank] where CompanyId = ${result.Id}`;
       const paymentBankIdRecord = await pool.request().query(paymentBankId);
       bankIdResult = paymentBankIdRecord.recordset[0];
-      console.log('BankIdResultForPayment: ',bankIdResult)
+      console.log('BankIdResultForPayment: ', bankIdResult)
 
     }
 
-     // Fetch shift details dynamically based on workingHours
-     const shiftQuery = `SELECT Id, Description FROM Payroll.Shift WHERE Description LIKE '%${workingHours.replace(/'/g, "''")}%'`;
-     const shiftResult = await pool.request().query(shiftQuery);
-     const shift = shiftResult.recordset[0];
+    // Fetch shift details dynamically based on workingHours
+    const shiftQuery = `SELECT Id, Description FROM Payroll.Shift WHERE Description LIKE '%${workingHours.replace(/'/g, "''")}%'`;
+    const shiftResult = await pool.request().query(shiftQuery);
+    const shift = shiftResult.recordset[0];
 
     // Construct the dynamic data object
     const dynamicData = {
       email1: 'system@javdekars.com',
       natureId: 0,
       interUnitLedgerId: result.interUnitLedgerId || null,
-      interUnitParentId: result.interUnitParentId, 
+      interUnitParentId: result.interUnitParentId,
       interUnitLedger: ledgerResult ? { ledgerGroupId: ledgerResult.GroupId } : null,
       id: result ? result.Id : null,
       code: result ? result.Code : null,
@@ -623,7 +623,7 @@ const fetchDynamicData = async (req, res) => {
   } catch (error) {
     console.error('Error fetching dynamic data:', error);
     res.status(500).send('Error fetching dynamic data');
-  } 
+  }
 };
 
 
@@ -665,43 +665,43 @@ const fetchOrgDynamicData = async (req, res) => {
 
     const salaryBuQueryResult = await pool.request().query(salaryBuQuery);
     const salaryBuJson = JSON.stringify(salaryBuQueryResult);
-    console.log('salaryBuQueryResult :' +salaryBuJson);
+    console.log('salaryBuQueryResult :' + salaryBuJson);
     let salaryUnitResult;
     let groupIdResult;
-    if(salaryBuQueryResult.recordset.length > 0){
-    const salaryBuDesc = salaryBuQueryResult.recordset[0];
-    const frameworkQuery = `SELECT * FROM Framework.BusinessUnit WHERE Id = ${salaryBuDesc.Id}`;
-    const frameworkUnit = await pool.request().query(frameworkQuery);
-    console.log('salaryBuUnit :' +JSON.stringify(frameworkUnit));      
-    salaryUnitResult = frameworkUnit.recordset[0];
-    if(frameworkUnit.recordset.length > 0){
-      console.log("salaryUnitResult : " + salaryUnitResult.InterUnitParentId);
-      const frameworkQuery = `SELECT * FROM Finance.Ledger Where Id = ${salaryUnitResult.InterUnitParentId}`;
+    if (salaryBuQueryResult.recordset.length > 0) {
+      const salaryBuDesc = salaryBuQueryResult.recordset[0];
+      const frameworkQuery = `SELECT * FROM Framework.BusinessUnit WHERE Id = ${salaryBuDesc.Id}`;
       const frameworkUnit = await pool.request().query(frameworkQuery);
-      groupIdResult = frameworkUnit.recordset[0];
-      console.log('groupIdResult : ' + groupIdResult);
-    }
-    console.log('salary :' +JSON.stringify(salaryUnitResult));      
+      console.log('salaryBuUnit :' + JSON.stringify(frameworkUnit));
+      salaryUnitResult = frameworkUnit.recordset[0];
+      if (frameworkUnit.recordset.length > 0) {
+        console.log("salaryUnitResult : " + salaryUnitResult.InterUnitParentId);
+        const frameworkQuery = `SELECT * FROM Finance.Ledger Where Id = ${salaryUnitResult.InterUnitParentId}`;
+        const frameworkUnit = await pool.request().query(frameworkQuery);
+        groupIdResult = frameworkUnit.recordset[0];
+        console.log('groupIdResult : ' + groupIdResult);
+      }
+      console.log('salary :' + JSON.stringify(salaryUnitResult));
     }
 
     const workBuQueryResult = await pool.request().query(workBuQuery);
     const workBuJson = JSON.stringify(workBuQueryResult);
-    console.log('workBuQueryResult :' +workBuJson);      
+    console.log('workBuQueryResult :' + workBuJson);
     let workUnitResult;
-    if(workBuQueryResult.recordset.length > 0){
+    if (workBuQueryResult.recordset.length > 0) {
       const workBuDesc = workBuQueryResult.recordset[0];
       const frameworkQuery = `SELECT * FROM Framework.BusinessUnit WHERE Id = ${workBuDesc.Id}`;
       const frameworkUnit = await pool.request().query(frameworkQuery);
-    console.log('workbuUnit :' +JSON.stringify(frameworkUnit));      
+      console.log('workbuUnit :' + JSON.stringify(frameworkUnit));
       workUnitResult = frameworkUnit.recordset[0];
-    console.log('workbu :' +workUnitResult);     
+      console.log('workbu :' + workUnitResult);
 
     }
 
     const monthPeriodResult = await pool.request().query(payrollEmployeeQuery);
     console.log(monthPeriodResult);
     let monthPeriodDetails;
-    if(monthPeriodResult.recordset.length > 0){
+    if (monthPeriodResult.recordset.length > 0) {
       const month = monthPeriodResult.recordset[0];
       const frameworkQuery = `Select * From Framework.FiscalYearPeriod WHERE Id = ${month.Id}`;
       const frameworkUnit = await pool.request().query(frameworkQuery);
@@ -729,7 +729,7 @@ const fetchOrgDynamicData = async (req, res) => {
     // const financeUnit = financeUnitResult.recordset[0];
     const payrollDepartmentUnit = payrollDepartmenUnitResult.recordset[0];
     const payrollDesignationUnit = payrollDesignationUnitResult.recordset[0];
-console.log("payrollUnit : " + payrollUnit);
+    console.log("payrollUnit : " + payrollUnit);
     const dynamicData2 = {
       payrollUnit,
       monthPeriod: {
@@ -955,7 +955,7 @@ const organizationMasterPayloadUpdatepost = async (req, res) => {
         },
       }
     );
-console.log('organizationMasterResponse 2025 ', organizationMasterResponse)
+    console.log('organizationMasterResponse 2025 ', organizationMasterResponse)
     // Check if the response status is successful
     if (organizationMasterResponse.data.status) {
       res.status(200).json({
@@ -998,29 +998,29 @@ console.log('organizationMasterResponse 2025 ', organizationMasterResponse)
 
 // Function to update Employee Master data and save responses
 const updateEmployeeMaster = async (req, res) => {
-  const { userId, LabourID, name, aadharNumber, employeeMasterPayload, organizationMasterPayload } = req.body; 
+  const { userId, LabourID, name, aadharNumber, employeeMasterPayload, organizationMasterPayload } = req.body;
   try {
-      // API call to Employee Master
-      const employeeMasterResponse = await axios.post('https://vjerp.farvisioncloud.com/Payroll/odata/Employees', employeeMasterPayload, {
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'apikey 8d1588e79eb31ed7cb57ff57325510572baa1008d575537615e295d3bbd7d558' }
-      });
+    // API call to Employee Master
+    const employeeMasterResponse = await axios.post('https://vjerp.farvisioncloud.com/Payroll/odata/Employees', employeeMasterPayload, {
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'apikey 8d1588e79eb31ed7cb57ff57325510572baa1008d575537615e295d3bbd7d558' }
+    });
 
-      // API call to Organization Master
-      const organizationMasterResponse = await axios.post('https://vjerp.farvisioncloud.com/Payroll/odata/Organisations', organizationMasterPayload, {
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'apikey 8d1588e79eb31ed7cb57ff57325510572baa1008d575537615e295d3bbd7d558' }
-      });
+    // API call to Organization Master
+    const organizationMasterResponse = await axios.post('https://vjerp.farvisioncloud.com/Payroll/odata/Organisations', organizationMasterPayload, {
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'apikey 8d1588e79eb31ed7cb57ff57325510572baa1008d575537615e295d3bbd7d558' }
+    });
 
-      // Check if both responses are successful and save to database
-      if (employeeMasterResponse.data.status && organizationMasterResponse.data.status) {
-          await saveApiResponsePayload(userId, LabourID, name, aadharNumber, {}, employeeMasterResponse.data, organizationMasterResponse.data);
-          res.json({ message: 'Employee Master and Organization Master data updated successfully' });
-      } else {
-          res.status(400).json({ message: 'Failed to update data from Employee Master or Organization Master' });
-      }
+    // Check if both responses are successful and save to database
+    if (employeeMasterResponse.data.status && organizationMasterResponse.data.status) {
+      await saveApiResponsePayload(userId, LabourID, name, aadharNumber, {}, employeeMasterResponse.data, organizationMasterResponse.data);
+      res.json({ message: 'Employee Master and Organization Master data updated successfully' });
+    } else {
+      res.status(400).json({ message: 'Failed to update data from Employee Master or Organization Master' });
+    }
 
   } catch (error) {
-      console.error('Error updating Employee Master:', error.message);
-      res.status(500).json({ message: 'Error updating Employee Master data' });
+    console.error('Error updating Employee Master:', error.message);
+    res.status(500).json({ message: 'Error updating Employee Master data' });
   }
 };
 
@@ -1250,7 +1250,7 @@ const saveLogToDatabase = async (userId, labourID, serialNumber, soapRequestPayl
 const sendDeleteUserRequest = async (labour) => {
   const labourID = labour?.LabourID; // Safely extract LabourID from labour object
   const userId = labour?.id; // Extract userId from labour object
-  let attendanceStatus = 'Disable'; 
+  let attendanceStatus = 'Disable';
 
   if (!labourID || typeof labourID !== 'string') {
     console.error(`Invalid LabourID for labour:`, labour);
@@ -1280,7 +1280,7 @@ const sendDeleteUserRequest = async (labour) => {
         </soap:Body>
       </soap:Envelope>`;
 
-      console.log(`SOAP Request for LabourID: ${labourID}`, soapEnvelope);
+    console.log(`SOAP Request for LabourID: ${labourID}`, soapEnvelope);
 
     const response = await axios.post(
       'https://essl.vjerp.com:8530/iclock/WebAPIService.asmx?op=DeleteUser',
@@ -1413,7 +1413,7 @@ const getLaboursWithOldAttendance = async () => {
 
       console.log(`Processing LabourID: ${labour.LabourID}`);
       if (labour.status !== 'Resubmitted' && labour.isApproved !== 3 &&
-          labour.status !== 'Rejected' && labour.isApproved !== 2) {
+        labour.status !== 'Rejected' && labour.isApproved !== 2) {
         labour.Reject_Reason = "This labour attendance is older than 15 days or not present";
 
         const success = await sendDeleteUserRequest(labour);  // Pass full labour object
@@ -1526,7 +1526,7 @@ FROM [AdminSiteTransferApproval] A order by A.createdAt desc;`);
 //                 SELECT *
 //                 FROM AdminSiteTransferApproval
 //                 WHERE LabourID = @LabourID  and adminStatus = 'Pending' `);
-    
+
 //          if(checkresult.recordset.length > 0){
 //           return res.status(200).json({
 //             message: `LabourID ${LabourID} already has a pending approval in Admin SiteTransfer Approval.`,
@@ -1664,59 +1664,59 @@ const siteTransferRequestforAdmin = async (req, res) => {
     );
 
     // Build counts for the response message
-  // Build counts for the response message
-const successCount = successfulTransfers.length;
-const pendingApprovalCount = pendingApprovalErrors.length;
-const otherErrorsCount = otherErrors.length;
-const sameNameErrorsCount = sameNameErrors.length;
-const totalErrors = errorLabours.length;
+    // Build counts for the response message
+    const successCount = successfulTransfers.length;
+    const pendingApprovalCount = pendingApprovalErrors.length;
+    const otherErrorsCount = otherErrors.length;
+    const sameNameErrorsCount = sameNameErrors.length;
+    const totalErrors = errorLabours.length;
 
-// Initialize an array to store message lines
-let responseLines = [];
+    // Initialize an array to store message lines
+    let responseLines = [];
 
-if (totalErrors > 0) {
-  responseLines.push(`Transfer Request Summary:`);
+    if (totalErrors > 0) {
+      responseLines.push(`Transfer Request Summary:`);
 
-  if (successCount > 0) {
-    if (successCount === 1) {
-      responseLines.push(`\nTransfer request submitted successfully for Labour ID: ${successfulTransfers[0].LabourID} (${successfulTransfers[0].name})`);
+      if (successCount > 0) {
+        if (successCount === 1) {
+          responseLines.push(`\nTransfer request submitted successfully for Labour ID: ${successfulTransfers[0].LabourID} (${successfulTransfers[0].name})`);
+        } else {
+          responseLines.push(`\nTransfer request submitted successfully for ${successCount} labours.`);
+        }
+      }
+
+      if (pendingApprovalCount > 0) {
+        if (pendingApprovalCount === 1) {
+          responseLines.push(`\nPending approval already exists for Labour ID: ${pendingApprovalErrors[0].LabourID}`);
+        } else {
+          responseLines.push(`\nPending approval already exists for ${pendingApprovalCount} labours.`);
+        }
+      }
+
+      if (sameNameErrorsCount > 0) {
+        if (sameNameErrorsCount === 1) {
+          responseLines.push(`\nCurrent site and transfer site cannot be the same for Labour ID: ${sameNameErrors[0].LabourID}`);
+        } else {
+          responseLines.push(`\nCurrent site and transfer site cannot be the same for ${sameNameErrorsCount} labours.`);
+        }
+      }
+
+      if (otherErrorsCount > 0) {
+        if (otherErrorsCount === 1) {
+          responseLines.push(`\nPlease try again. Contact admin for Labour ID: ${otherErrors[0].LabourID}`);
+        } else {
+          responseLines.push(`\nPlease try again. Contact admin for ${otherErrorsCount} labours.`);
+        }
+      }
+
+      responseMessage = responseLines.join("\n"); // Join all non-empty lines
     } else {
-      responseLines.push(`\nTransfer request submitted successfully for ${successCount} labours.`);
+      if (successCount === 1) {
+        responseMessage = `Transfer request submitted successfully for Labour ID: ${successfulTransfers[0].LabourID} (${successfulTransfers[0].name}).`;
+      } else {
+        responseMessage = `Transfer request submitted successfully for ${successCount} labours.`;
+      }
     }
-  }
-  
-  if (pendingApprovalCount > 0) {
-    if (pendingApprovalCount === 1) {
-      responseLines.push(`\nPending approval already exists for Labour ID: ${pendingApprovalErrors[0].LabourID}`);
-    } else {
-      responseLines.push(`\nPending approval already exists for ${pendingApprovalCount} labours.`);
-    }
-  }
-
-  if (sameNameErrorsCount > 0) {
-    if (sameNameErrorsCount === 1) {
-      responseLines.push(`\nCurrent site and transfer site cannot be the same for Labour ID: ${sameNameErrors[0].LabourID}`);
-    } else {
-      responseLines.push(`\nCurrent site and transfer site cannot be the same for ${sameNameErrorsCount} labours.`);
-    }
-  }
-
-  if (otherErrorsCount > 0) {
-    if (otherErrorsCount === 1) {
-      responseLines.push(`\nPlease try again. Contact admin for Labour ID: ${otherErrors[0].LabourID}`);
-    } else {
-      responseLines.push(`\nPlease try again. Contact admin for ${otherErrorsCount} labours.`);
-    }
-  }
-
-  responseMessage = responseLines.join("\n"); // Join all non-empty lines
-} else {
-  if (successCount === 1) {
-    responseMessage = `Transfer request submitted successfully for Labour ID: ${successfulTransfers[0].LabourID} (${successfulTransfers[0].name}).`;
-  } else {
-    responseMessage = `Transfer request submitted successfully for ${successCount} labours.`;
-  }
-}   
 
     // Compose the response payload
     const responsePayload = {
@@ -1724,16 +1724,16 @@ if (totalErrors > 0) {
       summary: {
         successfulTransfers: successCount,
         pendingApprovalErrors: pendingApprovalCount,
-        sameNameErrors : sameNameErrorsCount,
+        sameNameErrors: sameNameErrorsCount,
         otherErrors: otherErrorsCount,
         totalErrors,
         errorLabourIDs: errorLabours.map((item) => item.LabourID),
       },
       details: {
-        successfulTransfers,      
-        pendingApprovalErrors, 
-        sameNameErrors,    
-        otherErrors,   
+        successfulTransfers,
+        pendingApprovalErrors,
+        sameNameErrors,
+        otherErrors,
       },
     };
 
@@ -1776,7 +1776,7 @@ const approveSiteTransfer = async (req, res) => {
       return res.status(404).json({ message: "No pending approval found for the given ID." });
     }
 
-    const transferDetails = approval.recordset[0];   
+    const transferDetails = approval.recordset[0];
 
     // Call saveTransferData with the fetched details
     await saveTransferData({
@@ -1798,10 +1798,10 @@ const approveSiteTransfer = async (req, res) => {
       }),
     });
 
-     // Update admin approval status
-     await pool.request()
-     .input("id", sql.NVarChar(50), id)
-     .query(`
+    // Update admin approval status
+    await pool.request()
+      .input("id", sql.NVarChar(50), id)
+      .query(`
        UPDATE AdminSiteTransferApproval
        SET adminStatus = 'Approved', isAdminApproval = 1, updatedAt = GETDATE(), siteTransferApproveDate = GETDATE()
        WHERE id = @id AND adminStatus = 'Pending'
@@ -1826,8 +1826,8 @@ const approveSiteTransfer = async (req, res) => {
 
 const rejectSiteTransfer = async (req, res) => {
   try {
-    const {params } = req.body; 
-    console.log("req.body reject site transfer",req.body)
+    const { params } = req.body;
+    console.log("req.body reject site transfer", req.body)
     if (!params.id) {
       return res.status(400).json({ message: "ID is required." });
     }
@@ -1840,7 +1840,7 @@ const rejectSiteTransfer = async (req, res) => {
         SELECT * FROM [AdminSiteTransferApproval]
         WHERE id = @id AND adminStatus = 'Pending'
       `);
-console.log("approval.recordset",approval.recordset)
+    console.log("approval.recordset", approval.recordset)
     if (approval.recordset.length === 0) {
       return res.status(404).json({ message: "No pending approval found for the given ID." });
     }
@@ -1881,7 +1881,7 @@ console.log("approval.recordset",approval.recordset)
       "Rejected"
     );
 
-    res.status(200).json({ message: "Site transfer request rejected successfully.", success:true });
+    res.status(200).json({ message: "Site transfer request rejected successfully.", success: true });
   } catch (error) {
     console.error("Error rejecting site transfer:", error);
     res.status(500).json({ message: "Failed to reject site transfer.", error: error.message });
@@ -2130,7 +2130,7 @@ const saveTransferData = async (req, res) => {
       .input("siteTransferBy", sql.NVarChar(50), siteTransferBy || null)
       .query(insertQuery);
 
-       // Step 4: Update [labourOnboarding] with transfer site details
+    // Step 4: Update [labourOnboarding] with transfer site details
     const updateQuery = `
       UPDATE [dbo].[labourOnboarding]
       SET
@@ -2564,7 +2564,7 @@ const approveCompanyTransfer = async (req, res) => {
       .input("WorkingBu", sql.NVarChar(255), transferDetails.transferSiteName)
       .input("businessUnit", sql.NVarChar(255), transferDetails.transferSiteName)
       .input("location", sql.NVarChar(255), transferDetails.transferSiteName)
-      .input("isCompanyTransfer", sql.Bit, 1) 
+      .input("isCompanyTransfer", sql.Bit, 1)
       .query(`
         UPDATE labourOnboarding
         SET
@@ -2632,7 +2632,7 @@ const approveCompanyTransfer = async (req, res) => {
 const rejectCompanyTransfer = async (req, res) => {
   try {
     const { id, rejectReason } = req.body;
-// console.log("company transfer reject",req.body)
+    // console.log("company transfer reject",req.body)
     if (!id) {
       return res.status(400).json({ message: "ID is required." });
     }
@@ -2693,9 +2693,9 @@ const rejectCompanyTransfer = async (req, res) => {
     });
   } catch (error) {
     console.error("Error rejecting Company transfer:", error);
-    return res.status(500).json({ 
-      message: "Failed to reject Company transfer.", 
-      error: error.message 
+    return res.status(500).json({
+      message: "Failed to reject Company transfer.",
+      error: error.message
     });
   }
 };
@@ -2754,9 +2754,9 @@ const editCompanyTransfer = async (req, res) => {
     return res.status(200).json({ message: "Company transfer request updated successfully." });
   } catch (error) {
     console.error("Error editing Company transfer:", error);
-    return res.status(500).json({ 
-      message: "Failed to edit Company transfer.", 
-      error: error.message 
+    return res.status(500).json({
+      message: "Failed to edit Company transfer.",
+      error: error.message
     });
   }
 };
@@ -2789,7 +2789,7 @@ module.exports = {
   getLaboursWithOldAttendance,
   fetchCachedLabours,
   saveTransferData,
-  getAllLaboursWithTransferDetails, 
+  getAllLaboursWithTransferDetails,
   // resubmitLabor
   getAdminSiteTransferApproval,
   employeeMasterPayloadUpdatepost,

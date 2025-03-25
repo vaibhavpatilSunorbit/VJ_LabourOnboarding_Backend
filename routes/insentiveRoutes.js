@@ -7,12 +7,12 @@ const upload = multer({ dest: 'uploads/' });
 
 router.post('/insentive', insentiveController.createRecord);
 router.get('/getAllLabours', insentiveController.getAllLabours);
-router.get('/searchLaboursFromVariablePay', insentiveController.searchLaboursFromVariablePay);  
-router.get('/searchLaboursFromAttendanceApproval', insentiveController.searchLaboursFromAttendanceApproval);  
-router.get('/searchLaboursFromWagesApproval', insentiveController.searchLaboursFromWagesApproval);  
-router.get('/searchFromSiteTransferApproval', insentiveController.searchFromSiteTransferApproval);  
-router.get('/searchFromViewMonthlyPayroll', insentiveController.searchFromViewMonthlyPayroll);  
-router.get('/getVariablePayAndLabourOnboardingJoin', insentiveController.getVariablePayAndLabourOnboardingJoincontroller);  
+router.get('/searchLaboursFromVariablePay', insentiveController.searchLaboursFromVariablePay);
+router.get('/searchLaboursFromAttendanceApproval', insentiveController.searchLaboursFromAttendanceApproval);
+router.get('/searchLaboursFromWagesApproval', insentiveController.searchLaboursFromWagesApproval);
+router.get('/searchFromSiteTransferApproval', insentiveController.searchFromSiteTransferApproval);
+router.get('/searchFromViewMonthlyPayroll', insentiveController.searchFromViewMonthlyPayroll);
+router.get('/getVariablePayAndLabourOnboardingJoin', insentiveController.getVariablePayAndLabourOnboardingJoincontroller);
 router.post('/upsertVariablePay', insentiveController.upsertLabourVariablePay);
 router.get('/checkExistingVariablePay', insentiveController.checkExistingVariablePayController);
 router.post('/sendVariablePayForApproval', insentiveController.markVariablePayForApprovalController);
@@ -23,7 +23,7 @@ router.get('/exportVariablePayexcelSheetWithBU', insentiveController.exportVaria
 router.get('/exportVariablePayExcel', insentiveController.exportVariablePayexcelSheet);
 
 router.post('/importVariablePay', upload.single('file'), insentiveController.importVariablePay);
-    
+
 // --------------------------------------------------   routes for salary generation process -----------------------------------
 router.post('/generateMonthlyPayroll', insentiveController.generateMonthlyPayroll);
 router.post('/generateMonthlyPayroll/:labourId', insentiveController.generateMonthlyPayrollForSingleLabour);

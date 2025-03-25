@@ -1,9 +1,9 @@
 
 const express = require('express');
-const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, getDesignations, getCompanyNamesByProjectId, getDevices, getAttendanceLogs, approveLabour, getProjectDeviceStatus,updateProjectDeviceStatus, deleteProjectDeviceStatus, getProjectDeviceStatusSS, fetchDynamicData, fetchOrgDynamicData, addFvEmpId, updateEmployeeMaster, saveApiResponsePayload, getLaboursWithOldAttendance, fetchCachedLabours, saveTransferData, getAllLaboursWithTransferDetails, employeeMasterPayloadUpdatepost, organizationMasterPayloadUpdatepost, siteTransferRequestforAdmin, approveSiteTransfer, rejectSiteTransfer, editSiteTransfer, getAdminSiteTransferApproval, getWagesforInsentiveAdd
+const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, getDesignations, getCompanyNamesByProjectId, getDevices, getAttendanceLogs, approveLabour, getProjectDeviceStatus, updateProjectDeviceStatus, deleteProjectDeviceStatus, getProjectDeviceStatusSS, fetchDynamicData, fetchOrgDynamicData, addFvEmpId, updateEmployeeMaster, saveApiResponsePayload, getLaboursWithOldAttendance, fetchCachedLabours, saveTransferData, getAllLaboursWithTransferDetails, employeeMasterPayloadUpdatepost, organizationMasterPayloadUpdatepost, siteTransferRequestforAdmin, approveSiteTransfer, rejectSiteTransfer, editSiteTransfer, getAdminSiteTransferApproval, getWagesforInsentiveAdd
     , getAdminCompanyTransferApproval, companyTransferRequestforAdmin, approveCompanyTransfer, rejectCompanyTransfer, editCompanyTransfer
 } = require('../controllers/dataController');
-const {addEmployee} =require("../controllers/sendLabourData")
+const { addEmployee } = require("../controllers/sendLabourData")
 const router = express.Router();
 
 router.get('/project-names', getProjectNames);
@@ -14,7 +14,7 @@ router.get('/designations/:departmentId', getDesignations);
 router.get('/company-names/:projectId', getCompanyNamesByProjectId);
 router.get('/devices', getDevices);
 router.get('/attendance-logs', getAttendanceLogs);
-router.post('/AddEmployee',addEmployee);
+router.post('/AddEmployee', addEmployee);
 router.post('/approveLabour', approveLabour);
 router.get('/projectDeviceStatus/:projectName', getProjectDeviceStatus);
 router.put('/projectDeviceStatus', updateProjectDeviceStatus);
@@ -25,8 +25,8 @@ router.get('/fetchOrgDynamicData', fetchOrgDynamicData);
 router.put('/addFvEmpId/:Id', addFvEmpId);
 router.post('/updateEmployeeMaster', updateEmployeeMaster);
 router.post('/saveApiResponsePayload', saveApiResponsePayload);
-router.get('/laboursoldattendance', fetchCachedLabours );
-router.post('/transfer', saveTransferData );
+router.get('/laboursoldattendance', fetchCachedLabours);
+router.post('/transfer', saveTransferData);
 router.post('/allTransferSite', getAllLaboursWithTransferDetails);
 // router.post('/resubmitattendancelabour', resubmitLabor);
 router.get('/getAdminSiteTransferApproval', getAdminSiteTransferApproval);
