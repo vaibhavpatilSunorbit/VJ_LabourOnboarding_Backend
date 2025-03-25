@@ -2528,21 +2528,35 @@ async function calculateSalaryForLabour(labourId, month, year) {
             baseWage = fullDayPay + halfDayPay;
         }
 
+        // --------------------------------------------------------------------------- IMPORTANT LOGIC FOR OVERTIME  ------------------------------------
         // B) Overtime: derivedPerHour
+        // let derivedPerHour = 0;
+        // if (wageType.includes("DAILY WAGES")) {
+        //     if (dailyWageRate > 0 && parsedWorkingHours > 0) {
+        //         derivedPerHour = dailyWageRate / parsedWorkingHours;
+        //     }
+        // } else {
+        //     // monthly/fixed => (monthly / 30) / workingHours
+        //     const baseMonthly = fixedMonthlyWage || monthlySalary;
+        //     if (baseMonthly > 0 && parsedWorkingHours > 0) {
+        //         derivedPerHour = (baseMonthly / 30) / parsedWorkingHours;
+        //     }
+        // }
+        // const overtimePay = cappedOvertime * derivedPerHour;
+
         let derivedPerHour = 0;
+        let overtimePay = 0;
         if (wageType.includes("DAILY WAGES")) {
             if (dailyWageRate > 0 && parsedWorkingHours > 0) {
                 derivedPerHour = dailyWageRate / parsedWorkingHours;
             }
+            overtimePay = cappedOvertime * derivedPerHour;
         } else {
-            // monthly/fixed => (monthly / 30) / workingHours
-            const baseMonthly = fixedMonthlyWage || monthlySalary;
-            if (baseMonthly > 0 && parsedWorkingHours > 0) {
-                derivedPerHour = (baseMonthly / 30) / parsedWorkingHours;
-            }
+            // For FIXED MONTHLY WAGES, ignore overtime calculations.
+            derivedPerHour = 0;
+            overtimePay = 0;
         }
-        const overtimePay = cappedOvertime * derivedPerHour;
-
+// ------------------------------------------------------------------------------------- IMPORTANT LOGIC END -----------------------------------------------
         // C) Holiday Overtime Pay (if any)
         const totalHolidayOvertimePay = holidayOvertimeWages;
 
