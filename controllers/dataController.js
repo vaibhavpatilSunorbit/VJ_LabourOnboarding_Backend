@@ -1826,21 +1826,21 @@ const approveSiteTransfer = async (req, res) => {
 
 const rejectSiteTransfer = async (req, res) => {
   try {
-    const { id, rejectReason } = req.body; 
-    // if (!id) {
-    //   return res.status(400).json({ message: "ID is required." });
-    // }
+    const {params } = req.body; 
+    console.log("req.body reject site transfer",req.body)
+    if (!params.id) {
+      return res.status(400).json({ message: "ID is required." });
+    }
 
     const pool = await poolPromise;
 
-    // Fetch the approval details using `id`
     const approval = await pool.request()
-      .input("id", sql.Int, id)
+      .input("id", sql.Int, params.id)
       .query(`
-        SELECT * FROM AdminSiteTransferApproval
+        SELECT * FROM [AdminSiteTransferApproval]
         WHERE id = @id AND adminStatus = 'Pending'
       `);
-
+console.log("approval.recordset",approval.recordset)
     if (approval.recordset.length === 0) {
       return res.status(404).json({ message: "No pending approval found for the given ID." });
     }
@@ -1849,8 +1849,8 @@ const rejectSiteTransfer = async (req, res) => {
 
     // Update admin rejection status in AdminSiteTransferApproval
     await pool.request()
-      .input("id", sql.Int, id)
-      .input("rejectReason", sql.NVarChar(sql.MAX), rejectReason || "No reason provided")
+      .input("id", sql.Int, params.id)
+      .input("rejectReason", sql.NVarChar(sql.MAX), params.rejectReason || "No reason provided")
       .query(`
         UPDATE AdminSiteTransferApproval
         SET 
@@ -1865,7 +1865,7 @@ const rejectSiteTransfer = async (req, res) => {
     // Update rejectionReason in API_TransferSite
     await pool.request()
       .input("LabourID", sql.NVarChar(50), transferDetails.LabourID)
-      .input("rejectReason", sql.NVarChar(sql.MAX), rejectReason || "No reason provided")
+      .input("rejectReason", sql.NVarChar(sql.MAX), params.rejectReason || "No reason provided")
       .query(`
         UPDATE API_TransferSite
         SET rejectionReason = @rejectReason, updatedAt = GETDATE()
@@ -1877,7 +1877,7 @@ const rejectSiteTransfer = async (req, res) => {
       transferDetails.userId,
       transferDetails.LabourID,
       "Admin Rejected",
-      `Site transfer request for LabourID ${transferDetails.LabourID} was rejected. Reason: ${rejectReason || "No reason provided"}`,
+      `Site transfer request for LabourID ${transferDetails.LabourID} was rejected. Reason: ${params.rejectReason || "No reason provided"}`,
       "Rejected"
     );
 
