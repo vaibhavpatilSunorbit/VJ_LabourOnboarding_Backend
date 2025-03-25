@@ -2305,6 +2305,7 @@ async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month,
                     att.WorkingHours,
                     att.OnboardName,
                     att.ApprovalStatus,
+                    att.projectName,
                     las.TotalOvertimeHoursManually,
                     las.Shift
                 FROM [dbo].[LabourAttendanceDetails] att
