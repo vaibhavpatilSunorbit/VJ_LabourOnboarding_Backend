@@ -2469,6 +2469,15 @@ async function markAttendanceForApproval(
         request.input('lastPunchManually', sql.VarChar, lastPunchManually || null);
         request.input('markWeeklyOff', sql.Bit, markWeeklyOff === true ? 1 : 0 || null);
 
+        const result = await pool.request()
+        .input('LabourID', sql.NVarChar, labourId)
+        .query(`
+            SELECT name
+            FROM [dbo].[labourOnboarding]
+            WHERE LabourID = @LabourID
+        `);
+
+    const name = result.recordset.length > 0 ? result.recordset[0].name : null;
         // Perform the UPDATE query
         await request.query(`
             UPDATE [LabourAttendanceDetails]
@@ -2480,13 +2489,14 @@ async function markAttendanceForApproval(
             WHERE LabourId = @labourId AND Date = @date
         `);
 
+        request.input('name', sql.NVarChar, name || null);
         // Perform the INSERT query
         await request.query(`
             INSERT INTO LabourAttendanceApproval (
-              AttendanceId, LabourId, Date, OvertimeManually, RemarkManually, OnboardName, FirstPunchManually, LastPunchManually, markWeeklyOff
+              AttendanceId, LabourId, Date, OvertimeManually, RemarkManually, OnboardName, FirstPunchManually, LastPunchManually, markWeeklyOff, name
             )
             VALUES (
-              @AttendanceId, @labourId, @date, @overtimeManually, @remarkManually, @finalOnboardName, @firstPunchManually, @lastPunchManually, @markWeeklyOff
+              @AttendanceId, @labourId, @date, @overtimeManually, @remarkManually, @finalOnboardName, @firstPunchManually, @lastPunchManually, @markWeeklyOff, @name
             )
         `);
 
@@ -3676,10 +3686,6 @@ async function upsertAttendance({
 async function LabourAttendanceApprovalModel() {
     try {
         const pool = await poolPromise;
-        // const result = await pool.request().query(`
-        //     SELECT *
-        //     FROM [dbo].[LabourAttendanceApproval]
-        // `);
         const result = await pool.request().query(`
             SELECT 
     L.*,
@@ -4164,6 +4170,16 @@ async function markWagesForApproval(
 ) {
     try {
         const pool = await poolPromise;
+        const getNameResult = await pool
+        .request()
+        .input('LabourID', sql.NVarChar(50), labourId)
+        .query(`
+            SELECT name
+            FROM [dbo].[labourOnboarding]
+            WHERE LabourID = @LabourID
+        `);
+
+    const labourName = getNameResult.recordset.length > 0 ? getNameResult.recordset[0].name : null;
         const request = pool.request();
 
         const perHourWages = dailyWages ? dailyWages / 8 : 0;
@@ -4181,6 +4197,7 @@ async function markWagesForApproval(
         request.input('PayStructure', sql.NVarChar, payStructure || null);
         request.input('WagesEditedBy', sql.VarChar, wagesEditedBy || null);
         request.input('Remarks', sql.NVarChar, remarks || null);
+        request.input('name', sql.NVarChar, labourName || null);
 
         // Update the LabourMonthlyWages table
         const updateResult = await request.query(`
@@ -4199,11 +4216,11 @@ async function markWagesForApproval(
         await request.query(`
             INSERT INTO [WagesAdminApprovals] (
                 WageID, LabourID, DailyWages, MonthlyWages, FixedMonthlyWages, PerHourWages, YearlyWages, EffectiveDate,
-                WeeklyOff, PayStructure, WagesEditedBy, ApprovalStatus, Remarks, CreatedAt
+                WeeklyOff, PayStructure, WagesEditedBy, ApprovalStatus, Remarks, CreatedAt, name
             )
             VALUES (
                 @WageID, @LabourID, @DailyWages, @MonthlyWages, @FixedMonthlyWages, @PerHourWages, @YearlyWages, @EffectiveDate,
-                @WeeklyOff, @PayStructure, @WagesEditedBy, 'Pending', @Remarks, GETDATE()
+                @WeeklyOff, @PayStructure, @WagesEditedBy, 'Pending', @Remarks, GETDATE(), @name
             )
         `);
 
@@ -4883,6 +4900,58 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
 };
 
 
+const getAttendanceReportAAndLabourOnboardingJoin = async (filters = {}) => {
+    const pool = await poolPromise;
+
+    let query = `
+      WITH RankedAttendance AS (
+        SELECT 
+          *,
+          ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY LabourId DESC) AS rn
+        FROM [dbo].[LabourAttendanceSummary]
+      )
+      SELECT 
+        onboarding.LabourID,
+        onboarding.name,
+        onboarding.businessUnit,
+        onboarding.departmentName,
+        onboarding.workingHours,
+        onboarding.From_Date,
+        onboarding.projectName,
+        onboarding.department,
+        attendance.TotalDays,
+        attendance.PresentDays,
+        attendance.HalfDays,
+        attendance.AbsentDays,
+        attendance.TotalOvertimeHours,
+        attendance.Shift,
+        attendance.CreationDate,
+        attendance.SelectedMonth,
+        attendance.MissPunchDays,
+        attendance.RoundOffTotalOvertime,
+        attendance.PayrollCalRoundoffTotalOvertime
+      FROM [dbo].[labourOnboarding] AS onboarding
+      OUTER APPLY (
+        SELECT TOP 1 *
+        FROM RankedAttendance R
+        WHERE R.LabourID = onboarding.LabourID AND R.rn = 1
+      ) AS attendance
+      WHERE onboarding.status = 'Approved'
+    `;
+
+    // Append additional filters if provided.
+    if (filters.projectName) {
+        query += ` AND onboarding.projectName = '${filters.projectName}'`;
+    }
+    if (filters.department) {
+        query += ` AND onboarding.department = '${filters.department}'`;
+    }
+
+    const result = await pool.request().query(query);
+    return result.recordset;
+};
+
+
 
 async function searchFromWages(query) {
     try {
@@ -5218,6 +5287,7 @@ module.exports = {
     searchAttendance,
     searchLaboursFromSiteTransfer,
     updateTotalOvertimeHours,
-    searchFromVariableInput
+    searchFromVariableInput,
+    getAttendanceReportAAndLabourOnboardingJoin
 
 };
