@@ -825,28 +825,25 @@ async function updateRecord(req, res) {
 
 async function updateRecordWithDisable(req, res) {
     try {
-        //console.log('Request Body: check----------', req.body);
-        //console.log('Request Files:', req.files); 
-
         const {
-            LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
-            address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
-            accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, isResubmit
+            LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber,
+            gender, dateOfJoining, address, pincode, taluka, district, village, state,
+            emergencyContact, bankName, branch, accountNumber, ifscCode, projectName,
+            labourCategory, department, workingHours, contractorName, contractorNumber,
+            designation, title, Marital_Status, companyName, Induction_Date, Inducted_By,
+            OnboardName, expiryDate, departmentId, designationId, isResubmit = null
         } = req.body;
-
+console.log("req.body-->",req.body)
         let finalOnboardName = Array.isArray(OnboardName)
-            ? OnboardName.filter(name => name && name.trim() !== '').pop()
+            ? OnboardName.filter(n => n && n.trim() !== '').pop()
             : OnboardName;
 
         if (!finalOnboardName || finalOnboardName.trim() === '') {
-            console.error('OnboardName is missing or empty.');
             return res.status(400).json({ msg: 'OnboardName is required.' });
         }
         finalOnboardName = finalOnboardName.toUpperCase();
-        //console.log('Cleaned OnboardName Resubmitted button:', finalOnboardName);
-        if (!LabourID || !isResubmit) {
-            console.error('LabourID is missing from request body.');
+
+        if (!LabourID) {
             return res.status(400).json({ msg: 'LabourID is required.' });
         }
 
@@ -855,32 +852,16 @@ async function updateRecordWithDisable(req, res) {
             'UN-SKILLED': 2,
             'SEMI-SKILLED': 3
         };
-
         const safeLabourCategoryId = String(labourCategoryMap[labourCategory]) || null;
-
         if (safeLabourCategoryId === null) {
-            //console.log('Invalid labourCategory:', labourCategory);
             return res.status(400).json({ msg: 'Invalid labourCategory provided' });
         }
 
-        const safeConvertToInt = (value) => {
-            if (value === 'null' || value === '' || value === undefined) return null;
-            const parsedValue = parseInt(value, 10);
-            return isNaN(parsedValue) ? null : parsedValue;
-        };
-
         const safeDepartmentId = String(departmentId);
         const safeDesignationId = String(designationId);
-        const safeProjectName = isNaN(projectName) ? projectName : String(projectName);
+        const safeProjectName = String(projectName);
 
-        // console.log('Converted Values:', {
-        //     safeProjectName,
-        //     safeDepartmentId,
-        //     safeDesignationId,
-        //     safeLabourCategoryId
-        // });
-
-        if (safeProjectName === null || safeDepartmentId === null || safeDesignationId === null) {
+        if (!safeProjectName || !safeDepartmentId || !safeDesignationId) {
             return res.status(400).json({ msg: 'Missing required fields: projectName, departmentId, or designationId' });
         }
 
@@ -890,19 +871,13 @@ async function updateRecordWithDisable(req, res) {
             photoSrc = null,
             uploadIdProof = null,
             uploadInductionDoc = null
-        } = req.files || {};  // Use {} as fallback if req.files is undefined
+        } = req.files || {};
 
         const processFileField = (bodyField, fileField) => {
-            if (fileField) {
-                // Binary data uploaded, get URL path
-                return baseUrl + path.basename(fileField[0].path);
-            } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
-                // If no new file, use the existing URL
-                return bodyField;
-            }
-            return null; // No data available
+            if (fileField) return 'YOUR_BASE_URL/' + fileField[0].filename;
+            if (typeof bodyField === 'string' && bodyField.startsWith('http')) return bodyField;
+            return null;
         };
-
 
         const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
         const backImageUrl = processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
@@ -910,119 +885,93 @@ async function updateRecordWithDisable(req, res) {
         const IdProofImageUrl = processFileField(req.body.uploadIdProof, uploadIdProof);
         const uploadInductionDocImageUrl = processFileField(req.body.uploadInductionDoc, uploadInductionDoc);
 
-
         const dateOfJoiningDate = new Date(dateOfJoining);
         const fromDate = dateOfJoiningDate;
         const period = dateOfJoiningDate.toLocaleString('default', { month: 'long', year: 'numeric' }).replace(' ', '-');
+
         const validTillDate = new Date(dateOfJoiningDate);
         validTillDate.setFullYear(validTillDate.getFullYear() + 1);
+
         const retirementDate = new Date(dateOfBirth);
         retirementDate.setFullYear(retirementDate.getFullYear() + 60);
 
         const pool = await poolPromise2;
         const projectRequest = pool.request();
 
-        projectRequest.input('projectName', isNaN(safeProjectName) ? sql.VarChar : sql.Int, safeProjectName);
+        const isProjectId = !isNaN(safeProjectName);
+        projectRequest.input(
+            'projectName',
+            isProjectId ? sql.Int : sql.NVarChar,
+            isProjectId ? parseInt(safeProjectName) : safeProjectName
+        );
 
         let query;
-        if (!isNaN(safeProjectName)) {
+        if (isProjectId) {
             query = `
-                SELECT a.id, a.Description 
-                FROM Framework.BusinessUnit a
-                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
-                WHERE a.id = @projectName
-                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
-                AND b.Id = 3
+                SELECT Id, Description, Type, Email1, ParentId
+                FROM Framework.BusinessUnit
+                WHERE Type = 'B'
+                  AND Id = @projectName
+                  AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = 0)
+                  AND (IsDeleted IS NULL OR IsDeleted = 0)
             `;
         } else {
             query = `
-                SELECT a.id, a.Description 
-                FROM Framework.BusinessUnit a
-                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
-                WHERE a.Description = @projectName
-                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
-                AND b.Id = 3
+                SELECT Id, Description, Type, Email1, ParentId
+                FROM Framework.BusinessUnit
+                WHERE Type = 'B'
+                  AND Description = @projectName
+                  AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = 0)
+                  AND (IsDeleted IS NULL OR IsDeleted = 0)
             `;
         }
 
-        //console.log(`Querying for projectName: ${safeProjectName}`); // Debug log
-
+        console.log("Executing query...");
         const projectResult = await projectRequest.query(query);
+console.log("projectResult-->",projectResult.recordset[0])
+        // if (!projectResult.recordset || projectResult.recordset.length === 0) {
+        //     console.error("No project found for given projectName:", safeProjectName);
+        //     return res.status(400).json({ msg: 'Invalid project name or ID' });
+        // }
 
-        if (projectResult.recordset.length === 0) {
-            //console.log('Invalid project name:', safeProjectName); // Debug log
-            return res.status(400).json({ msg: 'Invalid project name-------' });
-        }
+        const projectData = projectResult.recordset[0];
+        console.log("projectData-->", projectData);
+        const location = projectData.Description;
+        const businessUnit = projectData.Description;
+        const projectId = projectData.Id;
+        const parentId = projectData.ParentId;
 
-        const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
-        const businessUnit = projectResult.recordset[0].Description;
-        //console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
+        console.log("parentId", parentId);
 
-        let salaryBu;
-        const projectId = projectResult.recordset[0].id;
-        const parentIdResult = await pool.request().query(`
-            SELECT ParentId 
-            FROM Framework.BusinessUnit 
+        const companyNameQuery = `
+            SELECT Id, Description AS Company_Name
+            FROM Framework.BusinessUnit
             WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-            AND Id = ${projectId}
-        `);
+              AND (IsDeleted = 0 OR IsDeleted IS NULL)
+              AND Id = ${parentId}
+        `;
 
-        if (parentIdResult.recordset.length === 0) {
-            return res.status(404).send('ParentId not found for the selected project');
-        }
+        const companyNameResult = await pool.request().query(companyNameQuery);
+        const companyNameFromDb = companyNameResult.recordset[0]?.Company_Name || '';
 
-        const parentId = parentIdResult.recordset[0].ParentId;
+        let salaryBu = companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED'
+            ? `${companyNameFromDb} - HO`
+            : location;
 
-        const companyNameResult = await pool.request().query(`
-            SELECT Id, Description AS Company_Name 
-            FROM Framework.BusinessUnit 
-            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-            AND Id = ${parentId}
-        `);
-
-        const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
-
-        if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
-            salaryBu = `${companyNameFromDb} - HO`;
-        } else {
-            salaryBu = location;
-        }
-
-        // Fetch department description
         const departmentRequest = pool.request();
-
-        // Validate and log departmentId before setting SQL input
-        //console.log('Setting SQL input for departmentId:', safeDepartmentId);
-        if (safeDepartmentId !== null) {
-            departmentRequest.input('departmentId', safeDepartmentId);
-            //console.log("departmentId", departmentId)
-        } else {
-            //console.log('Invalid departmentId provided:', departmentId);
-            return res.status(400).send('Invalid departmentId');
-        }
-
+        departmentRequest.input('departmentId', sql.Int, safeDepartmentId);
         const departmentQuery = `
             SELECT a.Description AS Department_Name
             FROM Payroll.Department a
             WHERE a.Id = @departmentId
         `;
         const departmentResult = await departmentRequest.query(departmentQuery);
-
         if (departmentResult.recordset.length === 0) {
-            //console.log('Department not found for departmentId:', safeDepartmentId);
             return res.status(404).send('Department not found');
         }
 
         const departmentName = departmentResult.recordset[0].Department_Name;
-
         const creationDate = new Date();
-
-
-        //console.log('Received OnboardName Resubmmit button functionlity:', finalOnboardName);
 
         const data = await labourModel.registerDataUpdateDisable({
             LabourID, labourOwnership,
@@ -1031,29 +980,34 @@ async function updateRecordWithDisable(req, res) {
             uploadIdProof: IdProofImageUrl,
             uploadInductionDoc: uploadInductionDocImageUrl,
             name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
-            Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining,
-            From_Date: fromDate.toISOString().split('T')[0], Period: period, address,
-            pincode, taluka, district, village, state, emergencyContact,
-            photoSrc: photoSrcUrl, bankName, branch, accountNumber, ifscCode, projectName,
-            labourCategory, department, workingHours, location, SalaryBu: salaryBu, businessUnit,
+            Group_Join_Date: dateOfJoining,
+            ConfirmDate: dateOfJoining,
+            From_Date: fromDate.toISOString().split('T')[0],
+            Period: period,
+            address, pincode, taluka, district, village, state, emergencyContact,
+            photoSrc: photoSrcUrl, bankName, branch, accountNumber, ifscCode,
+            projectName, labourCategory, department, workingHours,
+            location, SalaryBu: salaryBu, businessUnit,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName,
             Induction_Date, Inducted_By, OnboardName: finalOnboardName, expiryDate,
             ValidTill: validTillDate.toISOString().split('T')[0],
-            retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location,
-            CreationDate: creationDate.toISOString(), departmentId: safeDepartmentId, departmentName, designationId: safeDesignationId,
-            labourCategoryId: safeLabourCategoryId, isResubmit
+            retirementDate: retirementDate.toISOString().split('T')[0],
+            WorkingBu: location,
+            CreationDate: creationDate.toISOString(),
+            departmentId: safeDepartmentId, departmentName,
+            designationId: safeDesignationId,
+            labourCategoryId: safeLabourCategoryId,
+            isResubmit
         });
 
-
-        //console.log('dataupdate', data)
-
-        return res.status(201).json({ msg: "User created successfully", data: data });
+        return res.status(201).json({ msg: "User created successfully", data });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ msg: 'Internal server error' });
-    };
+    }
+}
 
-};
+
 
 
 // Define multer storage configuration
@@ -4448,6 +4402,19 @@ const getWagesAndLabourOnboardingJoincontroller = async (req, res) => {
     }
 };
 
+const getAttendanceReportAndLabourOnboardingJoincontroller = async (req, res) => {
+    try {
+        // Get filters from query parameters (e.g., ?ProjectID=...&DepartmentID=...)
+        const filters = req.query;
+        const joinAttendanceLabour = await labourModel.getAttendanceReportAAndLabourOnboardingJoin(filters);
+        res.status(200).json(joinAttendanceLabour);
+    } catch (error) {
+        console.error('Error fetching data:', error);
+        res.status(500).json({ message: 'Error fetching data', error });
+    }
+};
+
+
 async function searchLaboursFromWages(req, res) {
     const { q } = req.query;
 
@@ -4564,5 +4531,6 @@ module.exports = {
     exportFixedWagesExcel,
     searchLaboursFromSiteTransfer,
     searchAttendance,
-    searchLaboursFromVariableInput
+    searchLaboursFromVariableInput,
+    getAttendanceReportAndLabourOnboardingJoincontroller
 };

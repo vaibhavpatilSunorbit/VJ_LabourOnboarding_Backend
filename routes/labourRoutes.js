@@ -67,6 +67,7 @@ router.post('/wages/approvals', labourController.addWageApproval);
 router.post('/exportWagesExcel', labourController.exportWagesexcelSheet);
 router.post('/importWagesExcel', upload.single('file'), labourController.importWages);
 router.get('/getWagesAndLabourOnboardingJoin', labourController.getWagesAndLabourOnboardingJoincontroller);
+router.get('/getAttendanceReportAndLabourOnboardingJoin', labourController.getAttendanceReportAndLabourOnboardingJoincontroller);
 router.get('/searchLaboursFromWages', labourController.searchLaboursFromWages);
 router.get('/searchLaboursFromVariableInput', labourController.searchLaboursFromVariableInput);
 router.get('/searchAttendance', labourController.searchAttendance);

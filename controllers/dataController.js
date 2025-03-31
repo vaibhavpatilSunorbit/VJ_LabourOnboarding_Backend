@@ -56,7 +56,7 @@ const getProjectNames = async (req, res) => {
         Type, 
         ParentId, 
         Id AS ComapnyID 
-      FROM LabourOnboardingForm_TEST.dbo.CompanyNameByBuId
+      FROM CompanyNameByBuId
     `);
     const companyData = companyResult.recordset.map(company => ({
       ...company,
@@ -1565,7 +1565,6 @@ const siteTransferRequestforAdmin = async (req, res) => {
   try {
     // 1) Grab the `labours` array from the request body
     const { labours } = req.body;
-    console.log("req.body for transfer labour", req.body);
 
     // 2) If no labours array or empty, return an error
     if (!labours || !Array.isArray(labours) || labours.length === 0) {
