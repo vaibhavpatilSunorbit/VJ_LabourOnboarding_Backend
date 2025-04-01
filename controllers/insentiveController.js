@@ -442,7 +442,7 @@ const getVariablePayAdminApprovals = async (req, res) => {
 
 const exportVariablePayexcelSheetWithBU = async (req, res) => {
     try {
-        const { projectName, startDate } = req.query;
+        const { projectName, startDate, approvalStatus } = req.query;
         console.log('projectName, startDate ,', req.query)
         if (!startDate) {
             return res.status(400).json({ message: 'Missing required parameter: startDate' });
@@ -467,7 +467,8 @@ const exportVariablePayexcelSheetWithBU = async (req, res) => {
         const wagesData = await labourModel.getVariablePayByDateRange(
             projectName,
             startDateObj.toISOString().split('T')[0],
-            endDate
+            endDate,
+            approvalStatus
         );
 
         // Handle the case where no data is found
@@ -1187,7 +1188,7 @@ async function exportMonthlyPayrollExcel(req, res) {
 
 const exportWagesexcelSheet = async (req, res) => {
     try {
-        let { projectName, month, payStructure } = req.query;
+        let { projectName, month, payStructure, approvalStatus } = req.query;
 
         if (!month) {
             return res.status(400).json({ message: 'Missing required parameter: month' });
@@ -1207,7 +1208,7 @@ const exportWagesexcelSheet = async (req, res) => {
         //   console.log(`Fetching wages for projectName: ${projectName}, payStructure: ${payStructure}, startDate: ${startDate}, endDate: ${endDate}`);
 
         // Fetch wages data (or approved onboarding rows if no matching wages).
-        const wagesData = await labourModel.getWagesByDateRange(projectName, payStructure, startDate, endDate);
+        const wagesData = await labourModel.getWagesByDateRange(projectName, payStructure, approvalStatus , startDate, endDate);
 
         // Create the Excel workbook.
         const workbook = xlsx.utils.book_new();
@@ -1217,7 +1218,7 @@ const exportWagesexcelSheet = async (req, res) => {
         // Set the file name.
         const fileName = projectName === "all"
             ? `Approved_Labours_${month}.xlsx`
-            : `Wages_${projectName}_${month}.xlsx`;
+            : `Wages_${month}.xlsx`;
 
         // Use res.attachment to set the header only once.
         res.attachment(fileName);
