@@ -284,6 +284,7 @@ async function searchFromViewMonthlyPayrolls(query) {
 
 const getVariablePayAndLabourOnboardingJoin = async (filters = {}) => {
     const pool = await poolPromise;
+    const request = pool.request();
 
     let query = `
         SELECT 
@@ -293,7 +294,7 @@ const getVariablePayAndLabourOnboardingJoin = async (filters = {}) => {
             onboarding.businessUnit,
             onboarding.departmentName,
             onboarding.projectName AS ProjectID,
-        onboarding.department AS DepartmentID,
+            onboarding.department AS DepartmentID,
             variablepay.payAddedBy,
             variablepay.PayStructure,
             variablepay.AdvancePay,
@@ -313,22 +314,30 @@ const getVariablePayAndLabourOnboardingJoin = async (filters = {}) => {
             onboarding.LabourID = variablepay.LabourID
         WHERE 
             onboarding.status = 'Approved'
-           `;
+    `;
 
-    // Append additional filters if provided from the frontend
+    // ✅ Handle ProjectID filter as IN clause with parameters
     if (filters.ProjectID) {
-        // Note: Ensure that the value of filters.ProjectID is safe or use a parameterized query.
-        query += ` AND onboarding.projectName = ${filters.ProjectID}`;
+        const projectIds = filters.ProjectID.split(',').map((id, index) => {
+            const paramName = `projectId${index}`;
+            request.input(paramName, id);
+            return `@${paramName}`;
+        });
+        query += ` AND onboarding.projectName IN (${projectIds.join(', ')})`;
     }
+
+    // ✅ Handle DepartmentID filter
     if (filters.DepartmentID) {
-        query += ` AND onboarding.department = ${filters.DepartmentID}`;
+        request.input('DepartmentID', filters.DepartmentID);
+        query += ` AND onboarding.department = @DepartmentID`;
     }
 
-    // query += ` ORDER BY onboarding.LabourID ASC;`;
+    // Optional: Add more filters as needed
 
-    const result = await pool.request().query(query);
+    const result = await request.query(query);
     return result.recordset;
 };
+
 
 
 const checkExistingVariablePay = async (LabourID) => {
@@ -404,11 +413,11 @@ const upsertLabourVariablePay = async (variablePay) => {
     const query = `
         INSERT INTO VariablePay 
         (userId, LabourID, PayStructure, AdvancePay, DebitPay, IncentivePay, VariablepayAmount,
-         payAddedBy, name, projectName, companyName, businessUnit, departmentName, variablePayRemark, EffectiveDate, CreatedAt, ApprovalStatusPay, isApprovalSendAdmin)
+         payAddedBy, name, projectName, companyName, businessUnit, departmentName, variablePayRemark, EffectiveDate, CreatedAt, ApprovalStatusPay, isApprovalSendAdmin, incentiveRemark)
         VALUES 
         (@userId, @LabourID, @PayStructure, @AdvancePay, @DebitPay, @IncentivePay, @VariablepayAmount, 
          @payAddedBy, @name, @projectName, @companyName, @businessUnit, @departmentName, @variablePayRemark,
-         @EffectiveDate, GETDATE(), @ApprovalStatusPay, @isApprovalSendAdmin);
+         @EffectiveDate, GETDATE(), @ApprovalStatusPay, @isApprovalSendAdmin, @incentiveRemark);
     `;
 
     // Execute the query with the proper parameters
@@ -430,6 +439,7 @@ const upsertLabourVariablePay = async (variablePay) => {
         .input('EffectiveDate', sql.Date, effectiveDate)
         .input('ApprovalStatusPay', sql.NVarChar, ApprovalStatusPay)
         .input('isApprovalSendAdmin', sql.Bit, 1)
+        .input('incentiveRemark', sql.NVarChar, variablePay.incentiveRemark)
         .query(query);
 };
 
@@ -740,11 +750,11 @@ FROM [VariablePay] V order by V.CreatedAt desc;
 
 
 
-async function getVariablePayByDateRange(projectName, startDate, endDate) {
+async function getVariablePayByDateRange(projectName, startDate, endDate, approvalStatus) {
     const pool = await poolPromise;
 
     const query = `
-    WITH LatestVariablepay AS (
+   WITH LatestVariablepay AS (
         SELECT 
             onboarding.LabourID,
             onboarding.name,
@@ -760,6 +770,7 @@ async function getVariablePayByDateRange(projectName, startDate, endDate) {
             VariablePay.variablePayRemark,
             VariablePay.EffectiveDate,
             VariablePay.CreatedAt,
+            VariablePay.ApprovalStatusPay,
             ROW_NUMBER() OVER (PARTITION BY onboarding.LabourID ORDER BY VariablePay.CreatedAt DESC) AS RowNum
         FROM 
             [dbo].[labourOnboarding] AS onboarding
@@ -768,10 +779,17 @@ async function getVariablePayByDateRange(projectName, startDate, endDate) {
         ON 
             onboarding.LabourID = VariablePay.LabourID
             ${projectName !== "all" ? "AND VariablePay.ProjectName = @projectName" : ""}
+            ${startDate && endDate ? "AND VariablePay.CreatedAt BETWEEN @startDate AND @endDate" : ""}
+            ${
+                approvalStatus
+                    ? approvalStatus === 'Approved'
+                        ? "AND VariablePay.ApprovalStatusPay = 'Approved'"
+                        : "AND ISNULL(VariablePay.ApprovalStatusPay, '') <> 'Approved'"
+                    : ""
+            }
         WHERE 
             onboarding.status = 'Approved'
             ${projectName !== "all" ? "AND onboarding.projectName = @projectName" : ""}
-            ${startDate && endDate ? "AND VariablePay.CreatedAt BETWEEN @startDate AND @endDate" : ""}
     )
     SELECT 
         LabourID,
@@ -787,7 +805,8 @@ async function getVariablePayByDateRange(projectName, startDate, endDate) {
         VariablepayAmount,
         variablePayRemark,
         EffectiveDate,
-        CreatedAt
+        CreatedAt,
+        ApprovalStatusPay
     FROM LatestVariablepay
     WHERE RowNum = 1
     `;
@@ -4247,7 +4266,8 @@ async function getMonthlyPayrollData(month, year, projectName) {
         throw error;
     }
 }
-async function getWagesByDateRange(projectName, payStructure, startDate, endDate) {
+
+async function getWagesByDateRange(projectName, payStructure, approvalStatus , startDate, endDate) {
     const pool = await poolPromise;
     // console.log('projectName',projectName+"payStructure",payStructure+"startDate",startDate+'endDate',endDate)
     const query = `
@@ -4255,7 +4275,8 @@ async function getWagesByDateRange(projectName, payStructure, startDate, endDate
         @startDateParam DATE = @startDate,
         @endDateParam DATE = @endDate,
         @payStructureParam VARCHAR(50) = @payStructure,
-        @projectNameParam VARCHAR(50) = @projectName;
+        @projectNameParam VARCHAR(50) = @projectName,
+        @approvalStatusParam VARCHAR(50) = @approvalStatus;
   
       WITH LatestWages AS (
         SELECT 
@@ -4271,6 +4292,7 @@ async function getWagesByDateRange(projectName, payStructure, startDate, endDate
           wages.WeeklyOff,
           wages.FixedMonthlyWages,
           wages.EffectiveDate,
+          wages.ApprovalStatusWages,
           wages.CreatedAt,
           ROW_NUMBER() OVER (PARTITION BY onboarding.LabourID ORDER BY wages.CreatedAt DESC) AS RowNum
         FROM [dbo].[labourOnboarding] AS onboarding
@@ -4278,6 +4300,11 @@ async function getWagesByDateRange(projectName, payStructure, startDate, endDate
           ON onboarding.LabourID = wages.LabourID
              AND wages.CreatedAt BETWEEN @startDateParam AND @endDateParam
              AND (@payStructureParam IS NULL OR wages.PayStructure = @payStructureParam)
+              AND (
+           @approvalStatusParam IS NULL OR
+           (@approvalStatusParam = 'Approved' AND wages.ApprovalStatusWages = 'Approved') OR
+           (@approvalStatusParam = 'NotApproved' AND ISNULL(wages.ApprovalStatusWages, '') <> 'Approved')
+       )
         WHERE onboarding.status = 'Approved'
           AND (
                @projectNameParam = 'all'
@@ -4301,6 +4328,7 @@ async function getWagesByDateRange(projectName, payStructure, startDate, endDate
         WeeklyOff,
         FixedMonthlyWages,
         EffectiveDate,
+        ApprovalStatusWages,
         CreatedAt
       FROM LatestWages
       WHERE RowNum = 1
@@ -4311,6 +4339,7 @@ async function getWagesByDateRange(projectName, payStructure, startDate, endDate
     request.input('payStructure', sql.VarChar, payStructure || null);
     request.input('startDate', sql.Date, startDate);
     request.input('endDate', sql.Date, endDate);
+    request.input('approvalStatus', sql.VarChar, approvalStatus || null);
 
     // console.log("Executing SQL Query:", query);
     const result = await request.query(query);

@@ -4660,8 +4660,8 @@ async function insertWagesData(row) {
             throw new Error(`Invalid WeeklyOff value: ${row.WeeklyOff}`);
         }
         const weeklyOff = parseInt(row.WeeklyOff, 10);
-        if (isNaN(weeklyOff) || weeklyOff < 1 || weeklyOff > 4) {
-            throw new Error('WeeklyOff must be a number between 1 and 4 for FIXED MONTHLY WAGES');
+        if (isNaN(weeklyOff) || weeklyOff <= 0 || weeklyOff > 4) {
+            throw new Error('WeeklyOff must be a number between 0 and 4 for FIXED MONTHLY WAGES');
         }
     }
 
@@ -4710,6 +4710,19 @@ async function insertWagesData(row) {
     } else if (row.PayStructure === 'FIXED MONTHLY WAGES') {
         fixedMonthlyWages = parseFloat(row.FixedMonthlyWages) || "";
     }
+
+    const existingPending = await pool
+    .request()
+    .input('LabourID', sql.VarChar, row.LabourID)
+    .query(`
+        SELECT WageID 
+        FROM [dbo].[LabourMonthlyWages] 
+        WHERE LabourID = @LabourID AND ApprovalStatusWages = 'Pending'
+    `);
+
+if (existingPending.recordset.length > 0) {
+    throw new Error(`Wage entry with 'Pending' approval already exists for LabourID ${row.LabourID}`);
+}
 
     // Insert data into the LabourMonthlyWages table
     const request = pool.request();
@@ -4843,6 +4856,7 @@ async function insertWagesData(row) {
 
 const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
     const pool = await poolPromise;
+    const request = pool.request();
 
     let query = `
       WITH RankedWages AS (
@@ -4887,21 +4901,82 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
       WHERE onboarding.status = 'Approved'
     `;
 
-    // Append additional filters if provided.
+    // ✅ ProjectID filtering with safe IN clause
     if (filters.ProjectID) {
-        query += ` AND onboarding.projectName = '${filters.ProjectID}'`;
-    }
-    if (filters.DepartmentID) {
-        query += ` AND onboarding.department = '${filters.DepartmentID}'`;
+        const projectIds = filters.ProjectID.split(',').map((id, index) => {
+            const paramName = `projectId${index}`;
+            request.input(paramName, id);
+            return `@${paramName}`;
+        });
+        query += ` AND onboarding.projectName IN (${projectIds.join(', ')})`;
     }
 
-    const result = await pool.request().query(query);
+    // ✅ DepartmentID filtering
+    if (filters.DepartmentID) {
+        request.input('DepartmentID', filters.DepartmentID);
+        query += ` AND onboarding.department = @DepartmentID`;
+    }
+
+    const result = await request.query(query);
     return result.recordset;
 };
 
 
+
+// const getAttendanceReportAAndLabourOnboardingJoin = async (filters = {}) => {
+//     const pool = await poolPromise;
+
+//     let query = `
+//       WITH RankedAttendance AS (
+//         SELECT 
+//           *,
+//           ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY LabourId DESC) AS rn
+//         FROM [dbo].[LabourAttendanceSummary]
+//       )
+//       SELECT 
+//         onboarding.LabourID,
+//         onboarding.name,
+//         onboarding.businessUnit,
+//         onboarding.departmentName,
+//         onboarding.workingHours,
+//         onboarding.From_Date,
+//         onboarding.projectName,
+//         onboarding.department,
+//         attendance.TotalDays,
+//         attendance.PresentDays,
+//         attendance.HalfDays,
+//         attendance.AbsentDays,
+//         attendance.TotalOvertimeHours,
+//         attendance.Shift,
+//         attendance.CreationDate,
+//         attendance.SelectedMonth,
+//         attendance.MissPunchDays,
+//         attendance.RoundOffTotalOvertime,
+//         attendance.PayrollCalRoundoffTotalOvertime
+//       FROM [dbo].[labourOnboarding] AS onboarding
+//       OUTER APPLY (
+//         SELECT TOP 1 *
+//         FROM RankedAttendance R
+//         WHERE R.LabourID = onboarding.LabourID AND R.rn = 1
+//       ) AS attendance
+//       WHERE onboarding.status = 'Approved'
+//     `;
+
+//     // Append additional filters if provided.
+//     if (filters.projectName) {
+//         query += ` AND onboarding.projectName = '${filters.projectName}'`;
+//     }
+//     if (filters.department) {
+//         query += ` AND onboarding.department = '${filters.department}'`;
+//     }
+
+//     const result = await pool.request().query(query);
+//     return result.recordset;
+// };
+
 const getAttendanceReportAAndLabourOnboardingJoin = async (filters = {}) => {
     const pool = await poolPromise;
+    const request = pool.request();
 
     let query = `
       WITH RankedAttendance AS (
@@ -4939,18 +5014,29 @@ const getAttendanceReportAAndLabourOnboardingJoin = async (filters = {}) => {
       WHERE onboarding.status = 'Approved'
     `;
 
-    // Append additional filters if provided.
+    // ✅ Handle multiple projectName values using IN clause
     if (filters.projectName) {
-        query += ` AND onboarding.projectName = '${filters.projectName}'`;
-    }
-    if (filters.department) {
-        query += ` AND onboarding.department = '${filters.department}'`;
+        const projectNames = filters.projectName.split(',').map((name, index) => {
+            const param = `projectName${index}`;
+            request.input(param, name);
+            return `@${param}`;
+        });
+        query += ` AND onboarding.projectName IN (${projectNames.join(', ')})`;
     }
 
-    const result = await pool.request().query(query);
+    // ✅ Handle multiple departments (if needed)
+    if (filters.department) {
+        const departments = filters.department.split(',').map((dep, index) => {
+            const param = `department${index}`;
+            request.input(param, dep);
+            return `@${param}`;
+        });
+        query += ` AND onboarding.department IN (${departments.join(', ')})`;
+    }
+
+    const result = await request.query(query);
     return result.recordset;
 };
-
 
 
 async function searchFromWages(query) {
