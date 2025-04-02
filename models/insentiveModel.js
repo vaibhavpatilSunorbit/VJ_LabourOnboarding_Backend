@@ -2958,14 +2958,6 @@ async function calculateSalaryForLabour(labourId, month, year) {
             totalHolidayOvertimePay = holidayOvertimeWages;
         }
 
-        // ✅ Console for debugging
-        console.log("isFixedMonthly", isFixedMonthly);
-        console.log("hasAnyAttendanceIssue", hasAnyAttendanceIssue);
-        console.log("totalHolidaysInMonth", totalHolidaysInMonth);
-        console.log("totalHolidayOvertimePay", totalHolidayOvertimePay);
-
-
-
         // D) "Previous Wage" logic (optional)
         let previousWageAmount = 0;
 
@@ -3888,7 +3880,7 @@ async function generateMonthlyPayroll(month, year) {
                   @id, @name, @businessUnit, @projectName, @departmentName, @department, @aadhaarNumber, @accountNumber, @ifscCode)
               `);
 
-                    console.log(`✅ Inserted payroll for labourId: ${labour.labourId}`);
+                    // console.log(`✅ Inserted payroll for labourId: ${labour.labourId}`);
                 }
 
             } catch (error) {
@@ -3911,7 +3903,7 @@ async function generateMonthlyPayroll(month, year) {
             });
         }
 
-        console.log('🎯 Finished generating monthly payroll');
+        // console.log('🎯 Finished generating monthly payroll');
         return finalSalaries;
     } catch (error) {
         console.error('❌ Error generating monthly payroll:', error);
@@ -3942,7 +3934,7 @@ async function getExistingPayrolls(month, year) {
 async function createJsonFileForSkippedLabours(data) {
     try {
         fs.writeFileSync('SkippedLabours.json', JSON.stringify(data, null, 2), 'utf8');
-        console.log('📂 JSON file created: SkippedLabours.json\n');
+        // console.log('📂 JSON file created: SkippedLabours.json\n');
     } catch (err) {
         console.error('❌ Failed to write JSON file:', err);
     }

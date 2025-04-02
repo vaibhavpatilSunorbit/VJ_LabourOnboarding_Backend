@@ -283,7 +283,6 @@ const getVariablePayAndLabourOnboardingJoincontroller = async (req, res) => {
 const upsertLabourVariablePay = async (req, res) => {
     try {
         const payload = req.body;
-        console.log('payload}}}}==', payload)
         // Check that LabourID and Pay Structure are provided
         if (!payload.LabourID || !payload.payStructure) {
             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
@@ -291,7 +290,6 @@ const upsertLabourVariablePay = async (req, res) => {
 
         // First, check if labour wages record exists
         const existingvariablePay = await labourModel.checkExistingVariablePay(payload.LabourID);
-        console.log('existingvariablePay ++', existingvariablePay)
 
         if (existingvariablePay && existingvariablePay !== undefined && existingvariablePay !== null) {
             if (existingvariablePay.ApprovalStatusPay === "AdminPending") {
@@ -300,7 +298,6 @@ const upsertLabourVariablePay = async (req, res) => {
 
             // If an incentive is provided, perform the incentive check
             if (payload.payStructure === 'Incentive') {
-                console.log('payload.payStructure.Incentive', payload.payStructure.Incentive)
                 const wagesRecord = await labourModel.getLabourMonthlyWages(payload.LabourID);
                 if (!wagesRecord) {
                     // This ensures that if no wages record exists in the LabourMonthlyWages table, 
@@ -319,7 +316,6 @@ const upsertLabourVariablePay = async (req, res) => {
         } else {
             // If an incentive is provided, perform the incentive check
             if (payload.payStructure === 'Incentive') {
-                console.log('payload.payStructure.Incentive', payload.payStructure.Incentive)
                 const wagesRecord = await labourModel.getLabourMonthlyWages(payload.LabourID);
                 if (!wagesRecord) {
                     // This ensures that if no wages record exists in the LabourMonthlyWages table, 
@@ -443,7 +439,6 @@ const getVariablePayAdminApprovals = async (req, res) => {
 const exportVariablePayexcelSheetWithBU = async (req, res) => {
     try {
         const { projectName, startDate, approvalStatus } = req.query;
-        console.log('projectName, startDate ,', req.query)
         if (!startDate) {
             return res.status(400).json({ message: 'Missing required parameter: startDate' });
         }

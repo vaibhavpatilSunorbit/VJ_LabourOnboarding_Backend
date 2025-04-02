@@ -188,7 +188,7 @@ async function createRecord(req, res) {
         const finalOnboardName = Array.isArray(OnboardName) ? OnboardName[0] : OnboardName;
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files;
-        console.log('Received IDs:', { projectName, departmentId, designationId, labourCategoryId });
+        // console.log('Received IDs:', { projectName, departmentId, designationId, labourCategoryId });
         // Validate file fields
         if (!photoSrc || !uploadIdProof) {
             return res.status(400).json({ msg: 'All file fields are required' });
@@ -327,6 +327,17 @@ async function createRecord(req, res) {
 async function getAllRecords(req, res) {
     try {
         const records = await labourModel.getAll();
+        return res.status(200).json(records);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
+
+async function getAllRecordsLaboursOnboarding(req, res) {
+    try {
+        const records = await labourModel.getAllLaboursOnboarding();
         return res.status(200).json(records);
     } catch (error) {
         console.error(error);
@@ -2236,16 +2247,27 @@ async function getAllLaboursAttendance(req, res) {
                 let overtime = 0, dailyRoundOffOvertime = 0;
                 let firstPunchAttendanceId = null, firstPunchDeviceId = null;
                 let lastPunchAttendanceId = null, lastPunchDeviceId = null;
+                let projectIdFromDevicefirstPunch = null;
+                let projectIdFromDeviceLastPunch = null;
 
                 if (firstPunch) {
                     firstPunchAttendanceId = firstPunch.attendance_id;
                     firstPunchDeviceId = firstPunch.Device_id;
+                    if (firstPunchDeviceId) {
+                        projectIdFromDevicefirstPunch = await labourModel.getProjectIdByDeviceId(firstPunchDeviceId);
+                    }
                 }
 
                 if (lastPunch) {
                     lastPunchAttendanceId = lastPunch.attendance_id;
                     lastPunchDeviceId = lastPunch.Device_id;
+                    if (lastPunchDeviceId) {
+                        projectIdFromDeviceLastPunch = await labourModel.getProjectIdByDeviceId(lastPunchDeviceId);
+                    }
                 }
+
+            //    let projectIdFromDevicefirstPunch = projectIdFromDevicefirstPunchIn || null;
+            //    let projectIdFromDeviceLastPunch = projectIdFromDeviceLastPunchIn || null;
 
                 // ✅ **Overtime Calculation**
                 if (status === 'P') {
@@ -2294,6 +2316,8 @@ async function getAllLaboursAttendance(req, res) {
                     OvertimeManually: OvertimeManually.toFixed(2),
                     status,
                     creationDate: new Date(),
+                    projectIdFromDevicefirstPunch ,
+                    projectIdFromDeviceLastPunch ,
                 });
             }
 
@@ -2318,16 +2342,37 @@ async function getAllLaboursAttendance(req, res) {
             // ✅ **Insert Summary & Attendance**
             await labourModel.insertIntoLabourAttendanceSummary(summary);
             for (let dayAttendance of monthlyAttendance) {
+                // console.log(`Inserting Attendance for ${labourId} on ${dayAttendance.date}:`, dayAttendance);
                 await labourModel.insertIntoLabourAttendanceDetails(dayAttendance);
             }
         }
-
         res.status(200).json({ message: 'Attendance processed successfully' });
     } catch (err) {
         console.error('Error processing attendance:', err);
         res.status(500).json({ message: 'Error processing attendance' });
     }
-}
+};
+
+// ---------------------------------------------------------------------------------------------------------------------------------  START   ----------------------------------------------
+// const req = {query: {month: '3', year: '2025'}};
+//   const res = {
+//     status: function (code) {
+//       return {
+//         json: function (obj) {
+//           console.log(`Status ${code}:`, obj);
+//         }
+//       };
+//     }
+//   };
+//   // Run it
+//   (async () => {
+//     try {
+//       await getAllLaboursAttendance(req, res);
+//     } catch (err) {
+//       console.error('Manual run failed:', err);
+//     }
+//   })();
+// -----------------------------------------------------------------------------------------------------------------------------   END ---------------------------------
 
 // async function getAllLaboursAttendance(req, res) {
 //     try {
@@ -3684,7 +3729,7 @@ async function upsertAttendance(req, res) {
         AttendanceStatus,
         markWeeklyOff,
     } = req.body;
-
+console.log("req.body for update attendance",req.body)
     // Validate input
     if (!labourId || !date) {
         return res.status(400).json({
@@ -3730,6 +3775,23 @@ async function upsertAttendance(req, res) {
             : onboardName;
 
         const timesUpdated = await labourModel.getTimesUpdateForMonth(labourId, date);
+
+        if (markWeeklyOff === true) {
+            await labourModel.upsertAttendance({
+                labourId,
+                date,
+                firstPunchManually,
+                lastPunchManually,
+                overtimeManually,
+                remarkManually,
+                workingHours,
+                onboardName: finalOnboardName,
+                editUserName: finalOnboardName,
+                markWeeklyOff,
+            });
+
+            return res.status(200).json({ message: 'Attendance updated successfully.' });
+        }
 
         if (AttendanceStatus !== "MP") {
             await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff);
@@ -4170,7 +4232,7 @@ const handleApproval = async (req, res) => {
 
 async function approveWagesControllerAdmin(req, res) {
     const { ApprovalID } = req.query;
-    console.log('id___approveWagesControllerAdmin', ApprovalID)
+    // console.log('id___approveWagesControllerAdmin', ApprovalID)
     if (!ApprovalID) {
         return res.status(400).json({ message: 'WageID is required.' });
     }
@@ -4473,6 +4535,7 @@ module.exports = {
     getRecordById,
     updateRecord,
     deleteRecord,
+    getAllRecordsLaboursOnboarding,
     searchLabours,
     getAllLabours,
     approveLabour,
