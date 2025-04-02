@@ -8,6 +8,7 @@ router.post('/check-aadhaar', labourController.handleCheckAadhaar);
 router.get('/next-id', labourController.getNextUniqueID);
 router.post('/', labourController.createRecord);
 router.get('/', labourController.getAllRecords);
+router.get('/getAllRecordsLaboursOnboarding', labourController.getAllRecordsLaboursOnboarding);
 router.get('/', labourController.getAllLabours);
 router.get('/approved', labourController.getApprovedLabours);
 router.get('/search', labourController.searchLabours);

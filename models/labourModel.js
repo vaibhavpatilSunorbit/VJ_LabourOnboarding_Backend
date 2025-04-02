@@ -756,7 +756,35 @@ async function registerDataUpdateDisable(labourData) {
 async function getAll() {
     try {
         const pool = await poolPromise;
-        const result = await pool.request().query('SELECT * FROM labourOnboarding ORDER BY LabourID');
+        const result = await pool.request().query('SELECT * FROM labourOnboarding ORDER BY LabourID DESC');
+        return result.recordset;
+    } catch (error) {
+        throw error;
+    }
+}
+
+async function getAllLaboursOnboarding() {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query(`SELECT [id],
+       [projectName],
+       [department],
+       [name],
+       [workingHours],
+       [status],
+       [IsApproved],
+       [LabourID],
+       [companyName],
+       [WorkingBu],
+       [businessUnit],
+       [departmentId],
+       [designationId],
+       [departmentName]
+FROM [labourOnboarding]
+WHERE status IN ('Approved', 'Disable')
+ AND LabourID != 'VJ3893'
+ORDER BY LabourID ASC;
+`);
         return result.recordset;
     } catch (error) {
         throw error;
@@ -1366,39 +1394,75 @@ async function getFormDataByAadhaar(aadhaarNumber) {
 // }
 
 
-
-
 async function getLabourStatuses(labourIds) {
     try {
-        // Convert labourIds to a comma-separated string for SQL query
         const labourIdsString = labourIds.map(id => `'${id}'`).join(',');
 
         const pool = await poolPromise;
-        const result = await pool.request()
-            .query(`
-           SELECT 
-                    COALESCE(e.userId, r.userId) AS userId,
-                    CAST(COALESCE(e.LabourID, r.LabourID) AS VARCHAR(50)) AS LabourID,
-                    COALESCE(e.name, r.name) AS name,
-                    ISNULL(e.esslStatus, '-') AS esslStatus,
-                    CASE 
-                        WHEN r.employeeMasterStatus = 'true' OR r.employeeMasterStatus = 1 THEN 'true'
-                        ELSE '-'
-                    END AS employeeMasterStatus
-                FROM [dbo].[API_EsslPayloads] e
-                FULL OUTER JOIN [dbo].[API_ResponsePayloads] r
+        const result = await pool.request().query(`
+            SELECT 
+                COALESCE(e.userId, r.userId) AS userId,
+                CAST(COALESCE(e.LabourID, r.LabourID) AS VARCHAR(50)) AS LabourID,
+                COALESCE(e.name, r.name) AS name,
+                ISNULL(e.esslStatus, '-') AS esslStatus,
+                CASE 
+                    WHEN r.employeeMasterStatus = 'true' OR r.employeeMasterStatus = 1 THEN 'true'
+                    ELSE '-'
+                END AS employeeMasterStatus,
+                logs.CreatedAt AS disabledAttendanceCreatedAt
+            FROM [dbo].[API_EsslPayloads] e
+            FULL OUTER JOIN [dbo].[API_ResponsePayloads] r
                 ON CAST(e.LabourID AS VARCHAR(50)) = CAST(r.LabourID AS VARCHAR(50))
-                WHERE e.LabourID IS NOT NULL OR r.LabourID IS NOT NULL
-                AND COALESCE(e.LabourID, r.LabourID) IN (${labourIdsString});
+            LEFT JOIN (
+                SELECT LabourID, MIN(CreatedAt) AS CreatedAt
+                FROM [dbo].[LabourAttendanceLogs]
+                WHERE attendanceStatus = 'Disable'
+                GROUP BY LabourID
+            ) logs
+                ON logs.LabourID = COALESCE(e.LabourID, r.LabourID)
+            WHERE (e.LabourID IS NOT NULL OR r.LabourID IS NOT NULL)
+            AND COALESCE(e.LabourID, r.LabourID) IN (${labourIdsString});
         `);
-
 
         return result.recordset;
     } catch (error) {
         console.error("Error in getLabourStatuses:", error.message, error.stack);
         throw new Error('Error fetching labour statuses');
     }
-};
+}
+
+
+// async function getLabourStatuses(labourIds) {
+//     try {
+//         // Convert labourIds to a comma-separated string for SQL query
+//         const labourIdsString = labourIds.map(id => `'${id}'`).join(',');
+
+//         const pool = await poolPromise;
+//         const result = await pool.request()
+//             .query(`
+//            SELECT 
+//                     COALESCE(e.userId, r.userId) AS userId,
+//                     CAST(COALESCE(e.LabourID, r.LabourID) AS VARCHAR(50)) AS LabourID,
+//                     COALESCE(e.name, r.name) AS name,
+//                     ISNULL(e.esslStatus, '-') AS esslStatus,
+//                     CASE 
+//                         WHEN r.employeeMasterStatus = 'true' OR r.employeeMasterStatus = 1 THEN 'true'
+//                         ELSE '-'
+//                     END AS employeeMasterStatus
+//                 FROM [dbo].[API_EsslPayloads] e
+//                 FULL OUTER JOIN [dbo].[API_ResponsePayloads] r
+//                 ON CAST(e.LabourID AS VARCHAR(50)) = CAST(r.LabourID AS VARCHAR(50))
+//                 WHERE e.LabourID IS NOT NULL OR r.LabourID IS NOT NULL
+//                 AND COALESCE(e.LabourID, r.LabourID) IN (${labourIdsString});
+//         `);
+
+
+//         return result.recordset;
+//     } catch (error) {
+//         console.error("Error in getLabourStatuses:", error.message, error.stack);
+//         throw new Error('Error fetching labour statuses');
+//     }
+// };
 
 
 
@@ -1630,6 +1694,25 @@ async function isHoliday(date) {
         throw new Error('Error checking if date is a holiday');
     }
 }
+
+// Fetch ProjectID by DeviceID from ProjectDeviceStatus table
+async function getProjectIdByDeviceId(deviceId) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('deviceId', sql.NVarChar, deviceId)
+            .query(`
+                SELECT TOP 1 ProjectID 
+                FROM [dbo].[ProjectDeviceStatus] 
+                WHERE DeviceID = @deviceId
+            `);
+        return result.recordset[0]?.ProjectID || null;
+    } catch (err) {
+        console.error('SQL error fetching ProjectID by DeviceID', err);
+        throw new Error('Error fetching ProjectID by DeviceID');
+    }
+}
+
 
 // Check if weekly off exists
 async function getWeeklyOff(LabourID, offDate) {
@@ -1868,7 +1951,7 @@ async function insertIntoLabourAttendanceDetails(details) {
                     [TotalHours], [Overtime], [PayrollCalRoundOffOvertime], [Status],
                     [CreationDate], [projectName],
                     [FirstPunchManually], [LastPunchManually],
-                    [OvertimeManually], [RemarkManually]
+                    [OvertimeManually], [RemarkManually], [projectIdFromDevicefirstPunch], [projectIdFromDeviceLastPunch] 
                 )
                 VALUES (
                     @LabourId, @Date,
@@ -1877,7 +1960,7 @@ async function insertIntoLabourAttendanceDetails(details) {
                     @TotalHours, @Overtime, @PayrollCalRoundOffOvertime, @Status,
                     @CreationDate, @projectName,
                     @FirstPunchManually, @LastPunchManually,
-                    @OvertimeManually, @RemarkManually
+                    @OvertimeManually, @RemarkManually, @projectIdFromDevicefirstPunch, @projectIdFromDeviceLastPunch 
                 )
             END
         `;
@@ -1902,6 +1985,8 @@ async function insertIntoLabourAttendanceDetails(details) {
             .input('LastPunchManually', sql.NVarChar, details.lastPunch)
             .input('OvertimeManually', sql.Float, parseFloat(details.OvertimeManually) || 0)
             .input('RemarkManually', sql.NVarChar, details.remarkManually || null)
+            .input('projectIdFromDevicefirstPunch', sql.Int, parseInt(details.projectIdFromDevicefirstPunch) || 0)
+            .input('projectIdFromDeviceLastPunch', sql.Int, parseInt(details.projectIdFromDeviceLastPunch) || 0)
             .query(query);
 
     } catch (err) {
@@ -2252,7 +2337,7 @@ WHERE
         console.error('Error fetching attendance details for all labours:', error);
         throw error;
     }
-}
+};
 
 
 async function fetchAttendanceDetailsByMonthYearForSingleLabour(labourId, month, year) {
@@ -4237,7 +4322,7 @@ async function markWagesForApproval(
 async function approveWages(ApprovalID) {
     try {
         const pool = await poolPromise;
-        console.log('approvalWages ID in model.js:', ApprovalID);
+        // console.log('approvalWages ID in model.js:', ApprovalID);
 
         // Fetch the approval record
         const approvalResult = await pool.request()
@@ -4252,7 +4337,7 @@ async function approveWages(ApprovalID) {
         }
 
         const approvalData = approvalResult.recordset[0];
-        console.log('approvalData:', approvalData);
+        // console.log('approvalData:', approvalData);
 
         // Approve in LabourMonthlyWages
         await pool.request()
@@ -4287,7 +4372,7 @@ async function approveWages(ApprovalID) {
                 WHERE ApprovalID = @ApprovalID
             `);
 
-        console.log('Wages approved successfully.');
+        // console.log('Wages approved successfully.');
         return { success: true, message: 'Wages approved successfully.' };
     } catch (error) {
         console.error('Error approving wages:', error);
@@ -5293,6 +5378,7 @@ module.exports = {
     registerData,
     getAll,
     getById,
+    getAllLaboursOnboarding,
     // update,
     deleteById,
     getImagePathsById,
@@ -5354,7 +5440,7 @@ module.exports = {
     rejectAttendance,
     rejectAttendanceAdmin,
     showAttendanceCalenderSingleLabour,
-
+    getProjectIdByDeviceId,
     // approveAttendance
     getLabourMonthlyWages,
     upsertLabourMonthlyWages,
