@@ -4259,88 +4259,151 @@ async function getMonthlyPayrollData(month, year, projectName) {
     }
 }
 
-async function getWagesByDateRange(projectName, payStructure, approvalStatus , startDate, endDate) {
-    const pool = await poolPromise;
-    // console.log('projectName',projectName+"payStructure",payStructure+"startDate",startDate+'endDate',endDate)
-    const query = `
-      DECLARE 
-        @startDateParam DATE = @startDate,
-        @endDateParam DATE = @endDate,
-        @payStructureParam VARCHAR(50) = @payStructure,
-        @projectNameParam VARCHAR(50) = @projectName,
-        @approvalStatusParam VARCHAR(50) = @approvalStatus;
+// async function getWagesByDateRange(projectName, payStructure, approvalStatus , startDate, endDate) {
+//     const pool = await poolPromise;
+//     console.log('projectName',projectName+"payStructure",payStructure+"startDate",startDate+'endDate',endDate)
+//     const query = `
+//       DECLARE 
+//         @startDateParam DATE = @startDate,
+//         @endDateParam DATE = @endDate,
+//         @payStructureParam VARCHAR(50) = @payStructure,
+//         @projectNameParam VARCHAR(50) = @projectName,
+//         @approvalStatusParam VARCHAR(50) = @approvalStatus;
   
-      WITH LatestWages AS (
+//       WITH LatestWages AS (
+//         SELECT 
+//           onboarding.LabourID,
+//           onboarding.name,
+//           onboarding.projectName,
+//           onboarding.companyName,
+//           onboarding.From_Date,
+//           onboarding.businessUnit,
+//           onboarding.departmentName,
+//           wages.PayStructure,
+//           wages.DailyWages,
+//           wages.WeeklyOff,
+//           wages.FixedMonthlyWages,
+//           wages.EffectiveDate,
+//           wages.ApprovalStatusWages,
+//           wages.CreatedAt,
+//           ROW_NUMBER() OVER (PARTITION BY onboarding.LabourID ORDER BY wages.CreatedAt DESC) AS RowNum
+//         FROM [dbo].[labourOnboarding] AS onboarding
+//         LEFT JOIN [dbo].[LabourMonthlyWages] AS wages
+//           ON onboarding.LabourID = wages.LabourID
+//              AND wages.CreatedAt BETWEEN @startDateParam AND @endDateParam
+//              AND (@payStructureParam IS NULL OR wages.PayStructure = @payStructureParam)
+//               AND (
+//            @approvalStatusParam IS NULL OR
+//            (@approvalStatusParam = 'Approved' AND wages.ApprovalStatusWages = 'Approved') OR
+//            (@approvalStatusParam = 'NotApproved' AND ISNULL(wages.ApprovalStatusWages, '') <> 'Approved')
+//        )
+//         WHERE onboarding.status = 'Approved'
+//           AND (
+//                @projectNameParam = 'all'
+//                OR EXISTS (
+//                     SELECT 1
+//                     FROM STRING_SPLIT(@projectNameParam, ',') s
+//                     WHERE s.value = CAST(onboarding.projectName AS VARCHAR(50))
+//                )
+//           )
+//       )
+//       SELECT 
+//         LabourID,
+//         name,
+//         projectName,
+//         companyName,
+//         From_Date,
+//         businessUnit,
+//         departmentName,
+//         PayStructure,
+//         DailyWages,
+//         WeeklyOff,
+//         FixedMonthlyWages,
+//         EffectiveDate,
+//         ApprovalStatusWages,
+//         CreatedAt
+//       FROM LatestWages
+//       WHERE RowNum = 1
+//     `;
+
+//     const request = pool.request();
+//     request.input('projectName', sql.VarChar, projectName);
+//     request.input('payStructure', sql.VarChar, payStructure || null);
+//     request.input('startDate', sql.Date, startDate);
+//     request.input('endDate', sql.Date, endDate);
+//     request.input('approvalStatus', sql.VarChar, approvalStatus || null);
+
+//     // console.log("Executing SQL Query:", query);
+//     const result = await request.query(query);
+//     return result.recordset;
+// }
+
+
+async function getWagesByDateRange(projectName, payStructure, approvalStatus, startDate, endDate) {
+    const pool = await poolPromise;
+  
+    console.log('projectName:', projectName, '| payStructure:', payStructure, '| startDate:', startDate, '| endDate:', endDate);
+  
+    const query = `
+      WITH RankedWages AS (
         SELECT 
-          onboarding.LabourID,
-          onboarding.name,
-          onboarding.projectName,
-          onboarding.companyName,
-          onboarding.From_Date,
-          onboarding.businessUnit,
-          onboarding.departmentName,
-          wages.PayStructure,
-          wages.DailyWages,
-          wages.WeeklyOff,
-          wages.FixedMonthlyWages,
-          wages.EffectiveDate,
-          wages.ApprovalStatusWages,
-          wages.CreatedAt,
-          ROW_NUMBER() OVER (PARTITION BY onboarding.LabourID ORDER BY wages.CreatedAt DESC) AS RowNum
-        FROM [dbo].[labourOnboarding] AS onboarding
-        LEFT JOIN [dbo].[LabourMonthlyWages] AS wages
-          ON onboarding.LabourID = wages.LabourID
-             AND wages.CreatedAt BETWEEN @startDateParam AND @endDateParam
-             AND (@payStructureParam IS NULL OR wages.PayStructure = @payStructureParam)
-              AND (
-           @approvalStatusParam IS NULL OR
-           (@approvalStatusParam = 'Approved' AND wages.ApprovalStatusWages = 'Approved') OR
-           (@approvalStatusParam = 'NotApproved' AND ISNULL(wages.ApprovalStatusWages, '') <> 'Approved')
-       )
-        WHERE onboarding.status = 'Approved'
-          AND (
-               @projectNameParam = 'all'
-               OR EXISTS (
-                    SELECT 1
-                    FROM STRING_SPLIT(@projectNameParam, ',') s
-                    WHERE s.value = CAST(onboarding.projectName AS VARCHAR(50))
-               )
-          )
+          *,
+          ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY EffectiveDate DESC) AS RowNum
+        FROM [dbo].[LabourMonthlyWages]
       )
       SELECT 
-        LabourID,
-        name,
-        projectName,
-        companyName,
-        From_Date,
-        businessUnit,
-        departmentName,
-        PayStructure,
-        DailyWages,
-        WeeklyOff,
-        FixedMonthlyWages,
-        EffectiveDate,
-        ApprovalStatusWages,
-        CreatedAt
-      FROM LatestWages
-      WHERE RowNum = 1
+        onboarding.LabourID,
+        onboarding.name,
+        onboarding.projectName,
+        onboarding.companyName,
+        onboarding.From_Date,
+        onboarding.businessUnit,
+        onboarding.departmentName,
+        wages.PayStructure,
+        wages.DailyWages,
+        wages.WeeklyOff,
+        wages.FixedMonthlyWages,
+        wages.EffectiveDate,
+        wages.ApprovalStatusWages,
+        wages.EffectiveDate
+      FROM [dbo].[labourOnboarding] AS onboarding
+      LEFT JOIN RankedWages AS wages
+        ON onboarding.LabourID = wages.LabourID
+        AND wages.RowNum = 1
+      WHERE onboarding.status = 'Approved'
+        AND (
+          @projectName = 'all'
+          OR EXISTS (
+            SELECT 1
+            FROM STRING_SPLIT(@projectName, ',') s
+            WHERE s.value = CAST(onboarding.projectName AS VARCHAR(50))
+          )
+        )
+        AND (
+          @payStructure IS NULL OR wages.PayStructure = @payStructure
+        )
+        AND (
+          @approvalStatus IS NULL OR
+          (@approvalStatus = 'Approved' AND wages.ApprovalStatusWages = 'Approved') OR
+          (@approvalStatus = 'NotApproved' AND ISNULL(wages.ApprovalStatusWages, '') <> 'Approved')
+        )
+        AND (
+          wages.EffectiveDate IS NULL OR 
+          wages.EffectiveDate BETWEEN @startDate AND @endDate
+        )
     `;
-
+  
     const request = pool.request();
-    request.input('projectName', sql.VarChar, projectName);
+    request.input('projectName', sql.VarChar, projectName || 'all');
     request.input('payStructure', sql.VarChar, payStructure || null);
+    request.input('approvalStatus', sql.VarChar, approvalStatus || null);
     request.input('startDate', sql.Date, startDate);
     request.input('endDate', sql.Date, endDate);
-    request.input('approvalStatus', sql.VarChar, approvalStatus || null);
-
-    // console.log("Executing SQL Query:", query);
+  
     const result = await request.query(query);
     return result.recordset;
-}
-
-
-
-
+  }
+  
 
 
 

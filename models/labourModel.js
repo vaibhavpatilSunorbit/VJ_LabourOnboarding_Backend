@@ -4880,68 +4880,14 @@ if (existingPending.recordset.length > 0) {
 
 
 
-//   const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
-//     const pool = await poolPromise;
-
-//     // Build the query using a CTE and OUTER APPLY
-//     // The CTE "RankedWages" ranks all wage records by CreatedAt descending for each LabourID.
-//     // The OUTER APPLY selects the TOP 1 wage record where ApprovalStatusWages = 'Approved'
-//     // ordered so that if the latest record (rn = 1) is approved it comes first.
-//     let query = `
-//       WITH RankedWages AS (
-//         SELECT 
-//           *,
-//           ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY CreatedAt DESC) AS rn
-//         FROM [dbo].[LabourMonthlyWages]
-//       )
-//       SELECT 
-//         onboarding.LabourID,
-//         onboarding.name,
-//         onboarding.businessUnit,
-//         onboarding.departmentName,
-//         onboarding.workingHours,
-//         onboarding.From_Date,
-//         onboarding.projectName AS ProjectID,
-//         onboarding.department AS DepartmentID,
-//         wages.WagesEditedBy,
-//         wages.PayStructure,
-//         wages.DailyWages,
-//         wages.PerHourWages,
-//         wages.MonthlyWages,
-//         wages.YearlyWages,
-//         wages.WeeklyOff,
-//         wages.CreatedAt,
-//         wages.FixedMonthlyWages,
-//         wages.EffectiveDate
-//       FROM [dbo].[labourOnboarding] AS onboarding
-//       OUTER APPLY (
-//         SELECT TOP 1 *
-//         FROM RankedWages R
-//         WHERE R.LabourID = onboarding.LabourID
-//           AND R.ApprovalStatusWages = 'Approved'
-//         ORDER BY 
-//           CASE WHEN R.rn = 1 THEN 0 ELSE 1 END,
-//           R.CreatedAt DESC
-//       ) AS wages
-//       WHERE onboarding.status = 'Approved'
-//     `;
-
-//     // Append additional filters if provided.
-//     if (filters.ProjectID) {
-//       query += ` AND onboarding.projectName = ${filters.ProjectID}`;
-//     }
-//     if (filters.DepartmentID) {
-//       query += ` AND onboarding.department = ${filters.DepartmentID}`;
-//     }
-
-//     const result = await pool.request().query(query);
-//     // console.log('result wages', result);
-//     return result.recordset;
-//   };
-
 const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
     const pool = await poolPromise;
     const request = pool.request();
+
+    // Build OUTER APPLY filter for PayStructure if it exists
+    const payStructureFilter = filters.PayStructure 
+        ? 'AND R.PayStructure = @PayStructure' 
+        : '';
 
     let query = `
       WITH RankedWages AS (
@@ -4975,6 +4921,7 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
         SELECT TOP 1 *
         FROM RankedWages R
         WHERE R.LabourID = onboarding.LabourID
+        ${payStructureFilter}
         ORDER BY 
           CASE 
             WHEN R.ApprovalStatusWages = 'Approved' THEN 1 
@@ -4986,25 +4933,101 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
       WHERE onboarding.status = 'Approved'
     `;
 
-    // ✅ ProjectID filtering with safe IN clause
+    // Apply optional ProjectID filter
     if (filters.ProjectID) {
         const projectIds = filters.ProjectID.split(',').map((id, index) => {
-            const paramName = `projectId${index}`;
-            request.input(paramName, id);
-            return `@${paramName}`;
+            const param = `projectId${index}`;
+            request.input(param, id.trim());
+            return `@${param}`;
         });
         query += ` AND onboarding.projectName IN (${projectIds.join(', ')})`;
     }
 
-    // ✅ DepartmentID filtering
+    // Apply optional DepartmentID filter
     if (filters.DepartmentID) {
         request.input('DepartmentID', filters.DepartmentID);
         query += ` AND onboarding.department = @DepartmentID`;
     }
 
+    // Apply PayStructure only if passed
+    if (filters.PayStructure) {
+        request.input('PayStructure', filters.PayStructure);
+        // Force filter to return only rows where PayStructure matched by ensuring wages exists
+        query += ` AND wages.PayStructure = @PayStructure`;
+    }
+
     const result = await request.query(query);
     return result.recordset;
 };
+
+
+
+// const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
+//     const pool = await poolPromise;
+//     const request = pool.request();
+
+//     let query = `
+//       WITH RankedWages AS (
+//         SELECT 
+//           *,
+//           ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY CreatedAt DESC) AS rn
+//         FROM [dbo].[LabourMonthlyWages]
+//       )
+//       SELECT 
+//         onboarding.LabourID,
+//         onboarding.name,
+//         onboarding.businessUnit,
+//         onboarding.departmentName,
+//         onboarding.workingHours,
+//         onboarding.From_Date,
+//         onboarding.projectName AS ProjectID,
+//         onboarding.department AS DepartmentID,
+//         wages.WagesEditedBy,
+//         wages.PayStructure,
+//         wages.DailyWages,
+//         wages.PerHourWages,
+//         wages.MonthlyWages,
+//         wages.YearlyWages,
+//         wages.WeeklyOff,
+//         wages.CreatedAt,
+//         wages.FixedMonthlyWages,
+//         wages.EffectiveDate,
+//         wages.ApprovalStatusWages
+//       FROM [dbo].[labourOnboarding] AS onboarding
+//       OUTER APPLY (
+//         SELECT TOP 1 *
+//         FROM RankedWages R
+//         WHERE R.LabourID = onboarding.LabourID
+//         ORDER BY 
+//           CASE 
+//             WHEN R.ApprovalStatusWages = 'Approved' THEN 1 
+//             WHEN R.ApprovalStatusWages = 'Pending' THEN 2
+//             ELSE 3 
+//           END,
+//           R.CreatedAt DESC
+//       ) AS wages
+//       WHERE onboarding.status = 'Approved'
+//     `;
+
+//     // ✅ ProjectID filtering with safe IN clause
+//     if (filters.ProjectID) {
+//         const projectIds = filters.ProjectID.split(',').map((id, index) => {
+//             const paramName = `projectId${index}`;
+//             request.input(paramName, id);
+//             return `@${paramName}`;
+//         });
+//         query += ` AND onboarding.projectName IN (${projectIds.join(', ')})`;
+//     }
+
+//     // ✅ DepartmentID filtering
+//     if (filters.DepartmentID) {
+//         request.input('DepartmentID', filters.DepartmentID);
+//         query += ` AND onboarding.department = @DepartmentID`;
+//     }
+
+//     const result = await request.query(query);
+//     return result.recordset;
+// };
 
 
 
