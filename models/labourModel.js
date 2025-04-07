@@ -54,26 +54,29 @@ async function getNextUniqueID(departmentId) {
 
         let prefix = 'JC';
         let initialID = 'JC4008';
-        let exclusions = `'JCO519', 'VJ3893'`;
+        const exclusions = `'JCO519', 'VJ3893'`;
 
         if (departmentId === 334) {
             prefix = 'JIH';
-            initialID = 'JIH0001';  
+            initialID = 'JIH0001';
         }
 
-        const lastIDQuery = `
-            SELECT MAX(LabourID) AS lastID 
-            FROM labourOnboarding 
-            WHERE LabourID NOT IN (${exclusions}) AND departmentId = ${departmentId}
-        `;
+        let lastIDQuery = '';
 
-        // let lastIDResult = await pool.request().query(lastIDQuery);
-        // let nextID = initialID;
-        // if (lastIDResult.recordset[0].lastID) {
-        //     const lastID = lastIDResult.recordset[0].lastID;
-        //     const numericPart = parseInt(lastID.slice(prefix.length)) + 1;
-        //     nextID = `${prefix}${numericPart.toString().padStart(4, '0')}`;
-        // }
+        if (departmentId === 334) {
+            lastIDQuery = `
+                SELECT MAX(LabourID) AS lastID 
+                FROM labourOnboarding 
+                WHERE LabourID NOT IN (${exclusions}) 
+                AND departmentId = ${departmentId}
+            `;
+        } else {
+            lastIDQuery = `
+                SELECT MAX(LabourID) AS lastID 
+                FROM labourOnboarding 
+                WHERE LabourID NOT IN (${exclusions})
+            `;
+        }
 
         const result = await pool.request().query(lastIDQuery);
         const lastID = result.recordset[0].lastID;
@@ -87,9 +90,10 @@ async function getNextUniqueID(departmentId) {
 
         return nextID;
     } catch (error) {
-        throw new Error('Error fetching next unique ID');
+        throw new Error(`Error fetching next unique ID: ${error.message}`);
     }
 }
+
 
 
 
