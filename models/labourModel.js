@@ -68,13 +68,13 @@ async function getNextUniqueID(departmentId) {
                 SELECT MAX(LabourID) AS lastID 
                 FROM labourOnboarding 
                 WHERE LabourID NOT IN (${exclusions}) 
-                AND departmentId = ${departmentId}
+                AND departmentId = ${departmentId} and LabourID like '%JIH%'
             `;
         } else {
             lastIDQuery = `
                 SELECT MAX(LabourID) AS lastID 
                 FROM labourOnboarding 
-                WHERE LabourID NOT IN (${exclusions})
+                WHERE LabourID NOT IN (${exclusions}) and LabourID like '%JC%'
             `;
         }
 
