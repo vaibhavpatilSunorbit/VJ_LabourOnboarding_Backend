@@ -1617,6 +1617,54 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 // ------------------------------------------------------------------------  LABOUR PHASE 2 -------------------------------------------
 // ------------------------------------------------------------------------  ATTENDANCE MODUL -------------------------------------------
 
+// Fetch Approved Labour IDs with Working Hours
+async function getAllApprovedLabours() {
+    try {
+        //console.log('Attempting to connect to the database...');
+        const pool = await poolPromise;
+        const result = await pool
+            .request()
+            .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [labourOnboarding] WHERE status = 'Approved'`);
+        //console.log('Fetched approved labours:', result.recordset);
+        return result.recordset; // Returns an array of approved labour IDs and working hours
+    } catch (err) {
+        console.error('SQL error fetching approved labour IDs', err);
+        throw new Error('Error fetching approved labour IDs');
+    }
+}
+
+async function getAllApprovedOrMonthlyDisabledLabours(month, year) {
+    try {
+        const pool = await poolPromise;
+
+        const result = await pool
+            .request()
+            .input('month', month)
+            .input('year', year)
+            .query(`
+                SELECT DISTINCT lo.LabourID AS labourId, lo.workingHours, lo.projectName, lo.status
+                FROM [labourOnboarding] lo
+                WHERE lo.status = 'Approved'
+
+                UNION
+
+                SELECT DISTINCT lo.LabourID AS labourId, lo.workingHours, lo.projectName, lo.status
+                FROM [labourOnboarding] lo
+                JOIN [LabourAttendanceLogs] lal
+                    ON lal.LabourID = lo.LabourID
+                WHERE lal.attendanceStatus = 'Disable'
+                    AND MONTH(lal.CreatedAt) = @month
+                    AND YEAR(lal.CreatedAt) = @year
+            `);
+
+        return result.recordset;
+    } catch (err) {
+        console.error('SQL error fetching labours', err);
+        throw new Error('Error fetching approved or monthly disabled labours');
+    }
+}
+
+
 async function getAttendanceByLabourId(labourId, month, year) {
     try {
         //console.log('Fetching attendance from DB for:', { labourId, month, year });
@@ -1641,21 +1689,7 @@ async function getAttendanceByLabourId(labourId, month, year) {
     }
 };
 
-// Fetch Approved Labour IDs with Working Hours
-async function getAllApprovedLabours() {
-    try {
-        //console.log('Attempting to connect to the database...');
-        const pool = await poolPromise;
-        const result = await pool
-            .request()
-            .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [labourOnboarding] WHERE status = 'Approved'`);
-        //console.log('Fetched approved labours:', result.recordset);
-        return result.recordset; // Returns an array of approved labour IDs and working hours
-    } catch (err) {
-        console.error('SQL error fetching approved labour IDs', err);
-        throw new Error('Error fetching approved labour IDs');
-    }
-}
+
 
 // Fetch Labour Details by ID
 async function getLabourDetailsById(labourId) {
@@ -3339,11 +3373,10 @@ async function upsertAttendance({
         // 6) If user explicitly gave "OvertimeManually" from the front-end, use that.
         //    Otherwise, cap system's computed rounding at 4.
         let finalOvertimeManually = 0;
-        if (overtimeManually && String(overtimeManually).trim() !== '') {
-            // from front-end
-            finalOvertimeManually = parseFloat(overtimeManually) || 0;
+        const isOvertimeManuallyDefined = overtimeManually !== null && overtimeManually !== undefined;
+        if (isOvertimeManuallyDefined && String(overtimeManually).trim() !== '') {
+            finalOvertimeManually = parseFloat(overtimeManually);
         } else {
-            // from system compute => cap at 4
             finalOvertimeManually = Math.min(4, payrollCalRoundOffOvertime);
         }
         // console.log("finalOvertimeManually",finalOvertimeManually)
@@ -4995,7 +5028,7 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
           END,
           R.CreatedAt DESC
       ) AS wages
-      WHERE onboarding.status = 'Approved'
+      WHERE onboarding.status IN ('Approved', 'Disable')
     `;
 
     // Apply optional ProjectID filter
@@ -5153,7 +5186,7 @@ const getAttendanceReportAAndLabourOnboardingJoin = async (filters = {}) => {
     const request = pool.request();
 
     let query = `
-        WITH RankedAttendance AS (
+         WITH RankedAttendance AS (
             SELECT 
                 *,
                 ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY LabourId DESC) AS rn
@@ -5185,25 +5218,25 @@ const getAttendanceReportAAndLabourOnboardingJoin = async (filters = {}) => {
             FROM RankedAttendance R
             WHERE R.LabourID = onboarding.LabourID AND R.rn = 1
         ) AS attendance
-        WHERE onboarding.status = 'Approved'
+        WHERE onboarding.status IN ('Approved', 'Disable')
     `;
 
-    // Strict filter: projectName (as ProjectID)
-    if (filters.projectName) {
-        const projectNames = filters.projectName.split(',').map(p => p.trim());
-        const projectParams = projectNames.map((val, idx) => {
-            const param = `projectName${idx}`;
+     // 🔍 Filter by ProjectID
+     if (filters.ProjectID) {
+        const projectIDs = filters.ProjectID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
+        const projectParams = projectIDs.map((val, idx) => {
+            const param = `projectID${idx}`;
             request.input(param, val);
             return `@${param}`;
         });
         query += ` AND onboarding.projectName IN (${projectParams.join(', ')})`;
     }
 
-    // Strict filter: department
-    if (filters.department) {
-        const departments = filters.department.split(',').map(d => d.trim());
-        const departmentParams = departments.map((val, idx) => {
-            const param = `department${idx}`;
+    // 🔍 Filter by DepartmentID
+    if (filters.DepartmentID) {
+        const departmentIDs = filters.DepartmentID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
+        const departmentParams = departmentIDs.map((val, idx) => {
+            const param = `departmentID${idx}`;
             request.input(param, val);
             return `@${param}`;
         });
@@ -5211,6 +5244,7 @@ const getAttendanceReportAAndLabourOnboardingJoin = async (filters = {}) => {
     }
 
     const result = await request.query(query);
+    console.log("resultresultresult--", result.recordset); // Debugging log to check the result
     return result.recordset;
 };
 
@@ -5285,42 +5319,6 @@ async function searchFromWages(query) {
         const pool = await poolPromise;
         const isLabourID = /^[A-Za-z]+\d+$/.test(query.trim());
 
-
-        // `SELECT top (1)
-        //     l.id,
-        //     l.aadhaarNumber,
-        //     l.name,
-        //     l.projectName AS ProjectID,
-        //     l.labourCategory,
-        //     l.department AS DepartmentID,
-        //     l.departmentName,
-        //     l.LabourID,
-        //     l.companyName,
-        //     l.OnboardName,
-        //     l.workingHours,
-        //     l.businessUnit,
-        //     l.designation,
-        //     l.location,
-        //     w.From_Date,
-        //     w.WagesEditedBy,
-        //     w.PayStructure,
-        //     w.DailyWages,
-        //     w.PerHourWages,
-        //     w.MonthlyWages,
-        //     w.YearlyWages,
-        //     w.WeeklyOff,
-        //     w.CreatedAt,
-        //     w.FixedMonthlyWages,
-        //     w.EffectiveDate
-        //  FROM labourOnboarding l
-        //  LEFT JOIN LabourMonthlyWages w ON l.LabourID = w.LabourID
-        //  WHERE l.status = 'Approved'
-        //    AND (l.name LIKE @query 
-        //         OR l.companyName LIKE @query 
-        //         OR l.LabourID LIKE @query 
-        //         OR l.departmentName LIKE @query 
-        //         OR l.location LIKE @query)
-        //     order by w.CreatedAt desc`
         let searchQuery = `WITH LatestWages AS (
             SELECT 
                 w.LabourID, w.From_Date, w.WagesEditedBy, w.PayStructure,
@@ -5338,7 +5336,7 @@ async function searchFromWages(query) {
             lw.CreatedAt, lw.FixedMonthlyWages, lw.EffectiveDate, lw.ApprovalStatusWages
         FROM labourOnboarding l
         LEFT JOIN LatestWages lw ON l.LabourID = lw.LabourID AND lw.rn = 1
-        WHERE l.status = 'Approved'
+        WHERE l.status IN ('Approved', 'Disable')
         AND (${isLabourID ? "l.LabourID = @query" : `
             l.name LIKE '%' + @query + '%' 
             OR l.companyName LIKE '%' + @query + '%'
@@ -5408,7 +5406,7 @@ async function searchFromVariableInput(query) {
                 vp.variablePayRemark
             FROM labourOnboarding l
             LEFT JOIN LatestVariablePay vp ON l.LabourID = vp.LabourID AND vp.rn = 1
-            WHERE l.status = 'Approved'
+            WHERE l.status IN ('Approved', 'Disable')
               AND (${isLabourID
                 ? "l.LabourID = @query"
                 : `
@@ -5522,7 +5520,7 @@ const getVariablePayAndLabourOnboardingJoin = async () => {
         ON 
             onboarding.LabourID = variablepay.LabourID
         WHERE 
-            onboarding.status = 'Approved'
+            onboarding.status IN ('Approved', 'Disable')
     `);
 
     return result.recordset;
@@ -5616,6 +5614,6 @@ module.exports = {
     searchLaboursFromSiteTransfer,
     updateTotalOvertimeHours,
     searchFromVariableInput,
-    getAttendanceReportAAndLabourOnboardingJoin
-
+    getAttendanceReportAAndLabourOnboardingJoin,
+    getAllApprovedOrMonthlyDisabledLabours
 };

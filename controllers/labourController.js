@@ -2217,7 +2217,9 @@ async function getAllLaboursAttendance(req, res) {
         }
 
         // Fetch all approved labours
-        const approvedLabours = await labourModel.getAllApprovedLabours();
+        // const approvedLabours = await labourModel.getAllApprovedLabours();
+        const approvedLabours = await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
+
 
         if (!approvedLabours || approvedLabours.length === 0) {
             return res.status(404).json({ message: 'No approved labours found' });
@@ -4467,8 +4469,11 @@ const getWagesAndLabourOnboardingJoincontroller = async (req, res) => {
 
 const getAttendanceReportAndLabourOnboardingJoincontroller = async (req, res) => {
     try {
-        // Get filters from query parameters (e.g., ?ProjectID=...&DepartmentID=...)
-        const filters = req.query;
+        const filters = {
+            ProjectID: req.query.ProjectID || '',
+            DepartmentID: req.query.DepartmentID || ''
+        };
+        console.log('filters', filters);
         const joinAttendanceLabour = await labourModel.getAttendanceReportAAndLabourOnboardingJoin(filters);
         res.status(200).json(joinAttendanceLabour);
     } catch (error) {
