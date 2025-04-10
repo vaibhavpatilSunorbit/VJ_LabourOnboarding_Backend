@@ -4339,10 +4339,10 @@ async function getMonthlyPayrollData(month, year, projectName) {
 // }
 
 
-async function getWagesByDateRange(projectName, payStructure, approvalStatus, startDate, endDate) {
+async function getWagesByDateRange(projectName, payStructure, approvalStatus) {
     const pool = await poolPromise;
   
-    console.log('projectName:', projectName, '| payStructure:', payStructure, '| startDate:', startDate, '| endDate:', endDate);
+    console.log('projectName:', projectName, '| payStructure:', payStructure);
   
     const query = `
       WITH RankedWages AS (
@@ -4387,18 +4387,12 @@ async function getWagesByDateRange(projectName, payStructure, approvalStatus, st
           (@approvalStatus = 'Approved' AND wages.ApprovalStatusWages = 'Approved') OR
           (@approvalStatus = 'NotApproved' AND ISNULL(wages.ApprovalStatusWages, '') <> 'Approved')
         )
-        AND (
-          wages.EffectiveDate IS NULL OR 
-          wages.EffectiveDate BETWEEN @startDate AND @endDate
-        )
     `;
   
     const request = pool.request();
     request.input('projectName', sql.VarChar, projectName || 'all');
     request.input('payStructure', sql.VarChar, payStructure || null);
     request.input('approvalStatus', sql.VarChar, approvalStatus || null);
-    request.input('startDate', sql.Date, startDate);
-    request.input('endDate', sql.Date, endDate);
   
     const result = await request.query(query);
     return result.recordset;

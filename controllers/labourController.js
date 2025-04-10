@@ -3886,14 +3886,15 @@ async function rejectAttendanceController(req, res) {
 // -------------------------------------------------------------  Excel import and Export controller function ----------------
 const exportAttendance = async (req, res) => {
     try {
-        const { startDate, endDate, projectName } = req.query;
+        const { startDate, endDate, projectName, department  } = req.query;
+        
 
         if (!startDate || !endDate || !projectName) {
             return res.status(400).json({ message: 'Missing required parameters: startDate, endDate, or projectId.' });
         }
 
         // Fetch attendance data filtered by date range and projectId
-        const attendanceData = await labourModel.getAttendanceByDateRange(projectName, startDate, endDate);
+        const attendanceData = await labourModel.getAttendanceByDateRange(projectName, startDate, endDate, department );
 
         if (attendanceData.length === 0) {
             return res.status(404).json({ message: 'No attendance data found for the selected criteria.' });

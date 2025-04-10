@@ -1183,28 +1183,20 @@ async function exportMonthlyPayrollExcel(req, res) {
 
 const exportWagesexcelSheet = async (req, res) => {
     try {
-        let { projectName, month, payStructure, approvalStatus } = req.query;
-
-        if (!month) {
-            return res.status(400).json({ message: 'Missing required parameter: month' });
-        }
+        let { projectName, payStructure, approvalStatus } = req.query;
 
         // Use "all" if projectName is missing or empty.
         if (!projectName || projectName.trim() === "") {
             projectName = "all";
         }
 
-        // Calculate the date range for the given month.
-        const startDate = `${month}-01`;
-        const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
-            .toISOString()
-            .split('T')[0];
-
         //   console.log(`Fetching wages for projectName: ${projectName}, payStructure: ${payStructure}, startDate: ${startDate}, endDate: ${endDate}`);
 
         // Fetch wages data (or approved onboarding rows if no matching wages).
-        const wagesData = await labourModel.getWagesByDateRange(projectName, payStructure, approvalStatus , startDate, endDate);
-
+        const wagesData = await labourModel.getWagesByDateRange(projectName, payStructure, approvalStatus );
+        if (!wagesData || wagesData.length === 0) {
+            return res.status(404).json({ message: 'No data found for the selected criteria.' });
+        }
         // Create the Excel workbook.
         const workbook = xlsx.utils.book_new();
         const worksheet = xlsx.utils.json_to_sheet(wagesData);
@@ -1212,8 +1204,8 @@ const exportWagesexcelSheet = async (req, res) => {
 
         // Set the file name.
         const fileName = projectName === "all"
-            ? `Approved_Labours_${month}.xlsx`
-            : `Wages_${month}.xlsx`;
+            ? `Approved_Labours.xlsx`
+            : `Wages.xlsx`;
 
         // Use res.attachment to set the header only once.
         res.attachment(fileName);
