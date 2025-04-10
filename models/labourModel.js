@@ -3854,20 +3854,85 @@ async function rejectAttendance(id, rejectReason) {
 
 // ------------------------------------   Excel sheet import and Export funnciton --------------------
 
-async function getAttendanceByDateRange(projectName, startDate, endDate) {
+// async function getAttendanceByDateRange(projectName, startDate, endDate) {
+//     const pool = await poolPromise;
+//     const result = await pool
+//         .request()
+//         .input('projectName',  projectName)
+//         .input('startDate', sql.Date, startDate)
+//         .input('endDate', sql.Date, endDate)
+//         .query(
+//             `SELECT AttendanceId, LabourId, Date, projectName, FirstPunchManually, LastPunchManually, OvertimeManually, RemarkManually 
+//          FROM LabourAttendanceDetails 
+//          WHERE ProjectName in  (@projectName) AND Date BETWEEN @startDate AND @endDate`
+//         );
+//     return result.recordset;
+// };
+async function getAttendanceByDateRange(projectNameStr, startDate, endDate, departmentStr ) {
     const pool = await poolPromise;
-    const result = await pool
-        .request()
-        .input('projectName', sql.Int, projectName)
-        .input('startDate', sql.Date, startDate)
-        .input('endDate', sql.Date, endDate)
-        .query(
-            `SELECT AttendanceId, LabourId, Date, projectName, FirstPunchManually, LastPunchManually, OvertimeManually, RemarkManually 
-         FROM LabourAttendanceDetails 
-         WHERE ProjectName = @projectName AND Date BETWEEN @startDate AND @endDate`
-        );
+
+    if (!projectNameStr || !startDate || !endDate) {
+        throw new Error("Missing required parameters.");
+    }
+
+    // Sanitize and split projectNameStr
+    const projectNames = projectNameStr
+        .split(',')
+        .map(p => p.trim())
+        .filter(p => p); // remove empty entries
+
+    if (projectNames.length === 0) {
+        return []; // nothing to query
+    }
+
+    const request = pool.request();
+
+    // Build dynamic parameters
+    const projectPlaceholders = projectNames.map((_, i) => `@pn${i}`).join(',');
+    projectNames.forEach((name, i) => {
+        request.input(`pn${i}`, sql.VarChar, name);
+    });
+
+    request.input('startDate', sql.Date, startDate);
+    request.input('endDate', sql.Date, endDate);
+
+    let departmentFilterClause = '';
+    if (departmentStr && departmentStr.trim()) {
+        const departmentIds = departmentStr.split(',').map(d => d.trim()).filter(Boolean);
+        const departmentPlaceholders = departmentIds.map((_, i) => `@dep${i}`).join(',');
+        departmentIds.forEach((id, i) => {
+            request.input(`dep${i}`, sql.VarChar, id);
+        });
+        departmentFilterClause = `AND lo.department IN (${departmentPlaceholders})`;
+    }
+
+    const query = `
+        SELECT 
+            lad.AttendanceId, 
+            lad.LabourId, 
+            lad.Date, 
+            lad.ProjectName, 
+            lo.BusinessUnit,
+            lo.departmentName,
+            lad.FirstPunchManually, 
+            lad.LastPunchManually, 
+            lad.OvertimeManually, 
+            lad.RemarkManually
+        FROM 
+            LabourAttendanceDetails lad WITH (NOLOCK)
+        INNER JOIN 
+            labourOnboarding lo WITH (NOLOCK) 
+            ON lad.LabourId = lo.LabourId
+        WHERE 
+            lad.ProjectName IN (${projectPlaceholders})
+            AND lad.Date BETWEEN @startDate AND @endDate
+            ${departmentFilterClause}
+    `;
+
+    const result = await request.query(query);
     return result.recordset;
-};
+}
+
 
 
 
@@ -5082,69 +5147,137 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
 //     return result.recordset;
 // };
 
+
 const getAttendanceReportAAndLabourOnboardingJoin = async (filters = {}) => {
     const pool = await poolPromise;
     const request = pool.request();
 
     let query = `
-      WITH RankedAttendance AS (
+        WITH RankedAttendance AS (
+            SELECT 
+                *,
+                ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY LabourId DESC) AS rn
+            FROM [dbo].[LabourAttendanceSummary]
+        )
         SELECT 
-          *,
-          ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY LabourId DESC) AS rn
-        FROM [dbo].[LabourAttendanceSummary]
-      )
-      SELECT 
-        onboarding.LabourID,
-        onboarding.name,
-        onboarding.businessUnit,
-        onboarding.departmentName,
-        onboarding.workingHours,
-        onboarding.From_Date,
-        onboarding.projectName,
-        onboarding.department,
-        attendance.TotalDays,
-        attendance.PresentDays,
-        attendance.HalfDays,
-        attendance.AbsentDays,
-        attendance.TotalOvertimeHours,
-        attendance.Shift,
-        attendance.CreationDate,
-        attendance.SelectedMonth,
-        attendance.MissPunchDays,
-        attendance.RoundOffTotalOvertime,
-        attendance.PayrollCalRoundoffTotalOvertime
-      FROM [dbo].[labourOnboarding] AS onboarding
-      OUTER APPLY (
-        SELECT TOP 1 *
-        FROM RankedAttendance R
-        WHERE R.LabourID = onboarding.LabourID AND R.rn = 1
-      ) AS attendance
-      WHERE onboarding.status = 'Approved'
+            onboarding.LabourID,
+            onboarding.name,
+            onboarding.businessUnit,
+            onboarding.departmentName,
+            onboarding.workingHours,
+            onboarding.From_Date,
+            onboarding.projectName,
+            onboarding.department,
+            attendance.TotalDays,
+            attendance.PresentDays,
+            attendance.HalfDays,
+            attendance.AbsentDays,
+            attendance.TotalOvertimeHours,
+            attendance.Shift,
+            attendance.CreationDate,
+            attendance.SelectedMonth,
+            attendance.MissPunchDays,
+            attendance.RoundOffTotalOvertime,
+            attendance.PayrollCalRoundoffTotalOvertime
+        FROM [dbo].[labourOnboarding] AS onboarding
+        OUTER APPLY (
+            SELECT TOP 1 *
+            FROM RankedAttendance R
+            WHERE R.LabourID = onboarding.LabourID AND R.rn = 1
+        ) AS attendance
+        WHERE onboarding.status = 'Approved'
     `;
 
-    // ✅ Handle multiple projectName values using IN clause
+    // Strict filter: projectName (as ProjectID)
     if (filters.projectName) {
-        const projectNames = filters.projectName.split(',').map((name, index) => {
-            const param = `projectName${index}`;
-            request.input(param, name);
+        const projectNames = filters.projectName.split(',').map(p => p.trim());
+        const projectParams = projectNames.map((val, idx) => {
+            const param = `projectName${idx}`;
+            request.input(param, val);
             return `@${param}`;
         });
-        query += ` AND onboarding.projectName IN (${projectNames.join(', ')})`;
+        query += ` AND onboarding.projectName IN (${projectParams.join(', ')})`;
     }
 
-    // ✅ Handle multiple departments (if needed)
+    // Strict filter: department
     if (filters.department) {
-        const departments = filters.department.split(',').map((dep, index) => {
-            const param = `department${index}`;
-            request.input(param, dep);
+        const departments = filters.department.split(',').map(d => d.trim());
+        const departmentParams = departments.map((val, idx) => {
+            const param = `department${idx}`;
+            request.input(param, val);
             return `@${param}`;
         });
-        query += ` AND onboarding.department IN (${departments.join(', ')})`;
+        query += ` AND onboarding.department IN (${departmentParams.join(', ')})`;
     }
 
     const result = await request.query(query);
     return result.recordset;
 };
+
+
+// const getAttendanceReportAAndLabourOnboardingJoin = async (filters = {}) => {
+//     const pool = await poolPromise;
+//     const request = pool.request();
+
+//     let query = `
+//       WITH RankedAttendance AS (
+//         SELECT 
+//           *,
+//           ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY LabourId DESC) AS rn
+//         FROM [dbo].[LabourAttendanceSummary]
+//       )
+//       SELECT 
+//         onboarding.LabourID,
+//         onboarding.name,
+//         onboarding.businessUnit,
+//         onboarding.departmentName,
+//         onboarding.workingHours,
+//         onboarding.From_Date,
+//         onboarding.projectName,
+//         onboarding.department,
+//         attendance.TotalDays,
+//         attendance.PresentDays,
+//         attendance.HalfDays,
+//         attendance.AbsentDays,
+//         attendance.TotalOvertimeHours,
+//         attendance.Shift,
+//         attendance.CreationDate,
+//         attendance.SelectedMonth,
+//         attendance.MissPunchDays,
+//         attendance.RoundOffTotalOvertime,
+//         attendance.PayrollCalRoundoffTotalOvertime
+//       FROM [dbo].[labourOnboarding] AS onboarding
+//       OUTER APPLY (
+//         SELECT TOP 1 *
+//         FROM RankedAttendance R
+//         WHERE R.LabourID = onboarding.LabourID AND R.rn = 1
+//       ) AS attendance
+//       WHERE onboarding.status = 'Approved'
+//     `;
+
+//     // ✅ Handle multiple projectName values using IN clause
+//     if (filters.projectName) {
+//         const projectNames = filters.projectName.split(',').map((name, index) => {
+//             const param = `projectName${index}`;
+//             request.input(param, name);
+//             return `@${param}`;
+//         });
+//         query += ` AND onboarding.projectName IN (${projectNames.join(', ')})`;
+//     }
+
+//     // ✅ Handle multiple departments (if needed)
+//     if (filters.department) {
+//         const departments = filters.department.split(',').map((dep, index) => {
+//             const param = `department${index}`;
+//             request.input(param, dep);
+//             return `@${param}`;
+//         });
+//         query += ` AND onboarding.department IN (${departments.join(', ')})`;
+//     }
+
+//     const result = await request.query(query);
+//     return result.recordset;
+// };
 
 
 async function searchFromWages(query) {
