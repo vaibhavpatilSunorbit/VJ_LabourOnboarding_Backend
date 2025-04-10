@@ -2348,71 +2348,77 @@ function formatTotalOvertime(TotalOvertimeHours) {
 
 // ------------------------------------------     calculate OT ----------------------
 
+// async function calculateTotalOvertime(labourId, month, year) {
+//     try {
+//         console.log("calculateTotalOvertime", labourId, month, year)
+//         const pool = await poolPromise;
+//         const result = await pool.request()
+//             .input('labourId', sql.NVarChar, labourId)
+//             .input('month', sql.Int, month)
+//             .input('year', sql.Int, year)
+//             .query(`
+//                 SELECT 
+//                    Overtime, OvertimeManually
+//                 FROM LabourAttendanceDetails
+//                 WHERE LabourId = @labourId
+//                   AND MONTH(Date) = @month
+//                   AND YEAR(Date) = @year
+//             `);
+
+
+//         if (!result.recordset || result.recordset.length === 0) {
+//             throw new Error('No data found for the given inputs.');
+//         }
+//         let TotalOvertime = 0;
+//         for (let i = 0; i < result.recordset.length; i++) {
+//             if (result.recordset[i].OvertimeManually === null) {
+//                 result.recordset[i].OvertimeManually = result.recordset[i].Overtime;
+//             }
+//             if (result.recordset[i].OvertimeManually > 4) {
+//                 result.recordset[i].OvertimeManually = 4
+//             }
+//             if (result.recordset[i].Overtime > 4) {
+//                 result.recordset[i].Overtime = 4
+//             }
+//             const formattedOverTime = formatTotalOvertime(result.recordset[i].Overtime)
+//             const formattedOvertimeManually = formatTotalOvertime(result.recordset[i].OvertimeManually)
+//             TotalOvertime += Math.min(formattedOvertimeManually, formattedOverTime)
+//         }
+//         const cappedOvertime = TotalOvertime
+
+//         // const { TotalOvertime = 0, TotalOvertimeManually = 0 } = result.recordset[0] || {};
+//         // const cappedOvertime = Math.min(TotalOvertime || 0, TotalOvertimeManually || 0, 120);
+//         return cappedOvertime;
+//     } catch (error) {
+//         console.error('Error in calculateTotalOvertime:', error);
+//         throw error;
+//     }
+// };
+
+
 async function calculateTotalOvertime(labourId, month, year) {
     try {
+        const selectedMonth = `${year}-${month.toString().padStart(2, '0')}`;
+
         const pool = await poolPromise;
         const result = await pool.request()
             .input('labourId', sql.NVarChar, labourId)
-            .input('month', sql.Int, month)
-            .input('year', sql.Int, year)
+            .input('selectedMonth', sql.NVarChar, selectedMonth)
             .query(`
-                SELECT 
-                   Overtime , OvertimeManually
-                FROM LabourAttendanceDetails
-                WHERE LabourId = @labourId
-                  AND MONTH(Date) = @month
-                  AND YEAR(Date) = @year
+                SELECT TotalOvertimeHoursManually 
+                FROM [dbo].[LabourAttendanceSummary] 
+                WHERE LabourId = @labourId 
+                  AND SelectedMonth = @selectedMonth
             `);
 
-
-        //             .query(`
-        //                SELECT 
-        //     SUM(
-        //         CASE 
-        //             WHEN Overtime < 4 AND OvertimeManually < 4 THEN 
-        //                 CASE WHEN Overtime < OvertimeManually THEN Overtime ELSE OvertimeManually END
-        //             WHEN Overtime < 4 THEN Overtime
-        //             WHEN OvertimeManually < 4 THEN OvertimeManually
-        //             ELSE 4
-        //         END
-        //     ) AS TotalEffectiveOvertime
-        // FROM LabourAttendanceDetails
-        //                 WHERE LabourId = @labourId
-        //                   AND MONTH(Date) = @month
-        //                   AND YEAR(Date) = @year
-        //             `);
-
         if (!result.recordset || result.recordset.length === 0) {
-            throw new Error('No data found for the given inputs.');
+            throw new Error(`No data found for LabourId ${labourId} and Month ${selectedMonth}`);
         }
-        let TotalOvertime = 0;
-        for (let i = 0; i < result.recordset.length; i++) {
-            if (result.recordset[i].OvertimeManually === null) {
-                result.recordset[i].OvertimeManually = result.recordset[i].Overtime;
-            }
-            if (result.recordset[i].OvertimeManually > 4) {
-                result.recordset[i].OvertimeManually = 4
-            }
-            if (result.recordset[i].Overtime > 4) {
-                result.recordset[i].Overtime = 4
-            }
-            // console.log("Overtime",result.recordset[i].Overtime)
-            // console.log("OvertimeManually",result.recordset[i].OvertimeManually)
-            const formattedOverTime = formatTotalOvertime(result.recordset[i].Overtime)
-            const formattedOvertimeManually = formatTotalOvertime(result.recordset[i].OvertimeManually)
 
-            // console.log("formattedOverTime",formattedOverTime)
-            // console.log("formattedOvertimeManually",formattedOvertimeManually)
-            TotalOvertime += Math.min(formattedOvertimeManually, formattedOverTime)
-        }
-        // console.log("TotalOvertime", TotalOvertime)     
-        const cappedOvertime = TotalOvertime
+        const total = parseFloat(result.recordset[0].TotalOvertimeHoursManually || 0);
+        const cappedOvertime = total > 120 ? 120 : total;
 
-        // const { TotalOvertime = 0, TotalOvertimeManually = 0 } = result.recordset[0] || {};
-        // console.log('TotalOvertime',TotalOvertime, 'TotalOvertimeManually',TotalOvertimeManually)
-        // const cappedOvertime = Math.min(TotalOvertime || 0, TotalOvertimeManually || 0, 120);
-
-        return cappedOvertime;
+        return  cappedOvertime || 0;
     } catch (error) {
         console.error('Error in calculateTotalOvertime:', error);
         throw error;
