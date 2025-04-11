@@ -5031,21 +5031,27 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
       WHERE onboarding.status IN ('Approved', 'Disable')
     `;
 
-    // Apply optional ProjectID filter
     if (filters.ProjectID) {
-        const projectIds = filters.ProjectID.split(',').map((id, index) => {
-            const param = `projectId${index}`;
-            request.input(param, id.trim());
+        const projectIDs = filters.ProjectID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
+        const projectParams = projectIDs.map((val, idx) => {
+            const param = `projectID${idx}`;
+            request.input(param, val);
             return `@${param}`;
         });
-        query += ` AND onboarding.projectName IN (${projectIds.join(', ')})`;
+        query += ` AND onboarding.projectName IN (${projectParams.join(', ')})`;
     }
 
-    // Apply optional DepartmentID filter
+    // 🔍 Filter by DepartmentID (comma-separated support)
     if (filters.DepartmentID) {
-        request.input('DepartmentID', filters.DepartmentID);
-        query += ` AND onboarding.department = @DepartmentID`;
+        const departmentIDs = filters.DepartmentID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
+        const departmentParams = departmentIDs.map((val, idx) => {
+            const param = `departmentID${idx}`;
+            request.input(param, val);
+            return `@${param}`;
+        });
+        query += ` AND onboarding.department IN (${departmentParams.join(', ')})`;
     }
+
 
     // Apply PayStructure only if passed
     if (filters.PayStructure) {
