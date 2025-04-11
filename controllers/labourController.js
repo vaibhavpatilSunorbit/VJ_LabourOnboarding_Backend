@@ -867,7 +867,7 @@ async function updateRecordWithDisable(req, res) {
             LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, isResubmit
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
         } = req.body;
 
         let finalOnboardName = Array.isArray(OnboardName) 
@@ -880,7 +880,7 @@ async function updateRecordWithDisable(req, res) {
         }
 finalOnboardName = finalOnboardName.toUpperCase();
         //console.log('Cleaned OnboardName Resubmitted button:', finalOnboardName);
-        if (!LabourID || !isResubmit) {
+        if (!LabourID ) {
             console.error('LabourID is missing from request body.');
             return res.status(400).json({ msg: 'LabourID is required.' });
         }
@@ -1076,7 +1076,7 @@ finalOnboardName = finalOnboardName.toUpperCase();
             ValidTill: validTillDate.toISOString().split('T')[0],
             retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location,
             CreationDate: creationDate.toISOString(), departmentId: safeDepartmentId, departmentName, designationId: safeDesignationId,
-            labourCategoryId: safeLabourCategoryId, isResubmit
+            labourCategoryId: safeLabourCategoryId
         });
 
 
