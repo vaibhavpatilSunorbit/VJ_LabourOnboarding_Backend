@@ -1745,7 +1745,9 @@ async function runDailyAttendanceCron() {
         await processLaboursAttendance(formattedYesterday);
         console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
         // Update attendance summary for all approved laborers
-        const approvedLabours = await labourModel.getAllApprovedLabours();
+        // const approvedLabours = await labourModel.getAllApprovedLabours();
+        const approvedLabours = await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
+
         for (let labour of approvedLabours) {
             const { labourId } = labour;
             await labourModel.insertOrUpdateLabourAttendanceSummary(labourId, formattedYesterday);

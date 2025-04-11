@@ -245,43 +245,6 @@ async function searchFromViewMonthlyPayrolls(query) {
     }
 };
 
-// const getVariablePayAndLabourOnboardingJoin = async () => {
-//     const pool = await poolPromise;
-
-//     const result = await pool.request().query(`
-//         SELECT 
-//             onboarding.id,
-//             onboarding.LabourID,
-//             onboarding.name,
-//             onboarding.businessUnit,
-//             onboarding.projectName,
-//             onboarding.departmentName,
-//             onboarding.department,
-//             variablepay.payAddedBy,
-//             variablepay.PayStructure,
-//             variablepay.AdvancePay,
-//             variablepay.DebitPay,
-//             variablepay.IncentivePay,
-//             variablepay.VariablepayAmount,
-//             variablepay.ApprovalStatusPay,
-//             variablepay.CreatedAt,
-//             variablepay.variablePayRemark,
-//             variablepay.EffectiveDate,
-//             variablepay.userId
-//         FROM 
-//             [labourOnboarding] AS onboarding
-//         LEFT JOIN 
-//             [VariablePay] AS variablepay
-//         ON 
-//             onboarding.LabourID = variablepay.LabourID
-//         WHERE 
-//             onboarding.status = 'Approved'
-//             ORDER BY LabourID
-//     `);
-
-//     return result.recordset;
-// };
-
 const getVariablePayAndLabourOnboardingJoin = async (filters = {}) => {
     const pool = await poolPromise;
     const request = pool.request();
@@ -316,27 +279,88 @@ const getVariablePayAndLabourOnboardingJoin = async (filters = {}) => {
             onboarding.status = 'Approved'
     `;
 
-    // ✅ Handle ProjectID filter as IN clause with parameters
+    // 🔍 Handle ProjectID filter (comma-separated)
     if (filters.ProjectID) {
-        const projectIds = filters.ProjectID.split(',').map((id, index) => {
-            const paramName = `projectId${index}`;
-            request.input(paramName, id);
-            return `@${paramName}`;
+        const projectIDs = filters.ProjectID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
+        const projectParams = projectIDs.map((val, idx) => {
+            const param = `projectID${idx}`;
+            request.input(param, val);
+            return `@${param}`;
         });
-        query += ` AND onboarding.projectName IN (${projectIds.join(', ')})`;
+        query += ` AND onboarding.projectName IN (${projectParams.join(', ')})`;
     }
 
-    // ✅ Handle DepartmentID filter
+    // 🔍 Handle DepartmentID filter (comma-separated)
     if (filters.DepartmentID) {
-        request.input('DepartmentID', filters.DepartmentID);
-        query += ` AND onboarding.department = @DepartmentID`;
+        const departmentIDs = filters.DepartmentID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
+        const departmentParams = departmentIDs.map((val, idx) => {
+            const param = `departmentID${idx}`;
+            request.input(param, val);
+            return `@${param}`;
+        });
+        query += ` AND onboarding.department IN (${departmentParams.join(', ')})`;
     }
-
-    // Optional: Add more filters as needed
 
     const result = await request.query(query);
     return result.recordset;
 };
+
+
+// const getVariablePayAndLabourOnboardingJoin = async (filters = {}) => {
+//     const pool = await poolPromise;
+//     const request = pool.request();
+
+//     let query = `
+//         SELECT 
+//             onboarding.id,
+//             onboarding.LabourID,
+//             onboarding.name,
+//             onboarding.businessUnit,
+//             onboarding.departmentName,
+//             onboarding.projectName AS ProjectID,
+//             onboarding.department AS DepartmentID,
+//             variablepay.payAddedBy,
+//             variablepay.PayStructure,
+//             variablepay.AdvancePay,
+//             variablepay.DebitPay,
+//             variablepay.IncentivePay,
+//             variablepay.VariablepayAmount,
+//             variablepay.ApprovalStatusPay,
+//             variablepay.CreatedAt,
+//             variablepay.variablePayRemark,
+//             variablepay.EffectiveDate,
+//             variablepay.userId
+//         FROM 
+//             [labourOnboarding] AS onboarding
+//         LEFT JOIN 
+//             [VariablePay] AS variablepay
+//         ON 
+//             onboarding.LabourID = variablepay.LabourID
+//         WHERE 
+//             onboarding.status = 'Approved'
+//     `;
+
+//     // ✅ Handle ProjectID filter as IN clause with parameters
+//     if (filters.ProjectID) {
+//         const projectIds = filters.ProjectID.split(',').map((id, index) => {
+//             const paramName = `projectId${index}`;
+//             request.input(paramName, id);
+//             return `@${paramName}`;
+//         });
+//         query += ` AND onboarding.projectName IN (${projectIds.join(', ')})`;
+//     }
+
+//     // ✅ Handle DepartmentID filter
+//     if (filters.DepartmentID) {
+//         request.input('DepartmentID', filters.DepartmentID);
+//         query += ` AND onboarding.department = @DepartmentID`;
+//     }
+
+//     // Optional: Add more filters as needed
+
+//     const result = await request.query(query);
+//     return result.recordset;
+// };
 
 
 
@@ -780,13 +804,12 @@ async function getVariablePayByDateRange(projectName, startDate, endDate, approv
             onboarding.LabourID = VariablePay.LabourID
             ${projectName !== "all" ? "AND VariablePay.ProjectName = @projectName" : ""}
             ${startDate && endDate ? "AND VariablePay.CreatedAt BETWEEN @startDate AND @endDate" : ""}
-            ${
-                approvalStatus
-                    ? approvalStatus === 'Approved'
-                        ? "AND VariablePay.ApprovalStatusPay = 'Approved'"
-                        : "AND ISNULL(VariablePay.ApprovalStatusPay, '') <> 'Approved'"
-                    : ""
-            }
+            ${approvalStatus
+            ? approvalStatus === 'Approved'
+                ? "AND VariablePay.ApprovalStatusPay = 'Approved'"
+                : "AND ISNULL(VariablePay.ApprovalStatusPay, '') <> 'Approved'"
+            : ""
+        }
         WHERE 
             onboarding.status = 'Approved'
             ${projectName !== "all" ? "AND onboarding.projectName = @projectName" : ""}
@@ -2418,7 +2441,7 @@ async function calculateTotalOvertime(labourId, month, year) {
         const total = parseFloat(result.recordset[0].TotalOvertimeHoursManually || 0);
         const cappedOvertime = total > 120 ? 120 : total;
 
-        return  cappedOvertime || 0;
+        return cappedOvertime || 0;
     } catch (error) {
         console.error('Error in calculateTotalOvertime:', error);
         throw error;
@@ -4275,7 +4298,7 @@ async function getMonthlyPayrollData(month, year, projectName) {
 //         @payStructureParam VARCHAR(50) = @payStructure,
 //         @projectNameParam VARCHAR(50) = @projectName,
 //         @approvalStatusParam VARCHAR(50) = @approvalStatus;
-  
+
 //       WITH LatestWages AS (
 //         SELECT 
 //           onboarding.LabourID,
@@ -4347,9 +4370,9 @@ async function getMonthlyPayrollData(month, year, projectName) {
 
 async function getWagesByDateRange(projectName, payStructure, approvalStatus) {
     const pool = await poolPromise;
-  
+
     console.log('projectName:', projectName, '| payStructure:', payStructure);
-  
+
     const query = `
       WITH RankedWages AS (
         SELECT 
@@ -4394,16 +4417,16 @@ async function getWagesByDateRange(projectName, payStructure, approvalStatus) {
           (@approvalStatus = 'NotApproved' AND ISNULL(wages.ApprovalStatusWages, '') <> 'Approved')
         )
     `;
-  
+
     const request = pool.request();
     request.input('projectName', sql.VarChar, projectName || 'all');
     request.input('payStructure', sql.VarChar, payStructure || null);
     request.input('approvalStatus', sql.VarChar, approvalStatus || null);
-  
+
     const result = await request.query(query);
     return result.recordset;
-  }
-  
+}
+
 
 
 
