@@ -1644,13 +1644,13 @@ async function getAllApprovedOrMonthlyDisabledLabours(month, year) {
             .query(`
                 SELECT DISTINCT lo.LabourID AS labourId, lo.workingHours, lo.projectName, lo.status
                 FROM [labourOnboarding] lo
-                WHERE lo.status = 'Approved'
+                WHERE lo.status IN ('Approved', 'Disable')
 
                 UNION
 
                 SELECT DISTINCT lo.LabourID AS labourId, lo.workingHours, lo.projectName, lo.status
                 FROM [labourOnboarding] lo
-                JOIN [LabourAttendanceLogs] lal
+                JOIN [LabourOnboardingForm].[dbo].[LabourAttendanceLogs] lal
                     ON lal.LabourID = lo.LabourID
                 WHERE lal.attendanceStatus = 'Disable'
                     AND MONTH(lal.CreatedAt) = @month
@@ -4667,7 +4667,7 @@ async function getWagesByDateRange(projectName, payStructure, startDate, endDate
 
     query += `
         WHERE 
-          onboarding.status = 'Approved'
+          onboarding.status IN ('Approved', 'Disable')
       )
       SELECT 
         LabourID,
@@ -5454,7 +5454,7 @@ async function searchAttendance(query) {
                        fs.netPay, fs.basicSalary
                 FROM labourOnboarding lo
                 LEFT JOIN FinalizedSalaryPay fs ON lo.LabourID = fs.LabourID
-                WHERE lo.status = 'Approved'
+                WHERE lo.status IN ('Approved', 'Disable')
                   AND (lo.name LIKE @query 
                        OR lo.aadhaarNumber LIKE @query 
                        OR lo.LabourID LIKE @query 
@@ -5481,7 +5481,7 @@ async function searchLaboursFromSiteTransfer(query) {
                 SELECT id, aadhaarNumber, name, projectName, labourCategory, department as departmentId,
                        LabourID, companyName, OnboardName, workingHours, businessUnit, designation, location
                 FROM labourOnboarding
-                WHERE status = 'Approved'
+                WHERE status IN ('Approved', 'Disable')
                   AND (name LIKE @query 
                        OR companyName LIKE @query 
                        OR LabourID LIKE @query 

@@ -2342,7 +2342,7 @@ async function getAllLaboursAttendance(req, res) {
                 creationDate: new Date(),
                 selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`,
             };
-
+ console.log(`Inserting Attendance for ${labourId} on:`, summary);
             // ✅ **Insert Summary & Attendance**
             await labourModel.insertIntoLabourAttendanceSummary(summary);
             for (let dayAttendance of monthlyAttendance) {

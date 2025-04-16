@@ -2172,7 +2172,7 @@ async function getEligibleLabours(month, year, idsArray) {
                 [labourOnboarding] AS onboarding
                 ON AttendanceCTE.LabourId = onboarding.LabourID
             WHERE 
-                onboarding.status = 'Approved'
+                onboarding.status IN ('Approved', 'Disable')
                 AND AttendanceCTE.AttendanceCount > 0
                 AND NOT EXISTS (
                     SELECT 1 
@@ -2435,18 +2435,20 @@ async function calculateTotalOvertime(labourId, month, year) {
             `);
 
         if (!result.recordset || result.recordset.length === 0) {
-            throw new Error(`No data found for LabourId ${labourId} and Month ${selectedMonth}`);
+            console.warn(`No data found for LabourId ${labourId} and Month ${selectedMonth}`);
+            return 0; // Return 0 instead of throwing error
         }
 
         const total = parseFloat(result.recordset[0].TotalOvertimeHoursManually || 0);
         const cappedOvertime = total > 120 ? 120 : total;
 
-        return cappedOvertime || 0;
+        return cappedOvertime;
     } catch (error) {
         console.error('Error in calculateTotalOvertime:', error);
-        throw error;
+        return 0; // Fail-safe fallback
     }
-};
+}
+
 
 
 
@@ -3786,7 +3788,7 @@ async function generateMonthlyPayroll(month, year) {
                     id, LabourID, name, businessUnit, projectName, departmentName, department, aadhaarNumber, accountNumber, ifscCode
                 FROM [dbo].[labourOnboarding]
                 WHERE LabourID IN ('${labourIds.join("','")}')
-                  AND status = 'Approved'
+                  AND status IN ('Approved', 'Disable')
             `);
 
         const labourDetailsMap = labourDetailsResult.recordset.reduce((acc, detail) => {
@@ -4399,7 +4401,7 @@ async function getWagesByDateRange(projectName, payStructure, approvalStatus) {
       LEFT JOIN RankedWages AS wages
         ON onboarding.LabourID = wages.LabourID
         AND wages.RowNum = 1
-      WHERE onboarding.status = 'Approved'
+      WHERE onboarding.status IN ('Approved', 'Disable')
         AND (
           @projectName = 'all'
           OR EXISTS (
