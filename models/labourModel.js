@@ -1616,11 +1616,14 @@ async function updateHideResubmit(labourId, hideResubmitValue) {
 
 // ------------------------------------------------------------------------  LABOUR PHASE 2 -------------------------------------------
 // ------------------------------------------------------------------------  ATTENDANCE MODUL -------------------------------------------
+// ------------------------------------------------------------------------  ATTENDANCE MODUL -------------------------------------------
+// ------------------------------------------------------------------------  ATTENDANCE MODUL -------------------------------------------
+// ------------------------------------------------------------------------  ATTENDANCE MODUL -------------------------------------------
 
 // Fetch Approved Labour IDs with Working Hours
 async function getAllApprovedLabours() {
     try {
-        //console.log('Attempting to connect to the database...');
+
         const pool = await poolPromise;
         const result = await pool
             .request()
