@@ -2567,7 +2567,8 @@ async function markAttendanceForApproval(
     lastPunchManually,
     remarkManually,
     finalOnboardName,
-    markWeeklyOff
+    markWeeklyOff,
+    updatedFields
 ) {
     try {
         if (AttendanceId === undefined || AttendanceId === null || isNaN(AttendanceId)) {
@@ -2587,6 +2588,7 @@ async function markAttendanceForApproval(
         request.input('firstPunchManually', sql.VarChar, firstPunchManually || null);
         request.input('lastPunchManually', sql.VarChar, lastPunchManually || null);
         request.input('markWeeklyOff', sql.Bit, markWeeklyOff === true ? 1 : 0 || null);
+        request.input('UpdatedFields', sql.NVarChar, JSON.stringify(updatedFields) || null);
 
         const result = await pool.request()
         .input('LabourID', sql.NVarChar, labourId)
@@ -2612,10 +2614,10 @@ async function markAttendanceForApproval(
         // Perform the INSERT query
         await request.query(`
             INSERT INTO LabourAttendanceApproval (
-              AttendanceId, LabourId, Date, OvertimeManually, RemarkManually, OnboardName, FirstPunchManually, LastPunchManually, markWeeklyOff, name
+              AttendanceId, LabourId, Date, OvertimeManually, RemarkManually, OnboardName, FirstPunchManually, LastPunchManually, markWeeklyOff, name, UpdatedFields
             )
             VALUES (
-              @AttendanceId, @labourId, @date, @overtimeManually, @remarkManually, @finalOnboardName, @firstPunchManually, @lastPunchManually, @markWeeklyOff, @name
+              @AttendanceId, @labourId, @date, @overtimeManually, @remarkManually, @finalOnboardName, @firstPunchManually, @lastPunchManually, @markWeeklyOff, @name, @UpdatedFields
             )
         `);
 
@@ -3260,7 +3262,6 @@ async function upsertAttendance({
     try {
         const pool = await poolPromise;
 
-        // 1) Check if date is a holiday => block changes
         const holidayCheckResult = await pool.request()
             .input('date', sql.Date, date)
             .query(`
@@ -3821,7 +3822,25 @@ async function LabourAttendanceApprovalModel() {
 FROM [LabourAttendanceApproval] L order by L.LastUpdatedDate desc;
         `);
 
-        return result.recordset;
+        // return result.recordset;
+        const parsedRecordset = result.recordset.map(record => {
+            let updatedFields = [];
+    
+            try {
+                if (record.UpdatedFields) {
+                    updatedFields = JSON.parse(record.UpdatedFields);
+                }
+            } catch (err) {
+                console.warn('Failed to parse UpdatedFields for record:', record.LabourId, err);
+            }
+    
+            return {
+                ...record,
+                UpdatedFields: updatedFields,
+            };
+        });
+    
+        return parsedRecordset;
     } catch (error) {
         console.error('Error fetching attendance Approval:', error);
         throw error;
@@ -4217,11 +4236,22 @@ const getLabourMonthlyWages = async () => {
     return result.recordset;
 };
 
+
+const parseDDMMYYYYtoDate = (dateStr) => {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+
+    const parts = dateStr.split("-");
+    if (parts.length !== 3) throw new Error(`Invalid date format for effectiveDate: ${dateStr}`);
+
+    const [day, month, year] = parts;
+    return new Date(`${year}-${month}-${day}`); // Returns JS Date object
+};
+
 // Add or update wages
 const upsertLabourMonthlyWages = async (wage) => {
     try {
         const pool = await poolPromise;
-
+console.log("object wages--->", wage);    
         // Check if LabourID exists in LabourMonthlyWages
         const checkExistingWage = await pool.request()
             .input('LabourID', sql.NVarChar, wage.labourId || '')
@@ -4250,7 +4280,7 @@ const upsertLabourMonthlyWages = async (wage) => {
             throw new Error(`LabourID ${wage.labourId} not found in labourOnboarding table`);
         }
         const labourDetails = onboardingResult.recordset[0];
-
+        const effectiveDateParsed = wage.effectiveDate ? parseDDMMYYYYtoDate(wage.effectiveDate) : null;
 
         // UPSERT Query with OUTPUT to return WageID
         const query = `
@@ -4283,7 +4313,7 @@ const upsertLabourMonthlyWages = async (wage) => {
             .input('From_Date', sql.Date, labourDetails.From_Date || null)
             .input('businessUnit', sql.NVarChar, labourDetails.businessUnit || '')
             .input('departmentName', sql.NVarChar, labourDetails.departmentName || '')
-            .input('EffectiveDate', sql.Date, wage.effectiveDate || null)
+            .input('EffectiveDate', sql.Date, effectiveDateParsed)
             .query(query);
 
         // Check if insertResult is valid

@@ -16,8 +16,8 @@ const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
-// const baseUrl = 'http://localhost:4000/uploads/';
-const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+const baseUrl = 'http://localhost:4000/uploads/';
+// const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
 // const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
@@ -2219,8 +2219,8 @@ async function getAllLaboursAttendance(req, res) {
         }
 
         // Fetch all approved labours
-        // const approvedLabours = await labourModel.getAllApprovedLabours();
-        const approvedLabours = await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
+        const approvedLabours = await labourModel.getAllApprovedLabours();
+        // const approvedLabours = await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
 
 
         if (!approvedLabours || approvedLabours.length === 0) {
@@ -2342,7 +2342,7 @@ async function getAllLaboursAttendance(req, res) {
                 creationDate: new Date(),
                 selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`,
             };
- console.log(`Inserting Attendance for ${labourId} on:`, summary);
+//  console.log(`Inserting Attendance for ${labourId} on:`, summary);
             // ✅ **Insert Summary & Attendance**
             await labourModel.insertIntoLabourAttendanceSummary(summary);
             for (let dayAttendance of monthlyAttendance) {
@@ -3732,8 +3732,8 @@ async function upsertAttendance(req, res) {
         onboardName,
         AttendanceStatus,
         markWeeklyOff,
+        updatedFields,
     } = req.body;
-console.log("req.body for update attendance",req.body)
     // Validate input
     if (!labourId || !date) {
         return res.status(400).json({
@@ -3792,18 +3792,19 @@ console.log("req.body for update attendance",req.body)
                 onboardName: finalOnboardName,
                 editUserName: finalOnboardName,
                 markWeeklyOff,
+                updatedFields,
             });
 
             return res.status(200).json({ message: 'Attendance updated successfully.' });
         }
 
         if (AttendanceStatus !== "MP") {
-            await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff);
+            await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff, updatedFields);
             return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
         };
 
         if (AttendanceStatus === "MP" && timesUpdated >= 3) {
-            await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff);
+            await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff, updatedFields);
             return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
         };
 
@@ -4092,7 +4093,7 @@ const getLabourMonthlyWages = async (req, res) => {
 const upsertLabourMonthlyWages = async (req, res) => {
     try {
         const payload = req.body;
-
+console.log("payload ===", payload)
         if (!payload.labourId || !payload.payStructure) {
             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
         }
