@@ -2476,8 +2476,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
             holidayOvertimeWages = 0,
             totalHoursForMonth = 0,
         } = attendance;
-        console.log("attendance ==", attendance)
-
+       
         const wagesInfo = await getWageInfoForLabour(labourId, month, year);
         if (!wagesInfo) {
             return {
@@ -2487,8 +2486,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
                 message: `No approved wages found for labour ID: ${labourId}`
             };
         }
-        console.log("wagesInfo >", wagesInfo)
-        const { wageBreakdown = [], workingHours } = wagesInfo;
+         const { wageBreakdown = [], workingHours } = wagesInfo;
 
         if (!wageBreakdown.length) {
             return {
@@ -2531,7 +2529,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
         const weeklyOffDays = latestSlice.weeklyOff || 0;
         const daysInSlice = latestSlice.daysInSlice || 0;
 
-        const daysInMonth = getDaysInMonth(year, month);
+       const daysInMonth = getDaysInMonth(year, month);
         let baseWage = 0;
 
         let weeklyOffPay = 0;
@@ -2544,7 +2542,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
             const hourlyWage = dailyWageRate / parsedWorkingHours;
 
             const totalHours = totalHoursForMonth - cappedOvertime;
-
+            
             if (presentDays === daysInSlice) {
                 baseWage = totalPossibleHours * hourlyWage;
             } else if (totalPossibleHours < totalHours) {
@@ -2554,6 +2552,8 @@ async function calculateSalaryForLabour(labourId, month, year) {
                     const totalPossibleHours = presentDays * parsedWorkingHours;
                     if (totalPossibleHours < totalHours) {
                         baseWage = totalPossibleHours * hourlyWage;
+                    }else{
+                        baseWage = totalHours * hourlyWage;
                     }
                 } else {
                     baseWage = totalHours * hourlyWage;
@@ -2599,7 +2599,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
                 baseWage = Math.round(workedPay + weeklyOffPay);
             }
 
-            if (weeklyOffDays === 0 && presentDays > 0 && presentDays < daysInSlice) {
+            if ((weeklyOffDays === 0 || weeklyOffDays === null) && presentDays > 0 && presentDays < daysInSlice) {
                 const totalHrs = totalHoursForMonth - cappedOvertime;
                 const totalPossibleHours = presentDays * parsedWorkingHours;
 
@@ -2615,7 +2615,6 @@ async function calculateSalaryForLabour(labourId, month, year) {
             }
 
         }
-
         let derivedPerHour = 0;
         let overtimePay = 0;
         if (isDailyWage) {
