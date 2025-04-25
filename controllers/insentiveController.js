@@ -253,92 +253,111 @@ const getVariablePayAndLabourOnboardingJoincontroller = async (req, res) => {
 };
 
 
+const upsertLabourVariablePay = async (req, res) => {
+    try {
+        const payload = req.body;
+
+        if (!payload.LabourID || !payload.payStructure) {
+            return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
+        }
+
+        const existingVariablePays = await labourModel.checkExistingVariablePay(payload.LabourID) || [];
+        // Check if a pending entry already exists for this payStructure
+        const isPending = existingVariablePays.find(
+            pay => pay.PayStructure === payload.payStructure && pay.ApprovalStatusPay === 'AdminPending'
+        );
+
+        if (isPending) {
+            return res.status(400).json({
+                message: `Labour ${payload.LabourID} already has a pending '${payload.payStructure}' entry for admin approval.`
+            });
+        }
+
+        if (payload.payStructure === 'Incentive') {
+            const wagesRecord = await labourModel.getLabourMonthlyWages(payload.LabourID);
+
+            if (!wagesRecord) {
+                return res.status(400).json({ message: 'Labour wages are not added' });
+            }
+
+            const allowedMonthlyWage = wagesRecord.FixedMonthlyWages || wagesRecord.MonthlyWages;
+
+            if (payload.Incentive && payload.Incentive > allowedMonthlyWage) {
+                return res.status(400).json({ message: 'Incentive cannot be greater than monthly wages' });
+            }
+        }
+
+        await labourModel.upsertLabourVariablePay(payload);
+
+        return res.status(200).json({ message: 'VariablePay updated successfully.' });
+
+    } catch (error) {
+        console.error('Error updating VariablePay:', error);
+        return res.status(500).json({ message: 'Error updating VariablePay', error });
+    }
+};
+
+
 // const upsertLabourVariablePay = async (req, res) => {
 //     try {
 //         const payload = req.body;
-
+//         console.log("payload--->",payload)
+//         // Check that LabourID and Pay Structure are provided
 //         if (!payload.LabourID || !payload.payStructure) {
 //             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
 //         }
 
-//         const existingWages = await labourModel.checkExistingVariablePay(payload.LabourID);
-//         //console.log('payload of wages 55', existingWages);
+//         // First, check if labour wages record exists
+//         const existingvariablePay = await labourModel.checkExistingVariablePay(payload.LabourID);
 
-//         // Check if existing wages were found or not
-//         if (existingWages) {
-//             //console.log("Updating existing wages because a record was found.");
+//         if (existingvariablePay && existingvariablePay !== undefined && existingvariablePay !== null) {
+//             if (existingvariablePay.ApprovalStatusPay === "AdminPending") {
+//                 return res.status(400).json({ message: `Labour ${existingvariablePay.LabourID} Variable Pay Already With Admin Pending` });
+//             }
+
+//             // If an incentive is provided, perform the incentive check
+//             if (payload.payStructure === 'Incentive') {
+//                 const wagesRecord = await labourModel.getLabourMonthlyWages(payload.LabourID);
+//                 if (!wagesRecord) {
+//                     // This ensures that if no wages record exists in the LabourMonthlyWages table, 
+//                     // we throw an error as well.
+//                     return res.status(400).json({ message: 'Labour wages are not added' });
+//                 }
+
+//                 const allowedMonthlyWage = wagesRecord.FixedMonthlyWages || wagesRecord.MonthlyWages;
+//                 if (payload.payStructure.Incentive > allowedMonthlyWage) {
+//                     return res.status(400).json({ message: 'Incentive cannot be greater than monthly wages' });
+//                 }
+//             }
+
 //             await labourModel.upsertLabourVariablePay(payload);
 //             return res.status(200).json({ message: 'VariablePay updated successfully.' });
 //         } else {
-//             //console.log("No existing wages found, inserting new wages.");
+//             // If an incentive is provided, perform the incentive check
+//             if (payload.payStructure === 'Incentive') {
+//                 const wagesRecord = await labourModel.getLabourMonthlyWages(payload.LabourID);
+//                 if (!wagesRecord) {
+//                     // This ensures that if no wages record exists in the LabourMonthlyWages table, 
+//                     // we throw an error as well.
+//                     return res.status(400).json({ message: 'Labour wages are not added' });
+//                 }
+
+//                 const allowedMonthlyWage = wagesRecord.FixedMonthlyWages || wagesRecord.MonthlyWages;
+//                 if (payload.payStructure.Incentive > allowedMonthlyWage) {
+//                     return res.status(400).json({ message: 'Incentive cannot be greater than monthly wages' });
+//                 }
+//             }
+
 //             await labourModel.upsertLabourVariablePay(payload);
-//             return res.status(200).json({ message: 'VariablePay added successfully.' });
+//             return res.status(200).json({ message: 'VariablePay updated successfully.' });
 //         }
+
+
 //     } catch (error) {
 //         console.error('Error updating VariablePay:', error);
 //         res.status(500).json({ message: 'Error updating VariablePay', error });
 //     }
 // };
-
-const upsertLabourVariablePay = async (req, res) => {
-    try {
-        const payload = req.body;
-        // Check that LabourID and Pay Structure are provided
-        if (!payload.LabourID || !payload.payStructure) {
-            return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
-        }
-
-        // First, check if labour wages record exists
-        const existingvariablePay = await labourModel.checkExistingVariablePay(payload.LabourID);
-
-        if (existingvariablePay && existingvariablePay !== undefined && existingvariablePay !== null) {
-            if (existingvariablePay.ApprovalStatusPay === "AdminPending") {
-                return res.status(400).json({ message: `Labour ${existingvariablePay.LabourID} Variable Pay Already With Admin Pending` });
-            }
-
-            // If an incentive is provided, perform the incentive check
-            if (payload.payStructure === 'Incentive') {
-                const wagesRecord = await labourModel.getLabourMonthlyWages(payload.LabourID);
-                if (!wagesRecord) {
-                    // This ensures that if no wages record exists in the LabourMonthlyWages table, 
-                    // we throw an error as well.
-                    return res.status(400).json({ message: 'Labour wages are not added' });
-                }
-
-                const allowedMonthlyWage = wagesRecord.FixedMonthlyWages || wagesRecord.MonthlyWages;
-                if (payload.payStructure.Incentive > allowedMonthlyWage) {
-                    return res.status(400).json({ message: 'Incentive cannot be greater than monthly wages' });
-                }
-            }
-
-            await labourModel.upsertLabourVariablePay(payload);
-            return res.status(200).json({ message: 'VariablePay updated successfully.' });
-        } else {
-            // If an incentive is provided, perform the incentive check
-            if (payload.payStructure === 'Incentive') {
-                const wagesRecord = await labourModel.getLabourMonthlyWages(payload.LabourID);
-                if (!wagesRecord) {
-                    // This ensures that if no wages record exists in the LabourMonthlyWages table, 
-                    // we throw an error as well.
-                    return res.status(400).json({ message: 'Labour wages are not added' });
-                }
-
-                const allowedMonthlyWage = wagesRecord.FixedMonthlyWages || wagesRecord.MonthlyWages;
-                if (payload.payStructure.Incentive > allowedMonthlyWage) {
-                    return res.status(400).json({ message: 'Incentive cannot be greater than monthly wages' });
-                }
-            }
-
-            await labourModel.upsertLabourVariablePay(payload);
-            return res.status(200).json({ message: 'VariablePay updated successfully.' });
-        }
-
-
-    } catch (error) {
-        console.error('Error updating VariablePay:', error);
-        res.status(500).json({ message: 'Error updating VariablePay', error });
-    }
-};
 
 
 
