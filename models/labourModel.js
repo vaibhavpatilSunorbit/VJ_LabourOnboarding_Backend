@@ -18,56 +18,22 @@ async function checkAadhaarExists(aadhaarNumber) {
 };
 
 
-async function getNextUniqueID() {
-    try {
-        const pool = await poolPromise;
-
-        // Fetch the maximum LabourID while excluding specific IDs
-        let lastIDResult = await pool.request().query(`
-            SELECT MAX(LabourID) AS lastID 
-            FROM labourOnboarding 
-            WHERE LabourID NOT IN ('JCO519', 'VJ3893')
-        `);
-
-        let initialID = 'JC4008'; // The starting ID
-        let nextID = initialID;
-
-        if (lastIDResult.recordset[0].lastID) {
-            let lastID = lastIDResult.recordset[0].lastID;
-
-            if (lastID) {
-                const numericPart = parseInt(lastID.slice(2)) + 1;
-                nextID = `JC${numericPart.toString().padStart(4, '0')}`; // Format to desired ID pattern
-            }
-        }
-
-        return nextID;
-    } catch (error) {
-        throw new Error('Error fetching next unique ID');
-    }
-}
-
-
-
-// This code changes on the 24-08-2024  This code working fine
-
 // async function getNextUniqueID() {
 //     try {
 //         const pool = await poolPromise;
-//         let lastIDResult = await pool.request().query('SELECT MAX(LabourID) AS lastID FROM labourOnboarding');
+
+//         // Fetch the maximum LabourID while excluding specific IDs
+//         let lastIDResult = await pool.request().query(`
+//             SELECT MAX(LabourID) AS lastID 
+//             FROM labourOnboarding 
+//             WHERE LabourID NOT IN ('JCO519', 'VJ3893')
+//         `);
 
 //         let initialID = 'JC4008'; // The starting ID
 //         let nextID = initialID;
 
 //         if (lastIDResult.recordset[0].lastID) {
 //             let lastID = lastIDResult.recordset[0].lastID;
-
-//             // Check if the lastID is the one to ignore
-//             if (lastID === 'JCO519') {
-//                 // Fetch the next valid last ID
-//                 lastIDResult = await pool.request().query("SELECT MAX(LabourID) AS lastID FROM labourOnboarding WHERE LabourID != 'JCO519'");
-//                 lastID = lastIDResult.recordset[0].lastID;
-//             }
 
 //             if (lastID) {
 //                 const numericPart = parseInt(lastID.slice(2)) + 1;
@@ -81,87 +47,53 @@ async function getNextUniqueID() {
 //     }
 // }
 
+async function getNextUniqueID(departmentId) {
+    try {
+        const pool = await poolPromise;
+
+        let prefix = 'JC';
+        let initialID = 'JC4008';
+        const exclusions = `'JCO519', 'VJ3893'`;
+
+        if (departmentId === 334) {
+            prefix = 'JIH';
+            initialID = 'JIH0001';
+        }
+
+        let lastIDQuery = '';
+
+        if (departmentId === 334) {
+            lastIDQuery = `
+                SELECT MAX(LabourID) AS lastID 
+                FROM labourOnboarding 
+                WHERE LabourID NOT IN (${exclusions}) 
+                AND departmentId = ${departmentId} and LabourID like '%JIH%'
+            `;
+        } else {
+            lastIDQuery = `
+                SELECT MAX(LabourID) AS lastID 
+                FROM labourOnboarding 
+                WHERE LabourID NOT IN (${exclusions}) and LabourID like '%JC%'
+            `;
+        }
+
+        const result = await pool.request().query(lastIDQuery);
+        const lastID = result.recordset[0].lastID;
+
+        if (!lastID) {
+            return initialID;
+        }
+
+        const numericPart = parseInt(lastID.slice(prefix.length)) + 1;
+        const nextID = `${prefix}${numericPart.toString().padStart(4, '0')}`;
+
+        return nextID;
+    } catch (error) {
+        throw new Error(`Error fetching next unique ID: ${error.message}`);
+    }
+}
 
 
-
-// async function getNextUniqueID() {
-//     try {
-//       const pool = await poolPromise;
-//       const result = await pool.request().query('SELECT MAX(LabourID) AS lastID FROM labourOnboarding');
-
-//       let initialID = 'JC4008'; // The starting ID
-//       let nextID = initialID;
-
-//       if (result.recordset[0].lastID) {
-//         const lastID = result.recordset[0].lastID;
-//         const numericPart = parseInt(lastID.slice(2)) + 1;
-//         nextID = `JC${numericPart.toString().padStart(4, '0')}`; // Format to desired ID pattern
-//       }
-
-//       return nextID;
-//     } catch (error) {
-//       throw new Error('Error fetching next unique ID');
-//     }
-//   }
-
-
-
-// async function getNextUniqueID() {
-//     try {
-//         const pool = await poolPromise3;
-//         const query = `
-//         Select  TOP 1 [EmployeeCode], CAST(SUBSTRING([EmployeeCode], 3, 6) AS INT) + 1 AS IncrementedValue 
-// From Employees   WHERE [EmployeeCode] LIKE 'JC%' 
-// AND [EmployeeCode] NOT LIKE 'JCO%' 
-// ORDER BY [EmployeeCode] DESC
-//         `;
-//         const result = await pool.request().query(query);
-
-//         let nextID = 'JC3808'; 
-
-//         if (result.recordset.length > 0) {
-//             const incrementedValue = result.recordset[0].IncrementedValue;
-//             nextID = `JC${incrementedValue.toString().padStart(4, '0')}`; 
-//         }
-
-//         return nextID;
-//     } catch (error) {
-//         console.error('Error in getNextUniqueID:', error.message);
-//         throw new Error('Error fetching next unique ID');
-//     }
-// }
-
-// async function getNextUniqueID() {
-//     try {
-//         const pool = await poolPromise3;
-//         const query = `
-//         SELECT TOP 1 
-//         [EmployeeCode], 
-//         CAST(SUBSTRING([EmployeeCode], 3, 6) AS INT) + 1 AS IncrementedValue 
-//     FROM Employees 
-//     WHERE [EmployeeCode] LIKE 'JC%' 
-//     AND [EmployeeCode] NOT LIKE 'JCO%'
-//     AND ISNUMERIC(SUBSTRING([EmployeeCode], 3, 6)) = 1
-//     ORDER BY CAST(SUBSTRING([EmployeeCode], 3, 6) AS INT) DESC
-//         `;
-//         const result = await pool.request().query(query);
-
-//         let nextID = 'JC0001'; 
-
-//         if (result.recordset.length > 0) {
-//             const incrementedValue = result.recordset[0].IncrementedValue;
-//             nextID = `JC${incrementedValue.toString().padStart(4, '0')}`; 
-//         }
-
-//         return nextID;
-//     } catch (error) {
-//         console.error('Error in getNextUniqueID:', error.message);
-//         throw new Error('Error fetching next unique ID');
-//     }
-// }
-
-
-// Function to register data
 async function registerData(labourData) {
     try {
         const pool = await poolPromise;
@@ -1009,7 +941,7 @@ async function search(query) {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
-            .query('SELECT * FROM labourOnboarding WHERE name LIKE @query OR aadhaarNumber LIKE @query OR LabourID LIKE @query OR OnboardName LIKE @query OR workingHours LIKE @query OR businessUnit LIKE @query OR designation LIKE @query OR location LIKE @query');
+            .query('SELECT * FROM labourOnboarding WHERE name LIKE @query OR aadhaarNumber LIKE @query OR LabourID LIKE @query OR OnboardName LIKE @query OR workingHours LIKE @query OR businessUnit LIKE @query OR designation LIKE @query OR location LIKE @query OR departmentName LIKE @query');
         return result.recordset;
     } catch (error) {
         throw error;
@@ -1037,8 +969,6 @@ async function approveLabour(id, nextID) {
             .input('LabourID', sql.VarChar, nextID)
             .input('ApproveLabourDate', sql.DateTime, now)
             .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID, ApproveLabourDate = @ApproveLabourDate WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
-
-        //console.log('Database update result:', result);
 
         if (result.rowsAffected[0] > 0) {
             const approvedResult = await pool.request()

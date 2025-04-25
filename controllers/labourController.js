@@ -62,27 +62,29 @@ async function handleCheckAadhaar(req, res) {
 
     try {
         const labourRecords = await labourModel.checkAadhaarExists(aadhaarNumber);
-
         if (labourRecords && labourRecords.length > 0) {
             // Check if any record matches specific conditions
             const resubmittedRecord = labourRecords.find(record =>
-                (record.status === 'Resubmitted' && record.isApproved === 3) ||
-                (record.status === 'Disable' && record.isApproved === 4)
+                (record.status === 'Pending' && record.isApproved === 0) ||
+                (record.status === 'Approved' && record.isApproved === 1) ||
+                (record.status === 'Rejected' && record.isApproved === 2) 
             );
 
             if (resubmittedRecord) {
-                //console.log("Returning skipCheck for Resubmitted or Disable with specific isApproved values");
-                return res.status(200).json({ exists: false, skipCheck: true, LabourID: resubmittedRecord.LabourID });
+               const labourIDs = labourRecords.map(record => record.LabourID);
+
+               //console.log(`LabourIDs found: ${labourIDs}`);
+               return res.status(200).json({
+                   exists: true,
+                   LabourIDs: labourIDs // Return all LabourIDs as an array
+               });
+            } else {
+                 //console.log("Returning skipCheck for Resubmitted or Disable with specific isApproved values");
+                 return res.status(200).json({ exists: false, skipCheck: true, LabourID: resubmittedRecord.LabourID });
+                
             }
 
-            // Extract all LabourIDs
-            const labourIDs = labourRecords.map(record => record.LabourID);
 
-            //console.log(`LabourIDs found: ${labourIDs}`);
-            return res.status(200).json({
-                exists: true,
-                LabourIDs: labourIDs // Return all LabourIDs as an array
-            });
         } else {
             //console.log("Returning exists false");
             return res.status(200).json({ exists: false });
@@ -93,65 +95,30 @@ async function handleCheckAadhaar(req, res) {
     }
 }
 
-
-// async function handleCheckAadhaar(req, res) {
-//     const { aadhaarNumber } = req.body;
-//     //console.log('Request Body: AaadharNumber Ch----------', req.body);
-
-//     try {
-//         const labourRecord = await labourModel.checkAadhaarExists(aadhaarNumber);
-
-//         if (labourRecord) {
-//             if (labourRecord.status === 'Resubmitted' && labourRecord.isApproved === 3) {
-//                 //console.log("Returning skipCheck for Resubmitted and isApproved 3");
-//                 return res.status(200).json({ exists: false, skipCheck: true });
-//             } else {
-//                 //console.log("Returning exists true");
-//                 return res.status(200).json({ exists: true });
-//             }
-//         } else {
-//             //console.log("Returning exists false");
-//             return res.status(200).json({ exists: false });
-//         }
-//     } catch (error) {
-//         console.error('Error in handleCheckAadhaar:', error);
-//         return res.status(500).json({ error: 'Error checking Aadhaar number' });
-//     };
-// };
-
-
-
-// async function handleCheckAadhaar(req, res) {
-//     const { aadhaarNumber } = req.body;
-
-//     try {
-//         const labourRecord = await labourModel.checkAadhaarExists(aadhaarNumber);
-
-//         if (labourRecord) {
-//             if (labourRecord.status === 'Resubmitted' && labourRecord.isApproved === 3) {
-//                 // const formData = await labourModel.getFormDataByAadhaar(aadhaarNumber);
-//                 return res.status(200).json({ exists: true, formData: labourRecord });
-//             } else {
-//                 return res.status(200).json({ exists: true });
-//             }
-//         } else {
-//             return res.status(200).json({ exists: false });
-//         }
-//     } catch (error) {
-//         console.error('Error in handleCheckAadhaar:', error);
-//         return res.status(500).json({ error: 'Error checking Aadhaar number' });
-//     }
-// }
-
 async function getNextUniqueID(req, res) {
     try {
-        const nextID = await labourModel.getNextUniqueID();
+        const departmentId = parseInt(req.query.departmentId, 10);
+        if (isNaN(departmentId)) {
+            return res.status(400).json({ message: 'Invalid or missing departmentId' });
+        }
+
+        const nextID = await labourModel.getNextUniqueID(departmentId);
         res.json({ nextID });
     } catch (error) {
         console.error('Error in getNextUniqueID:', error.message);
         res.status(500).json({ message: 'Internal server error' });
-    };
+    }
 };
+
+// async function getNextUniqueID(req, res) {
+//     try {
+//         const nextID = await labourModel.getNextUniqueID();
+//         res.json({ nextID });
+//     } catch (error) {
+//         console.error('Error in getNextUniqueID:', error.message);
+//         res.status(500).json({ message: 'Internal server error' });
+//     };
+// };
 
 
 async function getCommandStatus(req, res) {
@@ -1169,21 +1136,14 @@ async function getAllLabours(req, res) {
 
 async function approveLabour(req, res) {
     const id = parseInt(req.params.id, 10);
-    // //console.log(`Received id: ${req.params.id}, Parsed id: ${id}`);
+    const { labourID } = req.body;
 
     if (isNaN(id)) {
         return res.status(400).json({ message: 'Invalid labour ID' });
     }
 
     try {
-        const nextID = await labourModel.getNextUniqueID(); // Generate next unique LabourID
-        // const onboardName = req.body.OnboardName;
-
-        //console.log('Approving labour ID:', id);
-        //console.log('Generated nextID:', nextID);
-        // //console.log('OnboardName:', onboardName);
-
-        const success = await labourModel.approveLabour(id, nextID);
+        const success = await labourModel.approveLabour(id, labourID);
         if (success) {
             res.json({ success: true, message: 'Labour approved successfully.', data: success });
         } else {
