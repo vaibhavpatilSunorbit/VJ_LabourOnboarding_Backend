@@ -4,38 +4,75 @@ const { poolPromise3 } = require('../config/dbConfig3');
 const ExcelJS = require('exceljs');
 const fs = require('fs');
 
+// async function getAllLabours(filters = {}) {
+//     const pool = await poolPromise;
+//     // Start with the status filter to ensure only "Approved" entries are returned
+//     let query = "SELECT * FROM labourOnboarding WHERE status = 'Approved'";
+//     let conditions = [];
+
+//     if (filters.ProjectID) {
+//         conditions.push("projectName = @projectID");
+//     }
+//     if (filters.DepartmentID) {
+//         conditions.push("department = @departmentID");
+//     }
+
+//     // Append additional conditions if they exist
+//     if (conditions.length > 0) {
+//         query += " AND " + conditions.join(" AND ");
+//     }
+
+//     query += " ORDER BY LabourID;";
+
+//     const request = pool.request();
+//     if (filters.ProjectID) {
+//         request.input("projectID", filters.ProjectID);
+//     }
+//     if (filters.DepartmentID) {
+//         request.input("departmentID", filters.DepartmentID);
+//     }
+
+//     const result = await request.query(query);
+//     return result.recordset;
+// }
+
 async function getAllLabours(filters = {}) {
     const pool = await poolPromise;
-    // Start with the status filter to ensure only "Approved" entries are returned
-    let query = "SELECT * FROM labourOnboarding WHERE status = 'Approved'";
-    let conditions = [];
 
-    if (filters.ProjectID) {
-        conditions.push("projectName = @projectID");
-    }
-    if (filters.DepartmentID) {
-        conditions.push("department = @departmentID");
-    }
-
-    // Append additional conditions if they exist
-    if (conditions.length > 0) {
-        query += " AND " + conditions.join(" AND ");
-    }
-
-    query += " ORDER BY LabourID;";
-
+    let query = `SELECT * FROM labourOnboarding WHERE status = 'Approved'`;
     const request = pool.request();
+
+    // 🔍 Handle ProjectID filter (comma-separated)
     if (filters.ProjectID) {
-        request.input("projectID", filters.ProjectID);
+        const projectIDs = filters.ProjectID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
+        if (projectIDs.length > 0) {
+            const projectParams = projectIDs.map((val, idx) => {
+                const param = `projectID${idx}`;
+                request.input(param, val);
+                return `@${param}`;
+            });
+            query += ` AND projectName IN (${projectParams.join(', ')})`;
+        }
     }
+
+    // 🔍 Handle DepartmentID filter (comma-separated)
     if (filters.DepartmentID) {
-        request.input("departmentID", filters.DepartmentID);
+        const departmentIDs = filters.DepartmentID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
+        if (departmentIDs.length > 0) {
+            const departmentParams = departmentIDs.map((val, idx) => {
+                const param = `departmentID${idx}`;
+                request.input(param, val);
+                return `@${param}`;
+            });
+            query += ` AND department IN (${departmentParams.join(', ')})`;
+        }
     }
+
+    query += ` ORDER BY LabourID;`;
 
     const result = await request.query(query);
     return result.recordset;
 }
-
 
 
 
