@@ -370,12 +370,16 @@ const checkExistingVariablePay = async (LabourID) => {
     const result = await pool.request()
         .input('LabourID', sql.NVarChar, LabourID)
         .query(`
-            SELECT TOP 1 *
-            FROM VariablePay
-            WHERE LabourID = @LabourID
-            ORDER BY EffectiveDate DESC
+           SELECT *
+            FROM (
+                SELECT *,
+                       ROW_NUMBER() OVER (PARTITION BY PayStructure ORDER BY EffectiveDate DESC) AS rn
+                FROM VariablePay
+                WHERE LabourID = @LabourID
+            ) AS Ranked
+            WHERE rn = 1;
         `);
-    return result.recordset[0] || null;
+    return result.recordset || null;
 };
 
 // In your labourModel file, update the function to retrieve the monthly wages record
