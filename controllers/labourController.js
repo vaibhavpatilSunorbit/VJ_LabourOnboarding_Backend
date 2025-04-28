@@ -56,37 +56,33 @@ const baseUrl = 'http://localhost:4000/uploads/';
 //         return res.status(500).json({ error: 'Error checking Aadhaar number' });
 //     }
 // }
+
 async function handleCheckAadhaar(req, res) {
     const { aadhaarNumber } = req.body;
-    //console.log('Request Body: AadhaarNumber:', aadhaarNumber);
 
     try {
         const labourRecords = await labourModel.checkAadhaarExists(aadhaarNumber);
+
         if (labourRecords && labourRecords.length > 0) {
-            // Check if any record matches specific conditions
             const resubmittedRecord = labourRecords.find(record =>
                 (record.status === 'Pending' && record.isApproved === 0) ||
                 (record.status === 'Approved' && record.isApproved === 1) ||
-                (record.status === 'Rejected' && record.isApproved === 2) 
+                (record.status === 'Rejected' && record.isApproved === 2)
             );
 
             if (resubmittedRecord) {
-               const labourIDs = labourRecords.map(record => record.LabourID);
+                const labourIDs = labourRecords.map(record => record.LabourID);
 
-               //console.log(`LabourIDs found: ${labourIDs}`);
-               return res.status(200).json({
-                   exists: true,
-                   LabourIDs: labourIDs // Return all LabourIDs as an array
-               });
+                return res.status(200).json({
+                    exists: true,
+                    LabourIDs: labourIDs 
+                });
             } else {
-                 //console.log("Returning skipCheck for Resubmitted or Disable with specific isApproved values");
-                 return res.status(200).json({ exists: false, skipCheck: true, LabourID: resubmittedRecord.LabourID });
-                
+                const labourIDs = labourRecords.map(record => record.LabourID);
+                return res.status(200).json({ exists: false, skipCheck: true, LabourIDs: labourIDs });
             }
 
-
         } else {
-            //console.log("Returning exists false");
             return res.status(200).json({ exists: false });
         }
     } catch (error) {
@@ -94,6 +90,7 @@ async function handleCheckAadhaar(req, res) {
         return res.status(500).json({ error: 'Error checking Aadhaar number' });
     }
 }
+
 
 async function getNextUniqueID(req, res) {
     try {
