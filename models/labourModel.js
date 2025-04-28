@@ -4937,7 +4937,6 @@ if (existingPending.recordset.length > 0) {
 }
 
 
-
 const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
     const pool = await poolPromise;
     const request = pool.request();
@@ -4953,6 +4952,21 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
           *,
           ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY CreatedAt DESC) AS rn
         FROM [dbo].[LabourMonthlyWages]
+      ),
+      RankedOnboarding AS (
+        SELECT 
+          *,
+          ROW_NUMBER() OVER (
+              PARTITION BY LabourID 
+              ORDER BY 
+                  CASE WHEN status = 'Approved' THEN 1 
+                       WHEN status = 'Disable' THEN 2 
+                       ELSE 3 
+                  END,
+                  LabourID DESC
+          ) AS rn
+        FROM [dbo].[labourOnboarding]
+        WHERE status IN ('Approved', 'Disable')
       )
       SELECT 
         onboarding.LabourID,
@@ -4974,7 +4988,7 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
         wages.FixedMonthlyWages,
         wages.EffectiveDate,
         wages.ApprovalStatusWages
-      FROM [dbo].[labourOnboarding] AS onboarding
+      FROM RankedOnboarding AS onboarding
       OUTER APPLY (
         SELECT TOP 1 *
         FROM RankedWages R
@@ -4988,9 +5002,10 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
           END,
           R.CreatedAt DESC
       ) AS wages
-      WHERE onboarding.status IN ('Approved', 'Disable')
+      WHERE onboarding.rn = 1
     `;
 
+    // 🔵 Apply ProjectID filter
     if (filters.ProjectID) {
         const projectIDs = filters.ProjectID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
         const projectParams = projectIDs.map((val, idx) => {
@@ -5001,7 +5016,7 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
         query += ` AND onboarding.projectName IN (${projectParams.join(', ')})`;
     }
 
-    // 🔍 Filter by DepartmentID (comma-separated support)
+    // 🔵 Apply DepartmentID filter
     if (filters.DepartmentID) {
         const departmentIDs = filters.DepartmentID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
         const departmentParams = departmentIDs.map((val, idx) => {
@@ -5012,11 +5027,9 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
         query += ` AND onboarding.department IN (${departmentParams.join(', ')})`;
     }
 
-
-    // Apply PayStructure only if passed
+    // 🔵 Apply PayStructure filter
     if (filters.PayStructure) {
         request.input('PayStructure', filters.PayStructure);
-        // Force filter to return only rows where PayStructure matched by ensuring wages exists
         query += ` AND wages.PayStructure = @PayStructure`;
     }
 
@@ -5024,11 +5037,14 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
     return result.recordset;
 };
 
-
-
 // const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
 //     const pool = await poolPromise;
 //     const request = pool.request();
+
+//     // Build OUTER APPLY filter for PayStructure if it exists
+//     const payStructureFilter = filters.PayStructure 
+//         ? 'AND R.PayStructure = @PayStructure' 
+//         : '';
 
 //     let query = `
 //       WITH RankedWages AS (
@@ -5062,6 +5078,7 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
 //         SELECT TOP 1 *
 //         FROM RankedWages R
 //         WHERE R.LabourID = onboarding.LabourID
+//         ${payStructureFilter}
 //         ORDER BY 
 //           CASE 
 //             WHEN R.ApprovalStatusWages = 'Approved' THEN 1 
@@ -5070,81 +5087,42 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
 //           END,
 //           R.CreatedAt DESC
 //       ) AS wages
-//       WHERE onboarding.status = 'Approved'
+//       WHERE onboarding.status IN ('Approved', 'Disable')
 //     `;
 
-//     // ✅ ProjectID filtering with safe IN clause
 //     if (filters.ProjectID) {
-//         const projectIds = filters.ProjectID.split(',').map((id, index) => {
-//             const paramName = `projectId${index}`;
-//             request.input(paramName, id);
-//             return `@${paramName}`;
+//         const projectIDs = filters.ProjectID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
+//         const projectParams = projectIDs.map((val, idx) => {
+//             const param = `projectID${idx}`;
+//             request.input(param, val);
+//             return `@${param}`;
 //         });
-//         query += ` AND onboarding.projectName IN (${projectIds.join(', ')})`;
+//         query += ` AND onboarding.projectName IN (${projectParams.join(', ')})`;
 //     }
 
-//     // ✅ DepartmentID filtering
+//     // 🔍 Filter by DepartmentID (comma-separated support)
 //     if (filters.DepartmentID) {
-//         request.input('DepartmentID', filters.DepartmentID);
-//         query += ` AND onboarding.department = @DepartmentID`;
+//         const departmentIDs = filters.DepartmentID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
+//         const departmentParams = departmentIDs.map((val, idx) => {
+//             const param = `departmentID${idx}`;
+//             request.input(param, val);
+//             return `@${param}`;
+//         });
+//         query += ` AND onboarding.department IN (${departmentParams.join(', ')})`;
+//     }
+
+
+//     // Apply PayStructure only if passed
+//     if (filters.PayStructure) {
+//         request.input('PayStructure', filters.PayStructure);
+//         // Force filter to return only rows where PayStructure matched by ensuring wages exists
+//         query += ` AND wages.PayStructure = @PayStructure`;
 //     }
 
 //     const result = await request.query(query);
 //     return result.recordset;
 // };
 
-
-
-// const getAttendanceReportAAndLabourOnboardingJoin = async (filters = {}) => {
-//     const pool = await poolPromise;
-
-//     let query = `
-//       WITH RankedAttendance AS (
-//         SELECT 
-//           *,
-//           ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY LabourId DESC) AS rn
-//         FROM [dbo].[LabourAttendanceSummary]
-//       )
-//       SELECT 
-//         onboarding.LabourID,
-//         onboarding.name,
-//         onboarding.businessUnit,
-//         onboarding.departmentName,
-//         onboarding.workingHours,
-//         onboarding.From_Date,
-//         onboarding.projectName,
-//         onboarding.department,
-//         attendance.TotalDays,
-//         attendance.PresentDays,
-//         attendance.HalfDays,
-//         attendance.AbsentDays,
-//         attendance.TotalOvertimeHours,
-//         attendance.Shift,
-//         attendance.CreationDate,
-//         attendance.SelectedMonth,
-//         attendance.MissPunchDays,
-//         attendance.RoundOffTotalOvertime,
-//         attendance.PayrollCalRoundoffTotalOvertime
-//       FROM [dbo].[labourOnboarding] AS onboarding
-//       OUTER APPLY (
-//         SELECT TOP 1 *
-//         FROM RankedAttendance R
-//         WHERE R.LabourID = onboarding.LabourID AND R.rn = 1
-//       ) AS attendance
-//       WHERE onboarding.status = 'Approved'
-//     `;
-
-//     // Append additional filters if provided.
-//     if (filters.projectName) {
-//         query += ` AND onboarding.projectName = '${filters.projectName}'`;
-//     }
-//     if (filters.department) {
-//         query += ` AND onboarding.department = '${filters.department}'`;
-//     }
-
-//     const result = await pool.request().query(query);
-//     return result.recordset;
-// };
 
 
 const getAttendanceReportAAndLabourOnboardingJoin = async (filters = {}) => {
