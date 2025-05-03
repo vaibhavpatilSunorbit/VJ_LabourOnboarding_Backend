@@ -16,9 +16,9 @@ const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
-// const baseUrl = 'http://localhost:4000/uploads/';
+const baseUrl = 'http://localhost:4000/uploads/';
 // const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
-const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
+// const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
 
@@ -1719,134 +1719,264 @@ async function runDailyAttendanceCron() {
 }
 
 
-// function formatTimeToHoursMinutes(timeString) {
+
+// async function getAttendance(req, res) {
 //     try {
-//         const date = new Date(timeString);
-//         if (isNaN(date.getTime())) return "-";
-//         const hours = date.getUTCHours().toString().padStart(2, "0");
-//         const minutes = date.getUTCMinutes().toString().padStart(2, "0");
-//         const seconds = date.getUTCSeconds().toString().padStart(2, "0");
-//         return `${hours}:${minutes}:${seconds}`;
-//     } catch (error) {
-//         return "-";
+//         const { labourId } = req.params;
+//         const { month, year } = req.query;
+//         logger.info('Received request for attendance:', { labourId, month, year });
+
+//         const attendance = await labourModel.getAttendanceByLabourId(labourId, month, year);
+//         logger.info('Attendance data fetched from the database:', attendance);
+
+//         if (!attendance || attendance.length === 0) {
+//             logger.info('No attendance found for this labour in the selected month');
+//             return res.status(404).json({ message: 'No attendance found for this labour in the selected month' });
+//         }
+
+//         const labourDetails = await labourModel.getLabourDetailsById(labourId);
+//         const shiftHours = labourDetails.workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+//         const halfDayHours = shiftHours === 9 ? 4.5 : 4;
+
+//         const daysInMonth = new Date(year, month, 0).getDate();
+//         let presentDays = 0;
+//         let halfDays = 0;
+//         let missPunchDays = 0;
+//         let totalOvertimeHours = 0;
+//         let monthlyAttendance = [];
+
+//         for (let day = 1; day <= daysInMonth; day++) {
+//             const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+//             const punchesForDay = attendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
+
+//             let status = 'A';
+//             let totalHours = 0;
+//             let overtime = 0;
+
+//             if (punchesForDay.length > 0) {
+//                 punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+
+//                 const firstPunch = punchesForDay[0];
+//                 const lastPunch = punchesForDay[punchesForDay.length - 1];
+
+//                 totalHours = calculateHoursWorked(firstPunch.punch_date, firstPunch.punch_time, lastPunch.punch_time);
+
+//                 if (firstPunch && lastPunch && totalHours >= shiftHours) {
+//                     status = 'P';
+//                     presentDays++;
+//                     overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
+//                 } else if (firstPunch && totalHours < halfDayHours) {
+//                     status = 'MP';
+//                     missPunchDays++;
+//                 } else if (totalHours >= halfDayHours) {
+//                     status = 'HD';
+//                     halfDays++;
+//                 }
+
+//                 monthlyAttendance.push({
+//                     date,
+//                     firstPunch: {
+//                         time: formatTimeToHoursMinutes(firstPunch.punch_time),
+//                         attendanceId: firstPunch.attendance_id,
+//                         deviceId: firstPunch.Device_id,
+//                     },
+//                     lastPunch: {
+//                         time: formatTimeToHoursMinutes(lastPunch.punch_time),
+//                         attendanceId: lastPunch.attendance_id,
+//                         deviceId: lastPunch.Device_id,
+//                     },
+//                     totalHours,
+//                     overtime,
+//                     status,
+//                 });
+
+//                 totalOvertimeHours += overtime;
+//             } else {
+//                 monthlyAttendance.push({
+//                     date,
+//                     status: 'A',
+//                     totalHours: 0,
+//                     overtime: 0,
+//                 });
+//             }
+//         }
+
+//         logger.info('Calculated attendance:', {
+//             labourId,
+//             totalDays: daysInMonth,
+//             presentDays,
+//             halfDays,
+//             missPunchDays,
+//             totalOvertimeHours,
+//             shift: labourDetails.workingHours,
+//             monthlyAttendance,
+//         });
+
+//         res.json({
+//             labourId,
+//             totalDays: daysInMonth,
+//             presentDays,
+//             halfDays,
+//             missPunchDays,
+//             totalOvertimeHours,
+//             shift: labourDetails.workingHours,
+//             monthlyAttendance,
+//         });
+//     } catch (err) {
+//         logger.error('Error getting attendance for month', err);
+//         res.status(500).json({ message: 'Error getting attendance for the month' });
 //     }
 // }
 
-// // Helper function to calculate hours worked between two times (dynamic date)
-// function calculateHoursWorked(punchDate, firstPunch, lastPunch) {
-//     const punchDateStr = punchDate.toISOString().split('T')[0]; // Extract date from punchDate
-//     const punchInTime = new Date(`${punchDateStr}T${firstPunch.toISOString().split('T')[1]}`); // Combine date and time
-//     const punchOutTime = new Date(`${punchDateStr}T${lastPunch.toISOString().split('T')[1]}`); // Combine date and time
-
-//     const totalHours = (punchOutTime - punchInTime) / (1000 * 60 * 60); // Convert milliseconds to hours
-//     return totalHours.toFixed(2);  // Return hours with 2 decimal places
-// };
-
+/**
+ * Processes and records the attendance of a specific labour for a specified month and year.
+ * Implements rules for Present, Half Day, Absent, and Miss Punch statuses based on punch data.
+ * @param {Object} req - Express request object containing params labourId and query parameters month and year.
+ * @param {Object} res - Express response object.
+ */
 async function getAttendance(req, res) {
     try {
         const { labourId } = req.params;
         const { month, year } = req.query;
-        logger.info('Received request for attendance:', { labourId, month, year });
 
-        const attendance = await labourModel.getAttendanceByLabourId(labourId, month, year);
-        logger.info('Attendance data fetched from the database:', attendance);
-
-        if (!attendance || attendance.length === 0) {
-            logger.info('No attendance found for this labour in the selected month');
-            return res.status(404).json({ message: 'No attendance found for this labour in the selected month' });
+        // Validate input
+        if (!labourId || !month || !year) {
+            return res.status(400).json({ message: 'LabourId, Month, and Year are required' });
         }
 
-        const labourDetails = await labourModel.getLabourDetailsById(labourId);
-        const shiftHours = labourDetails.workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+        const parsedMonth = parseInt(month, 10);
+        const parsedYear = parseInt(year, 10);
+
+        if (isNaN(parsedMonth) || isNaN(parsedYear)) {
+            return res.status(400).json({ message: 'Invalid month or year' });
+        }
+
+        // Fetch labour details
+        const labour = await labourModel.getLabourDetailsById(labourId);
+
+        if (!labour) {
+            return res.status(404).json({ message: 'Labour not found' });
+        }
+
+        const { workingHours } = labour;
+        const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
         const halfDayHours = shiftHours === 9 ? 4.5 : 4;
 
-        const daysInMonth = new Date(year, month, 0).getDate();
-        let presentDays = 0;
-        let halfDays = 0;
-        let missPunchDays = 0;
-        let totalOvertimeHours = 0;
+        const daysInMonth = new Date(parsedYear, parsedMonth, 0).getDate(); // Total days in the month
+
+        let presentDays = 0, halfDays = 0, missPunchDays = 0, absentDays = 0;
+        let totalOvertimeHours = 0, roundOffTotalOvertime = 0, PayrollCalRoundoffTotalOvertime = 0;
+        let totalManualOvertimeManually = 0;
         let monthlyAttendance = [];
 
+        // Fetch attendance records for the labour for the month
+        const labourAttendance = await labourModel.getAttendanceByLabourId(labourId, parsedMonth, parsedYear);
+
         for (let day = 1; day <= daysInMonth; day++) {
-            const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const punchesForDay = attendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
+            const date = `${parsedYear}-${String(parsedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const punchesForDay = labourAttendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
 
-            let status = 'A';
-            let totalHours = 0;
-            let overtime = 0;
+            let { status, firstPunch, lastPunch, totalHours } = determineStatus(punchesForDay, shiftHours, halfDayHours, workingHours);
 
-            if (punchesForDay.length > 0) {
-                punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+            let overtime = 0, dailyRoundOffOvertime = 0;
+            let firstPunchAttendanceId = null, firstPunchDeviceId = null;
+            let lastPunchAttendanceId = null, lastPunchDeviceId = null;
+            let projectIdFromDevicefirstPunch = null;
+            let projectIdFromDeviceLastPunch = null;
 
-                const firstPunch = punchesForDay[0];
-                const lastPunch = punchesForDay[punchesForDay.length - 1];
-
-                totalHours = calculateHoursWorked(firstPunch.punch_date, firstPunch.punch_time, lastPunch.punch_time);
-
-                if (firstPunch && lastPunch && totalHours >= shiftHours) {
-                    status = 'P';
-                    presentDays++;
-                    overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
-                } else if (firstPunch && totalHours < halfDayHours) {
-                    status = 'MP';
-                    missPunchDays++;
-                } else if (totalHours >= halfDayHours) {
-                    status = 'HD';
-                    halfDays++;
+            if (firstPunch) {
+                firstPunchAttendanceId = firstPunch.attendance_id;
+                firstPunchDeviceId = firstPunch.Device_id;
+                if (firstPunchDeviceId) {
+                    projectIdFromDevicefirstPunch = await labourModel.getProjectIdByDeviceId(firstPunchDeviceId);
                 }
-
-                monthlyAttendance.push({
-                    date,
-                    firstPunch: {
-                        time: formatTimeToHoursMinutes(firstPunch.punch_time),
-                        attendanceId: firstPunch.attendance_id,
-                        deviceId: firstPunch.Device_id,
-                    },
-                    lastPunch: {
-                        time: formatTimeToHoursMinutes(lastPunch.punch_time),
-                        attendanceId: lastPunch.attendance_id,
-                        deviceId: lastPunch.Device_id,
-                    },
-                    totalHours,
-                    overtime,
-                    status,
-                });
-
-                totalOvertimeHours += overtime;
-            } else {
-                monthlyAttendance.push({
-                    date,
-                    status: 'A',
-                    totalHours: 0,
-                    overtime: 0,
-                });
             }
+
+            if (lastPunch) {
+                lastPunchAttendanceId = lastPunch.attendance_id;
+                lastPunchDeviceId = lastPunch.Device_id;
+                if (lastPunchDeviceId) {
+                    projectIdFromDeviceLastPunch = await labourModel.getProjectIdByDeviceId(lastPunchDeviceId);
+                }
+            }
+
+            // ✅ **Overtime Calculation**
+            if (status === 'P') {
+                overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
+            }
+
+            // ✅ **Overtime Rounding**
+            dailyRoundOffOvertime = roundOvertime(overtime);
+
+            // ✅ **Limit OvertimeManually to 4 hours**
+            let OvertimeManually = dailyRoundOffOvertime > 4 ? 4 : dailyRoundOffOvertime;
+
+            // ✅ **Update Counters**
+            switch (status) {
+                case 'P': presentDays++; break;
+                case 'HD': halfDays++; break;
+                case 'MP': missPunchDays++; break;
+                case 'A': absentDays++; break;
+                default: absentDays++;
+            }
+
+            totalOvertimeHours += overtime;
+            PayrollCalRoundoffTotalOvertime += roundOvertime(overtime);
+            roundOffTotalOvertime += dailyRoundOffOvertime;
+            totalManualOvertimeManually += OvertimeManually;
+
+            const safeTotalHours = typeof totalHours === 'number' && !isNaN(totalHours) ? totalHours : 0;
+
+            // ✅ **Prepare Attendance Data**
+            monthlyAttendance.push({
+                labourId,
+                projectName: parseInt(labour.projectName, 10),
+                date,
+                firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
+                firstPunchAttendanceId,
+                firstPunchDeviceId,
+                lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
+                lastPunchAttendanceId,
+                lastPunchDeviceId,
+                totalHours: safeTotalHours.toFixed(2),
+                overtime: overtime.toFixed(2),
+                PayrollCalRoundOffOvertime: dailyRoundOffOvertime.toFixed(2),
+                OvertimeManually: OvertimeManually.toFixed(2),
+                status,
+                creationDate: new Date(),
+                projectIdFromDevicefirstPunch,
+                projectIdFromDeviceLastPunch,
+            });
         }
 
-        logger.info('Calculated attendance:', {
+        // ✅ **Prepare Summary**
+        const summary = {
             labourId,
+            projectName: parseInt(labour.projectName, 10),
             totalDays: daysInMonth,
             presentDays,
             halfDays,
             missPunchDays,
-            totalOvertimeHours,
-            shift: labourDetails.workingHours,
+            absentDays,
+            totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(2)),
+            PayrollCalRoundoffTotalOvertime: parseFloat(PayrollCalRoundoffTotalOvertime.toFixed(2)),
+            RoundOffTotalOvertime: parseFloat(roundOffTotalOvertime.toFixed(2)),
+            TotalOvertimeHoursManually: parseFloat(totalManualOvertimeManually.toFixed(2)),
+            shift: workingHours,
+            creationDate: new Date(),
+            selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`,
+        };
+
+        // ✅ **Return Data**
+        res.status(200).json({
+            message: 'Attendance processed successfully',
+            summary,
             monthlyAttendance,
         });
 
-        res.json({
-            labourId,
-            totalDays: daysInMonth,
-            presentDays,
-            halfDays,
-            missPunchDays,
-            totalOvertimeHours,
-            shift: labourDetails.workingHours,
-            monthlyAttendance,
-        });
     } catch (err) {
-        logger.error('Error getting attendance for month', err);
-        res.status(500).json({ message: 'Error getting attendance for the month' });
+        console.error('Error processing attendance:', err);
+        res.status(500).json({ message: 'Error processing attendance' });
     }
 }
 
@@ -2176,8 +2306,8 @@ async function getAllLaboursAttendance(req, res) {
         }
 
         // Fetch all approved labours
-        const approvedLabours = await labourModel.getAllApprovedLabours();
-        // const approvedLabours = await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
+        // const approvedLabours = await labourModel.getAllApprovedLabours();
+        const approvedLabours = await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
 
 
         if (!approvedLabours || approvedLabours.length === 0) {
