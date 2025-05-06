@@ -624,7 +624,7 @@ async function registerDataUpdateDisable(labourData) {
         // const setInputWithUpperCase = (key, value) => {
         //   request.input(key, sql.VarChar, value ? value.toUpperCase() : '');
         // };
-
+        const bitFields = ['isResubmit', 'hideResubmit', 'isCompanyTransfer', 'isSiteTransfer'];
         const setInputWithUpperCase = (key, value) => {
             const valueAsString = value ? String(value) : '';
             request.input(key, sql.VarChar, valueAsString ? valueAsString.toUpperCase() : '');
@@ -648,12 +648,23 @@ async function registerDataUpdateDisable(labourData) {
         labourData.OnboardName = finalOnboardName.toUpperCase();
 
         Object.keys(labourData).forEach((key) => {
-            if (key !== 'LabourID' && key !== 'location') {
-                if (toUpperCaseFields.includes(key)) {
-                    setInputWithUpperCase(key, labourData[key]);
-                } else {
-                    request.input(key, sql.VarChar, labourData[key]);
-                }
+            if (key === 'LabourID' || key === 'location') return;
+
+            if (toUpperCaseFields.includes(key)) {
+                setInputWithUpperCase(key, labourData[key]);
+            } else if (bitFields.includes(key)) {
+                // ✅ Set BIT fields explicitly
+                let val = labourData[key];
+                const boolValue =
+                    val === true || val === 'true' || val === '1'
+                        ? true
+                        : val === false || val === 'false' || val === '0'
+                        ? false
+                        : null;
+
+                request.input(key, sql.Bit, boolValue);
+            } else {
+                request.input(key, sql.VarChar, labourData[key]);
             }
         });
 

@@ -75,7 +75,7 @@ async function handleCheckAadhaar(req, res) {
 
                 return res.status(200).json({
                     exists: true,
-                    LabourIDs: labourIDs 
+                    LabourIDs: labourIDs
                 });
             } else {
                 const labourIDs = labourRecords.map(record => record.LabourID);
@@ -185,87 +185,100 @@ async function createRecord(req, res) {
         retirementDate.setFullYear(retirementDate.getFullYear() + 60);
 
         // **********************************  NEW  ********************
-        const pool = await poolPromise4;
-        const projectRequest = pool.request();
-
+        // Primary check on Framework.BusinessUnit (Server 1)
+const pool = await poolPromise4;
         const isNumeric = !isNaN(projectName);
+        const projectRequest = pool.request();
         projectRequest.input('projectName', isNumeric ? sql.Int : sql.VarChar, projectName);
 
-        let query;
-        if (isNumeric) {
-            query = `
-        Select Id, Description ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
-(IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
-        AND Id = @projectName
-    `;
+        let projectResult;
+        let location = "";
+        let businessUnit = "";
+        let projectId;
+        let parentId;
+
+        // 1. Try primary query from Framework.BusinessUnit
+        const primaryQuery = isNumeric
+            ? `
+                SELECT Id, Description, Type, Email1, ParentId 
+                FROM Framework.BusinessUnit 
+                WHERE Type = 'B' 
+                AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
+                AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0)
+                AND Id = @projectName
+              `
+            : `
+                SELECT a.Id, a.Description, a.Type, a.Email1, a.ParentId
+                FROM Framework.BusinessUnit a
+                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
+                WHERE a.Description = @projectName
+                AND (a.IsDiscontinueBU IS NULL OR a.IsDiscontinueBU = 0)
+                AND (a.IsDeleted IS NULL OR a.IsDeleted = 0)
+                AND b.Id = 3
+              `;
+
+        const primaryResult = await projectRequest.query(primaryQuery);
+
+        if (primaryResult.recordset.length > 0) {
+            const record = primaryResult.recordset[0];
+            projectResult = record;
+            location = record.Description;
+            businessUnit = record.Description;
+            projectId = record.Id;
+            parentId = record.ParentId;
         } else {
-            query = `
-        SELECT a.id, a.Description 
-        FROM Framework.BusinessUnit a
-        LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
-        WHERE a.Description = @projectName
-        AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-        AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
-        AND b.Id = 3
-    `;
+            console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
+
+            const pool2 = await poolPromise;
+            const fallbackQuery = `
+                SELECT Id, ProjectName AS Description, Type, ParentId
+                FROM CompanyNameByBuId
+            `;
+            const fallbackResult = await pool2.request().query(fallbackQuery);
+
+            const match = fallbackResult.recordset.find(comp =>
+                isNumeric ? comp.Id === parseInt(projectName) : comp.Description.trim().toLowerCase() === projectName.trim().toLowerCase()
+            );
+
+            if (!match) {
+                return res.status(400).json({ msg: 'Invalid project name' });
+            }
+
+            projectResult = match;
+            location = match.Description;
+            businessUnit = match.Description;
+            projectId = match.Id;
+            parentId = match.ParentId;
         }
 
-        //console.log(`Querying for projectName: ${projectName}`); // Debug log
-
-        const projectResult = await projectRequest.query(query);
-
-        if (projectResult.recordset.length === 0) {
-            // //console.log('Invalid project name:', projectName); 
-            return res.status(400).json({ msg: 'Invalid project name' });
-        }
-
-        const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
-        const businessUnit = projectResult.recordset[0].Description;
-        // console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
-
-        // **********************************  NEW  ********************
-
-        let salaryBu;
-        const projectId = projectResult.recordset[0].Id;
-        const parentIdResult = await pool.request().query(`
-    Select Id, Description ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
-(IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
-        AND Id = ${projectId}
-`);
-
-        if (parentIdResult.recordset.length === 0) {
-            return res.status(404).send('ParentId not found for the selected project');
-        }
-
-        const parentId = parentIdResult.recordset[0].ParentId;
+        // 2. Determine Company Name using ParentId from resolved record
         const pool5 = await poolPromise;
         const companyNameResult = await pool5.request().query(`
-    SELECT Description AS Company_Name 
-        FROM CompanyNameByBuId 
-        WHERE ParentId = ${parentId}
-`);
+            SELECT Description AS Company_Name 
+            FROM CompanyNameByBuId 
+            WHERE ParentId = ${parentId}
+        `);
 
-        const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
-        // console.log('companyNameFromDb++',companyNameFromDb)
-        if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
-            salaryBu = `${companyNameFromDb} - HO`;
-        } else {
-            salaryBu = location;
+        let salaryBu = location;
+        if (companyNameResult.recordset.length > 0) {
+            const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
+            if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
+                salaryBu = `${companyNameFromDb} - HO`;
+            }
         }
 
-        // Fetch department description
+        // 3. Department Info
         const departmentRequest = pool5.request();
         departmentRequest.input('departmentId', sql.Int, departmentId);
         const departmentQuery = `
-      SELECT [id], [farvision_code] AS Code, [farvision_id] AS Id, [farvision_description] AS Description 
-      FROM [Departments] WHERE [farvision_id] = @departmentId
- `;
+            SELECT [id], [farvision_code] AS Code, [farvision_id] AS Id, [farvision_description] AS Description 
+            FROM [Departments] 
+            WHERE [farvision_id] = @departmentId
+        `;
         const departmentResult = await departmentRequest.query(departmentQuery);
-
         if (departmentResult.recordset.length === 0) {
             return res.status(404).send('Department not found');
         }
-
         const departmentName = departmentResult.recordset[0].Description;
         // console.log('departmentResult++',departmentName)
 
@@ -323,8 +336,6 @@ async function getRecordById(req, res) {
         return res.status(500).json({ error: 'Internal server error' });
     }
 }
-
-
 
 
 async function createRecordUpdate(req, res) {
@@ -425,56 +436,72 @@ async function createRecordUpdate(req, res) {
         const retirementDate = new Date(dateOfBirth);
         retirementDate.setFullYear(retirementDate.getFullYear() + 60);
 
-        const pool = await poolPromise2;
+        const pool = await poolPromise4;
+        const isNumeric = !isNaN(projectName);
         const projectRequest = pool.request();
+        projectRequest.input('projectName', isNumeric ? sql.Int : sql.VarChar, projectName);
 
-        projectRequest.input('projectName', isNaN(safeProjectName) ? sql.VarChar : sql.Int, safeProjectName);
+        let projectResult;
+        let location = "";
+        let businessUnit = "";
+        let projectId;
+        let parentId;
 
-        let query;
-        if (!isNaN(safeProjectName)) {
-            query = `
-                   Select Id, Description ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
-(IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
-        AND Id = @projectName
-            `;
-        } else {
-            query = `
-                SELECT a.id, a.Description 
+        // 1. Try primary query from Framework.BusinessUnit
+        const primaryQuery = isNumeric
+            ? `
+                SELECT Id, Description, Type, Email1, ParentId 
+                FROM Framework.BusinessUnit 
+                WHERE Type = 'B' 
+                AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
+                AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0)
+                AND Id = @projectName
+              `
+            : `
+                SELECT a.Id, a.Description, a.Type, a.Email1, a.ParentId
                 FROM Framework.BusinessUnit a
                 LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
                 WHERE a.Description = @projectName
-                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+                AND (a.IsDiscontinueBU IS NULL OR a.IsDiscontinueBU = 0)
+                AND (a.IsDeleted IS NULL OR a.IsDeleted = 0)
                 AND b.Id = 3
+              `;
+
+        const primaryResult = await projectRequest.query(primaryQuery);
+
+        if (primaryResult.recordset.length > 0) {
+            const record = primaryResult.recordset[0];
+            projectResult = record;
+            location = record.Description;
+            businessUnit = record.Description;
+            projectId = record.Id;
+            parentId = record.ParentId;
+        } else {
+            console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
+
+            const pool2 = await poolPromise;
+            const fallbackQuery = `
+                SELECT Id, ProjectName AS Description, Type, ParentId
+                FROM CompanyNameByBuId
             `;
+            const fallbackResult = await pool2.request().query(fallbackQuery);
+
+            const match = fallbackResult.recordset.find(comp =>
+                isNumeric ? comp.Id === parseInt(projectName) : comp.Description.trim().toLowerCase() === projectName.trim().toLowerCase()
+            );
+
+            if (!match) {
+                return res.status(400).json({ msg: 'Invalid project name' });
+            }
+
+            projectResult = match;
+            location = match.Description;
+            businessUnit = match.Description;
+            projectId = match.Id;
+            parentId = match.ParentId;
         }
 
-        //console.log(`Querying for projectName: ${safeProjectName}`); // Debug log
-
-        const projectResult = await projectRequest.query(query);
-
-        if (projectResult.recordset.length === 0) {
-            //console.log('Invalid project name:', safeProjectName); // Debug log
-            return res.status(400).json({ msg: 'Invalid project name-------' });
-        }
-
-        const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
-        const businessUnit = projectResult.recordset[0].Description;
-        //console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
-
-        let salaryBu;
-        const projectId = projectResult.recordset[0].id;
-        const parentIdResult = await pool.request().query(`
-            Select Id, Description ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
-(IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
-        AND Id = ${projectId}
-        `);
-
-        if (parentIdResult.recordset.length === 0) {
-            return res.status(404).send('ParentId not found for the selected project');
-        }
-
-        const parentId = parentIdResult.recordset[0].ParentId;
+        // const parentId = parentIdResult.recordset[0].ParentId;
         const pool5 = await poolPromise;
         const companyNameResult = await pool5.request().query(`
               SELECT Description AS Company_Name 
@@ -641,77 +668,103 @@ async function updateRecord(req, res) {
         const retirementDate = new Date(dateOfBirth);
         retirementDate.setFullYear(retirementDate.getFullYear() + 60);
 
-        const pool = await poolPromise2;
+        const pool = await poolPromise4;
+        const isNumeric = !isNaN(projectName);
         const projectRequest = pool.request();
-        projectRequest.input('projectName', isNaN(safeProjectName) ? sql.VarChar : sql.Int, safeProjectName);
+        projectRequest.input('projectName', isNumeric ? sql.Int : sql.VarChar, projectName);
 
-        let query;
-        if (!isNaN(safeProjectName)) {
-            query = `
-               Select Id, Description ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
-(IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
-        AND Id = @projectName
-            `;
-        } else {
-            query = `
-                SELECT a.id, a.Description 
+        let projectResult;
+        let location = "";
+        let businessUnit = "";
+        let projectId;
+        let parentId;
+
+        // 1. Try primary query from Framework.BusinessUnit
+        const primaryQuery = isNumeric
+            ? `
+                SELECT Id, Description, Type, Email1, ParentId 
+                FROM Framework.BusinessUnit 
+                WHERE Type = 'B' 
+                AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
+                AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0)
+                AND Id = @projectName
+              `
+            : `
+                SELECT a.Id, a.Description, a.Type, a.Email1, a.ParentId
                 FROM Framework.BusinessUnit a
                 LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
                 WHERE a.Description = @projectName
-                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+                AND (a.IsDiscontinueBU IS NULL OR a.IsDiscontinueBU = 0)
+                AND (a.IsDeleted IS NULL OR a.IsDeleted = 0)
                 AND b.Id = 3
+              `;
+
+        const primaryResult = await projectRequest.query(primaryQuery);
+
+        if (primaryResult.recordset.length > 0) {
+            const record = primaryResult.recordset[0];
+            projectResult = record;
+            location = record.Description;
+            businessUnit = record.Description;
+            projectId = record.Id;
+            parentId = record.ParentId;
+        } else {
+            console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
+
+            const pool2 = await poolPromise;
+            const fallbackQuery = `
+                SELECT Id, ProjectName AS Description, Type, ParentId
+                FROM CompanyNameByBuId
             `;
+            const fallbackResult = await pool2.request().query(fallbackQuery);
+
+            const match = fallbackResult.recordset.find(comp =>
+                isNumeric ? comp.Id === parseInt(projectName) : comp.Description.trim().toLowerCase() === projectName.trim().toLowerCase()
+            );
+
+            if (!match) {
+                return res.status(400).json({ msg: 'Invalid project name' });
+            }
+
+            projectResult = match;
+            location = match.Description;
+            businessUnit = match.Description;
+            projectId = match.Id;
+            parentId = match.ParentId;
         }
 
-        //console.log(`Querying for projectName: ${safeProjectName}`);
-
-        const projectResult = await projectRequest.query(query);
-
-        if (projectResult.recordset.length === 0) {
-            //console.log('Invalid project name:', safeProjectName);
-            return res.status(400).json({ msg: 'Invalid project name' });
-        }
-
-        const location = projectResult.recordset[0].Description;
-        const businessUnit = projectResult.recordset[0].Description;
-        //console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
-
-        let salaryBu;
-        const projectId = projectResult.recordset[0].id;
-        const parentIdResult = await pool.request().query(`
-            SELECT ParentId 
-            FROM Framework.BusinessUnit 
-            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-            AND Id = ${projectId}
-        `);
-
-        if (parentIdResult.recordset.length === 0) {
-            return res.status(404).send('ParentId not found for the selected project');
-        }
-
-        const parentId = parentIdResult.recordset[0].ParentId;
-
-        const companyNameResult = await pool.request().query(`
-            SELECT Id, Description AS Company_Name 
-            FROM Framework.BusinessUnit 
-            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-            AND Id = ${parentId}
+        // const parentId = parentIdResult.recordset[0].ParentId;
+        const pool5 = await poolPromise;
+        const companyNameResult = await pool5.request().query(`
+              SELECT Description AS Company_Name 
+        FROM CompanyNameByBuId 
+        WHERE ParentId = ${parentId}
         `);
 
         const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
 
-        salaryBu = companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED' ? `${companyNameFromDb} - HO` : location;
+        if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
+            salaryBu = `${companyNameFromDb} - HO`;
+        } else {
+            salaryBu = location;
+        }
 
+        // Fetch department description
         const departmentRequest = pool.request();
-        departmentRequest.input('departmentId', safeDepartmentId);
+
+        // Validate and log departmentId before setting SQL input
+        //console.log('Setting SQL input for departmentId:', safeDepartmentId);
+        if (safeDepartmentId !== null) {
+            departmentRequest.input('departmentId', safeDepartmentId);
+            //console.log("departmentId", departmentId)
+        } else {
+            //console.log('Invalid departmentId provided:', departmentId);
+            return res.status(400).send('Invalid departmentId');
+        }
 
         const departmentQuery = `
-            SELECT a.Description AS Department_Name
-            FROM Payroll.Department a
-            WHERE a.Id = @departmentId
+             SELECT [id], [farvision_code] AS Code, [farvision_id] AS Id, [farvision_description] AS Description 
+      FROM [Departments] WHERE [farvision_id] = @departmentId
         `;
         const departmentResult = await departmentRequest.query(departmentQuery);
 
@@ -720,7 +773,7 @@ async function updateRecord(req, res) {
             return res.status(404).send('Department not found');
         }
 
-        const departmentName = departmentResult.recordset[0].Department_Name;
+        const departmentName = departmentResult.recordset[0].Description;
 
         const creationDate = new Date();
         //console.log('Received OnboardName Edit button functionlity:', finalOnboardName);
@@ -800,15 +853,32 @@ async function updateRecord(req, res) {
 
 async function updateRecordWithDisable(req, res) {
     try {
-        const {
+        let {
             LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber,
             gender, dateOfJoining, address, pincode, taluka, district, village, state,
             emergencyContact, bankName, branch, accountNumber, ifscCode, projectName,
             labourCategory, department, workingHours, contractorName, contractorNumber,
             designation, title, Marital_Status, companyName, Induction_Date, Inducted_By,
-            OnboardName, expiryDate, departmentId, designationId, isResubmit = null
+            OnboardName, expiryDate, departmentId, designationId, isResubmit, hideResubmit , isCompanyTransfer, isSiteTransfer
         } = req.body;
-console.log("req.body-->",req.body)
+        console.log("req.body-->", req.body)
+
+        const parseBitField = (val) => {
+            if (val === null || val === undefined || val === '' || val === 'null') return null;
+            if (typeof val === 'boolean') return val;
+            if (typeof val === 'string') {
+                const lowered = val.trim().toLowerCase();
+                if (lowered === 'true' || lowered === '1') return true;
+                if (lowered === 'false' || lowered === '0') return false;
+            }
+            return null;
+        };
+
+        const parsedIsResubmit = parseBitField(isResubmit);
+        const parsedHideResubmit = parseBitField(hideResubmit);
+        const parsedIsCompanyTransfer = parseBitField(isCompanyTransfer);
+        const parsedIsSiteTransfer = parseBitField(isSiteTransfer);
+
         let finalOnboardName = Array.isArray(OnboardName)
             ? OnboardName.filter(n => n && n.trim() !== '').pop()
             : OnboardName;
@@ -849,10 +919,16 @@ console.log("req.body-->",req.body)
         } = req.files || {};
 
         const processFileField = (bodyField, fileField) => {
-            if (fileField) return 'YOUR_BASE_URL/' + fileField[0].filename;
-            if (typeof bodyField === 'string' && bodyField.startsWith('http')) return bodyField;
-            return null;
+            if (fileField) {
+                // Binary data uploaded, get URL path
+                return baseUrl + path.basename(fileField[0].path);
+            } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
+                // If no new file, use the existing URL
+                return bodyField;
+            }
+            return null; // No data available
         };
+   
 
         const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
         const backImageUrl = processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
@@ -870,83 +946,119 @@ console.log("req.body-->",req.body)
         const retirementDate = new Date(dateOfBirth);
         retirementDate.setFullYear(retirementDate.getFullYear() + 60);
 
-        const pool = await poolPromise2;
+        const pool = await poolPromise4;
+        const isNumeric = !isNaN(projectName);
         const projectRequest = pool.request();
+        projectRequest.input('projectName', isNumeric ? sql.Int : sql.VarChar, projectName);
 
-        const isProjectId = !isNaN(safeProjectName);
-        projectRequest.input(
-            'projectName',
-            isProjectId ? sql.Int : sql.NVarChar,
-            isProjectId ? parseInt(safeProjectName) : safeProjectName
-        );
+        let projectResult;
+        let location = "";
+        let businessUnit = "";
+        let projectId;
+        let parentId;
 
-        let query;
-        if (isProjectId) {
-            query = `
-                SELECT Id, Description, Type, Email1, ParentId
-                FROM Framework.BusinessUnit
-                WHERE Type = 'B'
-                  AND Id = @projectName
-                  AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = 0)
-                  AND (IsDeleted IS NULL OR IsDeleted = 0)
-            `;
+        // 1. Try primary query from Framework.BusinessUnit
+        const primaryQuery = isNumeric
+            ? `
+                SELECT Id, Description, Type, Email1, ParentId 
+                FROM Framework.BusinessUnit 
+                WHERE Type = 'B' 
+                AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
+                AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0)
+                AND Id = @projectName
+              `
+            : `
+                SELECT a.Id, a.Description, a.Type, a.Email1, a.ParentId
+                FROM Framework.BusinessUnit a
+                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
+                WHERE a.Description = @projectName
+                AND (a.IsDiscontinueBU IS NULL OR a.IsDiscontinueBU = 0)
+                AND (a.IsDeleted IS NULL OR a.IsDeleted = 0)
+                AND b.Id = 3
+              `;
+
+        const primaryResult = await projectRequest.query(primaryQuery);
+
+        if (primaryResult.recordset.length > 0) {
+            const record = primaryResult.recordset[0];
+            projectResult = record;
+            location = record.Description;
+            businessUnit = record.Description;
+            projectId = record.Id;
+            parentId = record.ParentId;
         } else {
-            query = `
-                SELECT Id, Description, Type, Email1, ParentId
-                FROM Framework.BusinessUnit
-                WHERE Type = 'B'
-                  AND Description = @projectName
-                  AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = 0)
-                  AND (IsDeleted IS NULL OR IsDeleted = 0)
+            console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
+
+            const pool2 = await poolPromise;
+            const fallbackQuery = `
+                SELECT Id, ProjectName AS Description, Type, ParentId
+                FROM CompanyNameByBuId
             `;
+            const fallbackResult = await pool2.request().query(fallbackQuery);
+
+            const match = fallbackResult.recordset.find(comp =>
+                isNumeric ? comp.Id === parseInt(projectName) : comp.Description.trim().toLowerCase() === projectName.trim().toLowerCase()
+            );
+
+            if (!match) {
+                return res.status(400).json({ msg: 'Invalid project name' });
+            }
+
+            projectResult = match;
+            location = match.Description;
+            businessUnit = match.Description;
+            projectId = match.Id;
+            parentId = match.ParentId;
         }
 
-        console.log("Executing query...");
-        const projectResult = await projectRequest.query(query);
-console.log("projectResult-->",projectResult.recordset[0])
-        // if (!projectResult.recordset || projectResult.recordset.length === 0) {
-        //     console.error("No project found for given projectName:", safeProjectName);
-        //     return res.status(400).json({ msg: 'Invalid project name or ID' });
-        // }
+        // const parentId = parentIdResult.recordset[0].ParentId;
+        const pool5 = await poolPromise;
+        const companyNameResult = await pool5.request().query(`
+              SELECT Description AS Company_Name 
+        FROM CompanyNameByBuId 
+        WHERE ParentId = ${parentId}
+        `);
 
-        const projectData = projectResult.recordset[0];
-        console.log("projectData-->", projectData);
-        const location = projectData.Description;
-        const businessUnit = projectData.Description;
-        const projectId = projectData.Id;
-        const parentId = projectData.ParentId;
+        const companyNameFromDb = companyNameResult.recordset[0].Company_Name || '';
 
-        console.log("parentId", parentId);
+        if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
+            salaryBu = `${companyNameFromDb} - HO`;
+        } else {
+            salaryBu = location;
+        }
 
-        const companyNameQuery = `
-            SELECT Id, Description AS Company_Name
-            FROM Framework.BusinessUnit
-            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-              AND (IsDeleted = 0 OR IsDeleted IS NULL)
-              AND Id = ${parentId}
-        `;
+        // Fetch department description
+        const departmentRequest = pool5.request();
 
-        const companyNameResult = await pool.request().query(companyNameQuery);
-        const companyNameFromDb = companyNameResult.recordset[0]?.Company_Name || '';
+        // Validate and log departmentId before setting SQL input
+        console.log('Setting SQL input for departmentId:', safeDepartmentId);
+        if (safeDepartmentId !== null) {
+            departmentRequest.input('departmentId', safeDepartmentId);
+            console.log("departmentId", departmentId)
+        } else {
+            console.log('Invalid departmentId provided:', departmentId);
+            return res.status(400).send('Invalid departmentId');
+        }
 
-        let salaryBu = companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED'
-            ? `${companyNameFromDb} - HO`
-            : location;
-
-        const departmentRequest = pool.request();
-        departmentRequest.input('departmentId', sql.Int, safeDepartmentId);
         const departmentQuery = `
-            SELECT a.Description AS Department_Name
-            FROM Payroll.Department a
-            WHERE a.Id = @departmentId
+             SELECT [id], [farvision_code] AS Code, [farvision_id] AS Id, [farvision_description] AS Description 
+      FROM [Departments] WHERE [farvision_id] = @departmentId
         `;
         const departmentResult = await departmentRequest.query(departmentQuery);
+
         if (departmentResult.recordset.length === 0) {
+            //console.log('Department not found for departmentId:', safeDepartmentId);
             return res.status(404).send('Department not found');
         }
 
-        const departmentName = departmentResult.recordset[0].Department_Name;
+      
+        
+        
+
+        const departmentName = departmentResult.recordset[0].Description;
         const creationDate = new Date();
+
+       
 
         const data = await labourModel.registerDataUpdateDisable({
             LabourID, labourOwnership,
@@ -972,7 +1084,10 @@ console.log("projectResult-->",projectResult.recordset[0])
             departmentId: safeDepartmentId, departmentName,
             designationId: safeDesignationId,
             labourCategoryId: safeLabourCategoryId,
-            isResubmit
+            isResubmit: parsedIsResubmit,
+            hideResubmit: parsedHideResubmit,
+            isCompanyTransfer: parsedIsCompanyTransfer,
+            isSiteTransfer: parsedIsSiteTransfer
         });
 
         return res.status(201).json({ msg: "User created successfully", data });
@@ -981,6 +1096,138 @@ console.log("projectResult-->",projectResult.recordset[0])
         return res.status(500).json({ msg: 'Internal server error' });
     }
 }
+
+
+
+const sanitizeInt = v =>
+    (v !== undefined && v !== null && v !== '' && v !== 'null') ? parseInt(v, 10) : null;
+  
+  // converts various truthy / falsy strings → boolean / null
+  const parseBit = v => {
+    if (v === null || v === undefined || v === '' || v === 'null') return null;
+    if (typeof v === 'boolean') return v;
+    const s = String(v).trim().toLowerCase();
+    if (s === 'true' || s === '1') return true;
+    if (s === 'false' || s === '0') return false;
+    return null;
+  };
+  
+
+// async function updateRecordWithDisable(req, res) {
+//     try {
+//       let {
+//         LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber,
+//         gender, dateOfJoining, address, pincode, taluka, district, village, state,
+//         emergencyContact, bankName, branch, accountNumber, ifscCode, projectName,
+//         labourCategory, department, workingHours, contractorName, contractorNumber,
+//         designation, title, Marital_Status, companyName, Induction_Date, Inducted_By,
+//         OnboardName, expiryDate, departmentId, designationId, isResubmit, hideResubmit,
+//         isCompanyTransfer, isSiteTransfer
+//       } = req.body;
+//   console.log("req.body updateRecordDisable--->", req.body)
+//       /* ---------- basic validation ---------- */
+//       if (!LabourID) return res.status(400).json({ msg: 'LabourID is required.' });
+  
+//       const onboardArray = Array.isArray(OnboardName)
+//         ? OnboardName.filter(n => n && n.trim())
+//         : [OnboardName];
+//       const finalOnboardName = (onboardArray.pop() || '').toUpperCase();
+//       if (!finalOnboardName) return res.status(400).json({ msg: 'OnboardName is required.' });
+  
+//       /* ---------- numeric & enum sanitising ---------- */
+//       const rawDeptId    = sanitizeInt(departmentId);
+//       const rawDeptCode  = sanitizeInt(department);           // fallback if id missing
+//       const safeDepartmentId   = rawDeptId ?? rawDeptCode;
+//       const safeDesignationId  = sanitizeInt(designationId);
+//       const labourCatMap = { 'SKILLED': 1, 'UN-SKILLED': 2, 'SEMI-SKILLED': 3 };
+//       const safeLabourCategoryId = labourCatMap[labourCategory] ?? null;
+  
+//       if (!projectName || !safeDepartmentId || !safeDesignationId) {
+//         return res.status(400).json({ msg: 'Missing projectName / departmentId / designationId' });
+//       }
+  
+//       /* ---------- file url helpers ---------- */
+//       const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files || {};
+//       const url = (bodyField, fileField) =>
+//         fileField ? baseUrl + path.basename(fileField[0].path) :
+//         (typeof bodyField === 'string' && bodyField.startsWith('http') ? bodyField : null);
+  
+//       /* ---------- dates ---------- */
+//       const joinDate  = new Date(dateOfJoining);
+//       const fromDate  = joinDate.toISOString().split('T')[0];
+//       const period    = joinDate.toLocaleString('default', { month:'long', year:'numeric' }).replace(' ','-');
+//       const validTill = new Date(joinDate); validTill.setFullYear(validTill.getFullYear()+1);
+//       const retireDt  = new Date(dateOfBirth); retireDt.setFullYear(retireDt.getFullYear()+60);
+  
+//       /* ---------- resolve project ---------- */
+//       const pool = await poolPromise4;
+//       const projReq = pool.request().input('projectName', !isNaN(projectName) ? sql.Int : sql.VarChar, projectName);
+//       const primaryQ = !isNaN(projectName)
+//         ? `SELECT Id,Description,ParentId FROM Framework.BusinessUnit WHERE Type='B' AND IsDeleted=0 AND Id=@projectName`
+//         : `SELECT a.Id,a.Description,a.ParentId FROM Framework.BusinessUnit a LEFT JOIN Framework.BusinessUnitSegment b ON b.Id=a.SegmentId
+//            WHERE a.Description=@projectName AND a.IsDeleted=0 AND b.Id=3`;
+  
+//       let { recordset } = await projReq.query(primaryQ);
+//       console.log("object----> projectname", recordset)
+//       if (!recordset.length) {
+//         const alt = await (await poolPromise).request().query('SELECT Id,ProjectName AS Description,ParentId FROM CompanyNameByBuId');
+//         recordset = alt.recordset.filter(r =>
+//           !isNaN(projectName) ? r.Id === +projectName : r.Description.trim().toLowerCase() === projectName.trim().toLowerCase()
+//         );
+//         if (!recordset.length) return res.status(400).json({ msg:'Invalid project name' });
+//       }
+//       const { Description: location, Id: projectId, ParentId: parentId } = recordset[0];
+  
+//       /* ---------- company name & department ---------- */
+//       const poolG = await poolPromise;
+//       const compRs = await poolG.request().query(`SELECT Description FROM CompanyNameByBuId WHERE ParentId=${parentId}`);
+//       const salaryBu = compRs.recordset[0]?.Description === 'SANKALP CONTRACTS PRIVATE LIMITED'
+//         ? 'SANKALP CONTRACTS PRIVATE LIMITED - HO'
+//         : location;
+  
+//       const deptRs = await poolG.request().input('departmentId', sql.Int, safeDepartmentId)
+//         .query('SELECT farvision_description FROM Departments WHERE farvision_id=@departmentId');
+//       if (!deptRs.recordset.length) return res.status(404).json({ msg:'Department not found' });
+  
+//       /* ---------- bit fields parsed ---------- */
+//       const bits = {
+//         isResubmit:        parseBit(isResubmit),
+//         hideResubmit:      parseBit(hideResubmit),
+//         isCompanyTransfer: parseBit(isCompanyTransfer),
+//         isSiteTransfer:    parseBit(isSiteTransfer)
+//       };
+  
+//       /* ---------- save ---------- */
+//       const data = await labourModel.registerDataUpdateDisable({
+//         LabourID, labourOwnership,
+//         uploadAadhaarFront : url(req.body.uploadAadhaarFront , uploadAadhaarFront ),
+//         uploadAadhaarBack  : url(req.body.uploadAadhaarBack  , uploadAadhaarBack  ),
+//         uploadIdProof      : url(req.body.uploadIdProof      , uploadIdProof      ),
+//         uploadInductionDoc : url(req.body.uploadInductionDoc , uploadInductionDoc ),
+//         photoSrc           : url(req.body.photoSrc           , photoSrc           ),
+//         name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
+//         Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining,
+//         From_Date: fromDate, Period: period,
+//         address, pincode, taluka, district, village, state, emergencyContact,
+//         bankName, branch, accountNumber, ifscCode,
+//         projectName, labourCategory, department, workingHours,
+//         location, SalaryBu: salaryBu, businessUnit: location,
+//         contractorName, contractorNumber, designation, title, Marital_Status, companyName,
+//         Induction_Date, Inducted_By, OnboardName: finalOnboardName, expiryDate,
+//         ValidTill: validTill.toISOString().split('T')[0],
+//         retirementDate: retireDt.toISOString().split('T')[0],
+//         WorkingBu: location, CreationDate: new Date().toISOString(),
+//         departmentId: safeDepartmentId, departmentName: deptRs.recordset[0].farvision_description,
+//         designationId: safeDesignationId, labourCategoryId: safeLabourCategoryId,
+//         ...bits
+//       });
+  
+//       return res.status(201).json({ msg:'User created successfully', data });
+//     } catch (err) {
+//       console.error('updateRecordWithDisable error:', err);
+//       return res.status(500).json({ msg:'Internal server error' });
+//     }
+//   }
 
 
 
@@ -1688,8 +1935,10 @@ function roundOvertime(overtimeHours) {
 
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
+    console.log("yesterday", yesterday)
+    yesterday.setDate(yesterday.getDate() - 3); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
+    console.log("formattedYesterday",formattedYesterday)
 
     console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
     console.log(`Processing Attendance for Date: ${formattedYesterday}`);
@@ -1699,11 +1948,12 @@ async function runDailyAttendanceCron() {
     try {
         // Call the function to process attendance
         console.log('Calling processLaboursAttendance function...');
-        await processLaboursAttendance(formattedYesterday);
+        // await processLaboursAttendance(formattedYesterday);
+        const approvedLabours = await getAllLaboursAttendanceDaily(formattedYesterday);
         console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
         // Update attendance summary for all approved laborers
         // const approvedLabours = await labourModel.getAllApprovedLabours();
-        const approvedLabours = await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
+        // const approvedLabours = await labourModel.getAllApprovedOrMonthlyDisabledLabours(formattedYesterday);
 
         for (let labour of approvedLabours) {
             const { labourId } = labour;
@@ -1716,6 +1966,132 @@ async function runDailyAttendanceCron() {
         console.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
         cronLogger.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
     }
+}
+
+/**
+ * End-to-end attendance processor.
+ * @param {string} attendanceDate – ISO date string in YYYY-MM-DD format (e.g. '2025-05-03').
+ * @returns {Promise<void>}
+ */
+async function getAllLaboursAttendanceDaily(attendanceDate) {
+    console.info(`[ATTENDANCE] Processing attendance for ${attendanceDate}...`);
+    /* ---------- guardrails & parameter normalisation ---------- */
+    if (!attendanceDate) throw new Error('attendanceDate is required (YYYY-MM-DD).');
+
+    const target = new Date(attendanceDate);
+    if (isNaN(target)) throw new Error(`Invalid attendanceDate supplied → ${attendanceDate}`);
+
+    const parsedYear  = target.getFullYear();           // e.g. 2025
+    const parsedMonth = target.getMonth() + 1;      
+    const processedDay = target.getDate();    // 1-based month index
+    const daysInMonth = new Date(parsedYear, parsedMonth, 0).getDate();
+    console.log("daysInMonth=--->",daysInMonth)
+
+    /* ---------- labour cohort ---------- */
+    const approvedLabours =
+        await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
+
+    if (!approvedLabours?.length) {
+        console.info(`[ATTENDANCE] No approved labours for ${parsedYear}-${parsedMonth}.`);
+        return;
+    }
+console.log("approvedLabours?.length",approvedLabours?.length)
+    /* ---------- per-labour daily crunch ---------- */
+    for (const labour of approvedLabours) {
+
+        const { labourId, workingHours } = labour;
+        const shiftHours   = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+        const halfDayHours = shiftHours === 9 ? 4.5 : 4;
+
+        let present = 0, half = 0, miss = 0, absent = 0;
+        let rawOT = 0, roundedOT = 0, payrollOT = 0, manualOT = 0;
+        const monthRows = [];
+
+        const punches = await labourModel.getAttendanceByLabourId(labourId, parsedMonth, parsedYear);
+
+        // for (let d = 1; d <= daysInMonth; d++) {
+        //     const dateISO = `${parsedYear}-${String(parsedMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        //     const punchesForDay = punches.filter(p =>
+        //         new Date(p.punch_date).toISOString().startsWith(dateISO));
+        const punchesForDay = punches.filter(p =>
+            new Date(p.punch_date).toISOString().startsWith(attendanceDate));
+
+            const { status, firstPunch, lastPunch, totalHours } =
+                determineStatus(punchesForDay, shiftHours, halfDayHours, workingHours);
+
+            /* ----- overtime funnel ----- */
+            let OT = 0;
+            if (status === 'P' && totalHours > shiftHours) OT = totalHours - shiftHours;
+            const OTrounded  = roundOvertime(OT);            // company rounding convention
+            const OTmanual   = Math.min(OTrounded, 4);       // manual capping rule (<=4 h)
+
+            /* ----- status KPIs ----- */
+            switch (status) {
+                case 'P':  present++; break;
+                case 'HD': half++;   break;
+                case 'MP': miss++;   break;
+                default:   absent++;
+            }
+            rawOT       += OT;
+            roundedOT   += OTrounded;
+            payrollOT   += OTrounded;
+            manualOT    += OTmanual;
+
+            /* ----- device / project refs ----- */
+            const fDev   = firstPunch?.Device_id ?? null;
+            const lDev   = lastPunch?.Device_id  ?? null;
+            const projFP = fDev ? await labourModel.getProjectIdByDeviceId(fDev) : null;
+            const projLP = lDev ? await labourModel.getProjectIdByDeviceId(lDev) : null;
+            const dateISO = attendanceDate;
+
+            /* ----- persistable detail row ----- */
+            monthRows.push({
+                labourId,
+                projectName: parseInt(labour.projectName, 10),
+                date: dateISO,
+                firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
+                firstPunchAttendanceId: firstPunch?.attendance_id ?? null,
+                firstPunchDeviceId: fDev,
+                lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
+                lastPunchAttendanceId: lastPunch?.attendance_id ?? null,
+                lastPunchDeviceId: lDev,
+                totalHours: Number(totalHours || 0).toFixed(2),
+                overtime: OT.toFixed(2),
+                PayrollCalRoundOffOvertime: OTrounded.toFixed(2),
+                OvertimeManually: OTmanual.toFixed(2),
+                status,
+                creationDate: new Date(),
+                projectIdFromDevicefirstPunch: projFP,
+                projectIdFromDeviceLastPunch:  projLP
+            });
+        
+
+        /* ---------- monthly summary ---------- */
+        const summary = {
+            labourId,
+            projectName: parseInt(labour.projectName, 10),
+            totalDays: processedDay,
+            presentDays: present,
+            halfDays:    half,
+            missPunchDays: miss,
+            absentDays:  absent,
+            totalOvertimeHours: Number(rawOT.toFixed(2)),
+            PayrollCalRoundoffTotalOvertime: Number(payrollOT.toFixed(2)),
+            RoundOffTotalOvertime: Number(roundedOT.toFixed(2)),
+            TotalOvertimeHoursManually: Number(manualOT.toFixed(2)),
+            shift: workingHours,
+            creationDate: new Date(),
+            selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2,'0')}`
+        };
+
+        /* ---------- persistence ---------- */
+        await labourModel.insertIntoLabourAttendanceSummary(summary);
+        for (const row of monthRows) {
+            await labourModel.insertIntoLabourAttendanceDetails(row);
+        }
+    }
+
+    console.info(`[ATTENDANCE] Completed processing for ${parsedYear}-${String(parsedMonth).padStart(2,'0')}`);
 }
 
 
@@ -2357,8 +2733,8 @@ async function getAllLaboursAttendance(req, res) {
                     }
                 }
 
-            //    let projectIdFromDevicefirstPunch = projectIdFromDevicefirstPunchIn || null;
-            //    let projectIdFromDeviceLastPunch = projectIdFromDeviceLastPunchIn || null;
+                //    let projectIdFromDevicefirstPunch = projectIdFromDevicefirstPunchIn || null;
+                //    let projectIdFromDeviceLastPunch = projectIdFromDeviceLastPunchIn || null;
 
                 // ✅ **Overtime Calculation**
                 if (status === 'P') {
@@ -2407,8 +2783,8 @@ async function getAllLaboursAttendance(req, res) {
                     OvertimeManually: OvertimeManually.toFixed(2),
                     status,
                     creationDate: new Date(),
-                    projectIdFromDevicefirstPunch ,
-                    projectIdFromDeviceLastPunch ,
+                    projectIdFromDevicefirstPunch,
+                    projectIdFromDeviceLastPunch,
                 });
             }
 
@@ -2429,7 +2805,7 @@ async function getAllLaboursAttendance(req, res) {
                 creationDate: new Date(),
                 selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`,
             };
-//  console.log(`Inserting Attendance for ${labourId} on:`, summary);
+            //  console.log(`Inserting Attendance for ${labourId} on:`, summary);
             // ✅ **Insert Summary & Attendance**
             await labourModel.insertIntoLabourAttendanceSummary(summary);
             for (let dayAttendance of monthlyAttendance) {
@@ -2769,6 +3145,7 @@ async function getAllLaboursAttendance(req, res) {
 async function processLaboursAttendance(date) {
     try {
         const attendanceDate = new Date(date);
+        console.log("attendanceDate--->",attendanceDate)
         if (isNaN(attendanceDate.getTime())) throw new Error('Invalid date format');
 
         const approvedLabours = await labourModel.getAllApprovedLabours();
@@ -3058,7 +3435,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('47 11 * * *', async () => {
+cron.schedule('02 16 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
@@ -3978,15 +4355,15 @@ async function rejectAttendanceController(req, res) {
 // -------------------------------------------------------------  Excel import and Export controller function ----------------
 const exportAttendance = async (req, res) => {
     try {
-        const { startDate, endDate, projectName, department  } = req.query;
-        
+        const { startDate, endDate, projectName, department } = req.query;
+
 
         if (!startDate || !endDate || !projectName) {
             return res.status(400).json({ message: 'Missing required parameters: startDate, endDate, or projectId.' });
         }
 
         // Fetch attendance data filtered by date range and projectId
-        const attendanceData = await labourModel.getAttendanceByDateRange(projectName, startDate, endDate, department );
+        const attendanceData = await labourModel.getAttendanceByDateRange(projectName, startDate, endDate, department);
 
         if (attendanceData.length === 0) {
             return res.status(404).json({ message: 'No attendance data found for the selected criteria.' });
@@ -4180,7 +4557,7 @@ const getLabourMonthlyWages = async (req, res) => {
 const upsertLabourMonthlyWages = async (req, res) => {
     try {
         const payload = req.body;
-console.log("payload ===", payload)
+        console.log("payload ===", payload)
         if (!payload.labourId || !payload.payStructure) {
             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
         }
@@ -4691,5 +5068,6 @@ module.exports = {
     searchLaboursFromSiteTransfer,
     searchAttendance,
     searchLaboursFromVariableInput,
-    getAttendanceReportAndLabourOnboardingJoincontroller
+    getAttendanceReportAndLabourOnboardingJoincontroller,
+    getAllLaboursAttendanceDaily
 };
