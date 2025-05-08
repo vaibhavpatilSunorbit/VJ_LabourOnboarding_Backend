@@ -303,6 +303,7 @@ const pool = await poolPromise4;
 
 async function getAllRecords(req, res) {
     try {
+        console.log('getAllRecords')
         const records = await labourModel.getAll();
         return res.status(200).json(records);
     } catch (error) {
@@ -1936,7 +1937,7 @@ function roundOvertime(overtimeHours) {
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
     console.log("yesterday", yesterday)
-    yesterday.setDate(yesterday.getDate() - 3); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 7); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
     console.log("formattedYesterday",formattedYesterday)
 
@@ -1989,7 +1990,10 @@ async function getAllLaboursAttendanceDaily(attendanceDate) {
 
     /* ---------- labour cohort ---------- */
     const approvedLabours =
-        await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
+        // await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
+        await labourModel.getAllApprovedOrMonthlyDisabledLabours();
+        // await labourModel.getAllApprovedLabours();
+
 
     if (!approvedLabours?.length) {
         console.info(`[ATTENDANCE] No approved labours for ${parsedYear}-${parsedMonth}.`);
@@ -2091,7 +2095,13 @@ console.log("approvedLabours?.length",approvedLabours?.length)
         }
     }
 
+    for (const labour of approvedLabours) {
+        const { labourId } = labour;
+        await labourModel.insertOrUpdateLabourAttendanceSummary(labourId, attendanceDate);
+    }
+
     console.info(`[ATTENDANCE] Completed processing for ${parsedYear}-${String(parsedMonth).padStart(2,'0')}`);
+    console.info(`[ATTENDANCE] Summary updates completed for ${attendanceDate}`);
 }
 
 
@@ -3435,7 +3445,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('02 16 * * *', async () => {
+cron.schedule('53 14 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
@@ -4199,6 +4209,8 @@ async function upsertAttendance(req, res) {
         updatedFields,
     } = req.body;
     // Validate input
+console.log("req.body for attendance--->", req.body)
+
     if (!labourId || !date) {
         return res.status(400).json({
             message: 'Labour ID and Date are required.',
@@ -4284,6 +4296,7 @@ async function upsertAttendance(req, res) {
             onboardName: finalOnboardName,
             editUserName: finalOnboardName,
             markWeeklyOff,
+            AttendanceStatus
         });
 
         res.status(200).json({ message: 'Attendance updated successfully.' });
