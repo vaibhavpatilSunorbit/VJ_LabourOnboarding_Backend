@@ -191,6 +191,8 @@ app.use(cors({
     origin: '*'
 }));
 
+console.log("in server.js")
+
 app.use(bodyParser.json({ limit: '100mb' }));
 app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
 
@@ -211,6 +213,8 @@ const upload = multer({
     storage: storage,
     limits: { fileSize: 100 * 1024 * 1024 } // 100MB file size limit
 });
+
+app.use('/api/labours', labourRoutes);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -256,67 +260,10 @@ app.get('/download-excel', async (req, res) => {
     }
 });
 
-app.get('/labours/:id/download/full-form', (req, res) => {
-    const { id } = req.params;
-    const filePath = path.join(__dirname, 'uploads', `full_form_${id}.pdf`);
-    if (fs.existsSync(filePath)) {
-        res.download(filePath, `full_form_${id}.pdf`);
-    } else {
-        res.status(404).send('File not found.');
-    }
-});
 
 
-app.get('/labours/:id/download/aadhaar-card', async (req, res) => {
-    const { id } = req.params;
-    const frontFilePath = path.join(__dirname, 'uploads', `aadhaar_front_${id}.jpg`);
-    const backFilePath = path.join(__dirname, 'uploads', `aadhaar_back_${id}.jpg`);
-    const idProofFilePath = path.join(__dirname, 'uploads', `id_Proof_${id}.jpg`);
-    const inductionFilePath = path.join(__dirname, 'uploads', `induction_${id}.jpg`);  // Corrected filename typo
 
-    // Initialize a JSZip instance
-    const zip = new JSZip();
-    let filesAdded = false;
 
-    // Check and add files to the zip if they exist
-    if (fs.existsSync(frontFilePath)) {
-        const frontFile = fs.readFileSync(frontFilePath);
-        zip.file(`aadhaar_front_${id}.jpg`, frontFile);
-        filesAdded = true;
-    }
-
-    if (fs.existsSync(backFilePath)) {
-        const backFile = fs.readFileSync(backFilePath);
-        zip.file(`aadhaar_back_${id}.jpg`, backFile);
-        filesAdded = true;
-    }
-
-    if (fs.existsSync(idProofFilePath)) {
-        const idFile = fs.readFileSync(idProofFilePath);
-        zip.file(`id_Proof_${id}.jpg`, idFile);
-        filesAdded = true;
-    }
-
-    if (fs.existsSync(inductionFilePath)) {
-        const inductionFile = fs.readFileSync(inductionFilePath);
-        zip.file(`induction_${id}.jpg`, inductionFile);
-        filesAdded = true;
-    }
-
-    // If any files were added to the zip, generate and send the zip file
-    if (filesAdded) {
-        res.set('Content-Type', 'application/zip');
-        res.set('Content-Disposition', `attachment; filename="documents_${id}.zip"`);
-
-        zip.generateNodeStream({ type: 'nodebuffer', streamFiles: true })
-            .pipe(res)
-            .on('finish', () => {
-                console.log(`Document zip for Labour ID ${id} has been generated and sent.`);
-            });
-    } else {
-        res.status(404).send('No documents found for download.');
-    }
-});
 
 
 // app.get('/labours/:id/download/aadhaar-card', async (req, res) => {
@@ -351,43 +298,9 @@ app.get('/labours/:id/download/aadhaar-card', async (req, res) => {
 //     }
 // });
 
-app.post('/labours', upload.fields([
-    { name: 'uploadAadhaarFront' },
-    { name: 'uploadAadhaarBack' },
-    { name: 'uploadIdProof' },
-    { name: 'uploadInductionDoc' },
-    { name: 'photoSrc' }
-]), labourController.createRecord);
 
-app.post('/labours/:id/updateRecord', upload.fields([
-    { name: 'uploadAadhaarFront' },
-    { name: 'uploadAadhaarBack' },
-    { name: 'uploadIdProof' },
-    { name: 'uploadInductionDoc' },
-    { name: 'photoSrc' }
-]), labourController.createRecordUpdate);
-
-// Define the route to update a labour record
-app.put('/labours/updatelabour/:id', upload.fields([
-    { name: 'uploadAadhaarFront' },
-    { name: 'uploadAadhaarBack' },
-    { name: 'uploadIdProof' },
-    { name: 'uploadInductionDoc' },
-    { name: 'photoSrc' }
-]), labourController.updateRecord);
-
-
-app.put('/labours/updatelabourDisableStatus/:id', upload.fields([
-    { name: 'uploadAadhaarFront' },
-    { name: 'uploadAadhaarBack' },
-    { name: 'uploadIdProof' },
-    { name: 'uploadInductionDoc' },
-    { name: 'photoSrc' }
-]), labourController.updateRecordWithDisable);
-
-app.use('/labours', labourRoutes);
 app.use('/users', userRoutes);
-app.use('/api', dataRoutes);
+app.use('/api',(req, res, next)=>{console.log('/api'); next()}, dataRoutes);
 app.use('/insentive', insentiveRoutes);
 app.use(EmployeeRoute);
 
