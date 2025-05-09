@@ -1612,17 +1612,17 @@ async function getAllApprovedOrMonthlyDisabledLabours() {
         const result = await pool
             .request()
             .query(`
-                SELECT DISTINCT lo.LabourID AS labourId, lo.workingHours, lo.projectName, lo.status
-                FROM [labourOnboarding] lo
-                WHERE lo.status IN ('Approved', 'Disable')
+                    SELECT DISTINCT lo.LabourID AS labourId, lo.workingHours, lo.projectName, lo.status
+                    FROM [labourOnboarding] lo
+                    WHERE lo.status IN ('Approved', 'Disable')
 
-                UNION
+                    UNION
 
-                SELECT DISTINCT lo.LabourID AS labourId, lo.workingHours, lo.projectName, lo.status
-                FROM [labourOnboarding] lo
-                JOIN [LabourOnboardingForm].[dbo].[LabourAttendanceLogs] lal
-                    ON lal.LabourID = lo.LabourID
-                WHERE lal.attendanceStatus = 'Disable'
+                    SELECT DISTINCT lo.LabourID AS labourId, lo.workingHours, lo.projectName, lo.status
+                    FROM [labourOnboarding] lo
+                    JOIN [LabourOnboardingForm].[dbo].[LabourAttendanceLogs] lal
+                        ON lal.LabourID = lo.LabourID
+                    WHERE lal.attendanceStatus = 'Disable'
             `);
 
         return result.recordset;
@@ -4059,6 +4059,7 @@ async function getAttendanceByDateRange(projectNameStr, startDate, endDate, depa
             lad.ProjectName, 
             lo.BusinessUnit,
             lo.departmentName,
+            lo.Status,
             lad.FirstPunchManually, 
             lad.LastPunchManually, 
             lad.OvertimeManually, 
@@ -4071,7 +4072,7 @@ async function getAttendanceByDateRange(projectNameStr, startDate, endDate, depa
         WHERE 
             lad.ProjectName IN (${projectPlaceholders})
             AND lad.Date BETWEEN @startDate AND @endDate
-            ${departmentFilterClause}
+            ${departmentFilterClause} order by lad.LabourId asc
     `;
 
     const result = await request.query(query);
