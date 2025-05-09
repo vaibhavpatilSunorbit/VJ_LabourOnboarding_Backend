@@ -1937,7 +1937,7 @@ function roundOvertime(overtimeHours) {
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
     console.log("yesterday", yesterday)
-    yesterday.setDate(yesterday.getDate() - 7); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
     console.log("formattedYesterday",formattedYesterday)
 
@@ -3445,7 +3445,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('53 14 * * *', async () => {
+cron.schedule('37 04 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
@@ -5013,6 +5013,70 @@ async function searchAttendance(req, res) {
 }
 
 
+async function updateOTHoursAttendance(req, res) {
+    try {
+        const {
+            labourId,
+            date,
+            AttendanceId,
+            firstPunchManually,
+            lastPunchManually,
+            overtimeManually,
+            remarkManually,
+            workingHours,
+            onboardName,
+            AttendanceStatus,
+            markWeeklyOff,
+            updatedFields,
+        } = req.body;
+
+
+        // 🔒 Required field validations
+        if (!labourId || !date || typeof overtimeManually === 'undefined') {
+            return res.status(400).json({ message: 'Missing required fields: labourId, date, or overtimeManually.' });
+        }
+
+        if (!Array.isArray(updatedFields) || updatedFields.length === 0) {
+            return res.status(400).json({ message: 'updatedFields must be a non-empty array.' });
+        }
+
+        const isOnlyOTUpdate = updatedFields.length === 1 && updatedFields[0] === 'overtimemanually';
+        if (!isOnlyOTUpdate) {
+            return res.status(400).json({ message: 'Only overtimeManually update is allowed through this endpoint.' });
+        }
+
+        const finalOnboardName = onboardName || 'System';
+
+        // ✅ Build only relevant fields based on updatedFields
+        const updatePayload = {
+            labourId,
+            date,
+            AttendanceId,
+            onboardName: finalOnboardName,
+            editUserName: finalOnboardName,
+        };
+
+        if (updatedFields.includes('overtimemanually') && overtimeManually !== undefined) {
+            updatePayload.overtimeManually = overtimeManually;
+        }
+
+        // ❌ If no actual fields to update, reject
+        const keysToUpdate = Object.keys(updatePayload).filter(k => !['labourId', 'date', 'AttendanceId', 'onboardName', 'editUserName'].includes(k));
+        if (keysToUpdate.length === 0) {
+            return res.status(400).json({ message: 'No valid fields to update.' });
+        }
+        // 📥 Call model
+        await labourModel.upsertAttendance(updatePayload);
+
+        return res.status(200).json({ message: 'Overtime manually updated successfully.' });
+
+    } catch (error) {
+        console.error('Error updating overtime manually:', error);
+        return res.status(error.statusCode || 500).json({ message: error.message || 'Internal server error.' });
+    }
+}
+
+
 module.exports = {
     handleCheckAadhaar,
     getNextUniqueID,
@@ -5082,5 +5146,6 @@ module.exports = {
     searchAttendance,
     searchLaboursFromVariableInput,
     getAttendanceReportAndLabourOnboardingJoincontroller,
-    getAllLaboursAttendanceDaily
+    getAllLaboursAttendanceDaily,
+    updateOTHoursAttendance
 };
