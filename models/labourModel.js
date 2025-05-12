@@ -3472,10 +3472,14 @@ console.log("updasertAttendnace",labourId,date,firstPunchManually,lastPunchManua
         }
         // console.log("finalOvertimeManually",finalOvertimeManually)
         if (AttendanceStatus === 'MP') {
-            payrollCalRoundOffOvertime = totalHours;
-            finalOvertimeManually = totalHours;
-            rawOvertime = totalHours; // also affects Overtime field
+            const potentialOvertime = totalHours - shiftHours;
+            const adjustedOvertime = potentialOvertime > 0 ? potentialOvertime : 0;
+
+            rawOvertime = adjustedOvertime;
+            payrollCalRoundOffOvertime = roundOvertime(rawOvertime);
+            finalOvertimeManually = payrollCalRoundOffOvertime;
         }
+
 
         // 7) MERGE/Upsert the attendance record
         const mergeQuery = `
@@ -3653,7 +3657,6 @@ console.log("updasertAttendnace",labourId,date,firstPunchManually,lastPunchManua
             }
             totalOvertimeHrs += dailyRoundedOT;
             totalManualOvertime += finalOTManually;
-
             monthlyAttendance.push({
                 labourId,
                 projectName,
@@ -3669,7 +3672,6 @@ console.log("updasertAttendnace",labourId,date,firstPunchManually,lastPunchManua
                 overtimeManually: finalOTManually
             });
         }
-
         // 9c) Insert monthly summary if needed
         const summary = {
             labourId,
@@ -4062,7 +4064,7 @@ async function getAttendanceByDateRange(projectNameStr, startDate, endDate, depa
             lad.ProjectName, 
             lo.BusinessUnit,
             lo.departmentName,
-            lo.Status,
+            lad.Status,
             lad.FirstPunchManually, 
             lad.LastPunchManually, 
             lad.OvertimeManually, 
