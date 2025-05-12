@@ -3,18 +3,20 @@ const router = express.Router();
 const labourController = require('../controllers/labourController');
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
+const JSZip = require('jszip');
+
 
 router.post('/check-aadhaar', labourController.handleCheckAadhaar);
 router.get('/next-id', labourController.getNextUniqueID);
 router.post('/', labourController.createRecord);
-router.get('/', labourController.getAllRecords);
+router.get('/', (req, res, next)=>{console.log('labourController.getAllRecords route'); next()}, labourController.getAllRecords);
 router.get('/getAllRecordsLaboursOnboarding', labourController.getAllRecordsLaboursOnboarding);
 router.get('/', labourController.getAllLabours);
 router.get('/approved', labourController.getApprovedLabours);
 router.get('/search', labourController.searchLabours);
-router.post('/:id/updateRecord', labourController.createRecordUpdate);
+// router.post('/:id/updateRecord', labourController.createRecordUpdate);
 router.delete('/:id', labourController.deleteRecord);
-router.put('/updatelabour/:id', labourController.updateRecord);
+// router.put('/updatelabour/:id', labourController.updateRecord);
 router.put('/update/:id', labourController.updateRecordLabour);
 router.put('/approve/:id', labourController.approveLabour);
 router.put('/approveDisableLabour/:id', labourController.approveDisableLabour);
@@ -23,7 +25,7 @@ router.put('/resubmit/:id', labourController.resubmitLabour);
 router.put('/editLabour/:id', labourController.editbuttonLabour);
 router.post('/essl/addEmployee', labourController.esslapi);
 router.get('/commandstatus/:commandId', labourController.getCommandStatus);
-router.put('/updatelabourDisableStatus/:id', labourController.updateRecordWithDisable);
+// router.put('/updatelabourDisableStatus/:id', labourController.updateRecordWithDisable);
 
 // router.get('/getEsslStatuses', labourController.getEsslStatuses);
 // router.get('/getEmployeeMasterStatuses', labourController.getEmployeeMasterStatuses);
@@ -54,7 +56,7 @@ router.put('/attendance/reject', labourController.rejectAttendanceControllerAdmi
 router.get('/LabourAttendanceApproval', labourController.LabourAttendanceApproval);
 router.put('/attendance/rejectFromAdmin', labourController.rejectAttendanceController);
 router.get('/showAttendanceCalenderSingleLabour/:id', labourController.getAttendanceCalenderSingleLabour);
-
+router.post('/updateOTHoursAttendance', labourController.updateOTHoursAttendance);
 
 router.get('/export', labourController.exportAttendance);
 router.post('/import', upload.single('file'), labourController.importAttendance);
@@ -85,6 +87,100 @@ router.get('/exportFixedWagesExcel', labourController.exportFixedWagesExcel);
 
 // ------------------------------------------------------- IMP ROUTE AND GET USING VIEW DETAILS FOR LABOUR --------------------------------------------------
 router.get('/:id', labourController.getRecordById);
+router.get('/:id/download/full-form', (req, res) => {
+    const { id } = req.params;
+    const filePath = path.join(__dirname, 'uploads', `full_form_${id}.pdf`);
+    if (fs.existsSync(filePath)) {
+        res.download(filePath, `full_form_${id}.pdf`);
+    } else {
+        res.status(404).send('File not found.');
+    }
+});
+
+router.post('/laboursCreateRecord', upload.fields([
+    { name: 'uploadAadhaarFront' },
+    { name: 'uploadAadhaarBack' },
+    { name: 'uploadIdProof' },
+    { name: 'uploadInductionDoc' },
+    { name: 'photoSrc' }
+]), labourController.createRecord);
+
+router.post('/:id/updateRecord', upload.fields([
+    { name: 'uploadAadhaarFront' },
+    { name: 'uploadAadhaarBack' },
+    { name: 'uploadIdProof' },
+    { name: 'uploadInductionDoc' },
+    { name: 'photoSrc' }
+]), labourController.createRecordUpdate);
+
+// Define the route to update a labour record
+router.put('/updatelabour/:id', upload.fields([
+    { name: 'uploadAadhaarFront' },
+    { name: 'uploadAadhaarBack' },
+    { name: 'uploadIdProof' },
+    { name: 'uploadInductionDoc' },
+    { name: 'photoSrc' }
+]), labourController.updateRecord);
+
+
+router.put('/updatelabourDisableStatus/:id', upload.fields([
+    { name: 'uploadAadhaarFront' },
+    { name: 'uploadAadhaarBack' },
+    { name: 'uploadIdProof' },
+    { name: 'uploadInductionDoc' },
+    { name: 'photoSrc' }
+]), labourController.updateRecordWithDisable);
+
+router.get('/:id/download/aadhaar-card', async (req, res) => {
+    const { id } = req.params;
+    const frontFilePath = path.join(__dirname, 'uploads', `aadhaar_front_${id}.jpg`);
+    const backFilePath = path.join(__dirname, 'uploads', `aadhaar_back_${id}.jpg`);
+    const idProofFilePath = path.join(__dirname, 'uploads', `id_Proof_${id}.jpg`);
+    const inductionFilePath = path.join(__dirname, 'uploads', `induction_${id}.jpg`);  // Corrected filename typo
+
+    // Initialize a JSZip instance
+    const zip = new JSZip();
+    let filesAdded = false;
+
+    // Check and add files to the zip if they exist
+    if (fs.existsSync(frontFilePath)) {
+        const frontFile = fs.readFileSync(frontFilePath);
+        zip.file(`aadhaar_front_${id}.jpg`, frontFile);
+        filesAdded = true;
+    }
+
+    if (fs.existsSync(backFilePath)) {
+        const backFile = fs.readFileSync(backFilePath);
+        zip.file(`aadhaar_back_${id}.jpg`, backFile);
+        filesAdded = true;
+    }
+
+    if (fs.existsSync(idProofFilePath)) {
+        const idFile = fs.readFileSync(idProofFilePath);
+        zip.file(`id_Proof_${id}.jpg`, idFile);
+        filesAdded = true;
+    }
+
+    if (fs.existsSync(inductionFilePath)) {
+        const inductionFile = fs.readFileSync(inductionFilePath);
+        zip.file(`induction_${id}.jpg`, inductionFile);
+        filesAdded = true;
+    }
+
+    // If any files were added to the zip, generate and send the zip file
+    if (filesAdded) {
+        res.set('Content-Type', 'application/zip');
+        res.set('Content-Disposition', `attachment; filename="documents_${id}.zip"`);
+
+        zip.generateNodeStream({ type: 'nodebuffer', streamFiles: true })
+            .pipe(res)
+            .on('finish', () => {
+                console.log(`Document zip for Labour ID ${id} has been generated and sent.`);
+            });
+    } else {
+        res.status(404).send('No documents found for download.');
+    }
+});
 
 
 module.exports = router;

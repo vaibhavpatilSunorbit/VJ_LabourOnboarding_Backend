@@ -19,7 +19,7 @@ router.post('/approveLabour', approveLabour);
 router.get('/projectDeviceStatus/:projectName', getProjectDeviceStatus);
 router.put('/projectDeviceStatus', updateProjectDeviceStatus);
 router.delete('/projectDeviceStatus', deleteProjectDeviceStatus);
-router.get('/projectDeviceStatus', getProjectDeviceStatusSS);
+router.get('/projectDeviceStatus',(req, res, next)=>{console.log('/projectDeviceStatus'); next()}, getProjectDeviceStatusSS);
 router.get('/fetchDynamicData', fetchDynamicData);
 router.get('/fetchOrgDynamicData', fetchOrgDynamicData);
 router.put('/addFvEmpId/:Id', addFvEmpId);
