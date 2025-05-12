@@ -356,64 +356,152 @@ const getAttendanceLogs = async (req, res) => {
 };
 
 
+// const approveLabour = async (req, res) => {
+//   try {
+//     const { projectId, deviceId } = req.body;
+//     console.log('projectId, deviceId', req.body)
+
+//     if (!projectId || !deviceId) {
+//       return res.status(400).json({ message: 'ProjectID and DeviceID are required' });
+//     }
+
+//     // Query from the first database (dbConfig2) for the project
+//     const pool2 = await poolPromise4;
+//     const projectResult = await pool2.request()
+//       .input('ProjectID', sql.Int, projectId)
+//       // .query('SELECT Description FROM Framework.BusinessUnit WHERE id = @ProjectID');
+//       .query(`SELECT Id, Description, Type, Email1, ParentId 
+//       FROM Framework.BusinessUnit 
+//       WHERE Type = 'B' 
+//       AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
+//       AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0) and Id = @ProjectID`);
+
+
+//     // Query from the second database (dbConfig3) for the device
+//     const pool3 = await poolPromise3;
+//     const deviceResult = await pool3.request()
+//       .input('DeviceID', sql.Int, deviceId)
+//       .query('SELECT DeviceSName, DeviceLocation, SerialNumber FROM dbo.Devices WHERE DeviceID = @DeviceID');
+
+//     // Validate the results
+//     if (projectResult.recordset.length === 0 || deviceResult.recordset.length === 0) {
+//       return res.status(400).send('Invalid ProjectID or DeviceID');
+//     }
+
+//     const BusinessUnit = projectResult.recordset[0].Description;
+//     const DeviceSName = deviceResult.recordset[0].DeviceSName;
+//     const DeviceLocation = deviceResult.recordset[0].DeviceLocation;
+//     const DeviceSerialNumber = deviceResult.recordset[0].SerialNumber;
+
+//     const pool1 = await poolPromise;
+//     await pool1.request()
+//       .input('ProjectID', sql.Int, projectId)
+//       .input('DeviceID', sql.Int, deviceId)
+//       .input('BusinessUnit', sql.VarChar, BusinessUnit)
+//       .input('DeviceSName', sql.VarChar, DeviceSName)
+//       .input('DeviceLocation', sql.VarChar, DeviceLocation)
+//       .input('SerialNumber', sql.VarChar, DeviceSerialNumber)
+//       .input('Status', sql.VarChar, 'Active')
+//       .query(`
+//         INSERT INTO ProjectDeviceStatus (ProjectID, DeviceID, BusinessUnit, DeviceSName, DeviceLocation, SerialNumber, Status)
+//         VALUES (@ProjectID, @DeviceID, @BusinessUnit, @DeviceSName, @DeviceLocation, @SerialNumber, @Status)
+//       `);
+
+//     res.status(200).json({ success: true });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).send('Server error');
+//   }
+// };
+
+
 const approveLabour = async (req, res) => {
   try {
-    const { projectId, deviceId } = req.body;
-    console.log('projectId, deviceId', req.body)
-
+    let { projectId, deviceId } = req.body;          // projectId may be ID or name
     if (!projectId || !deviceId) {
       return res.status(400).json({ message: 'ProjectID and DeviceID are required' });
     }
 
-    // Query from the first database (dbConfig2) for the project
-    const pool2 = await poolPromise4;
-    const projectResult = await pool2.request()
-      .input('ProjectID', sql.Int, projectId)
-      // .query('SELECT Description FROM Framework.BusinessUnit WHERE id = @ProjectID');
-      .query(`SELECT Id, Description, Type, Email1, ParentId 
-      FROM Framework.BusinessUnit 
-      WHERE Type = 'B' 
-      AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
-      AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0) and Id = @ProjectID`);
+    // ---------- 1️⃣  PROJECT LOOK-UP (with fallback) -----------------
+    const poolBU   = await poolPromise4;             // Framework.BusinessUnit
+    const poolComp = await poolPromise;              // CompanyNameByBuId
 
+    const isNumeric = !isNaN(projectId);
 
-    // Query from the second database (dbConfig3) for the device
-    const pool3 = await poolPromise3;
-    const deviceResult = await pool3.request()
-      .input('DeviceID', sql.Int, deviceId)
-      .query('SELECT DeviceSName, DeviceLocation, SerialNumber FROM dbo.Devices WHERE DeviceID = @DeviceID');
+    // primary: Framework.BusinessUnit
+    const primaryQuery = isNumeric
+      ? `SELECT Id, Description, ParentId
+         FROM Framework.BusinessUnit
+         WHERE Type = 'B'
+           AND Id = @input
+           AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = 0)
+           AND (IsDeleted       IS NULL OR IsDeleted       = 0)`
+      : `SELECT a.Id, a.Description, a.ParentId
+         FROM Framework.BusinessUnit a
+         LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
+         WHERE a.Description = @input
+           AND (a.IsDiscontinueBU IS NULL OR a.IsDiscontinueBU = 0)
+           AND (a.IsDeleted       IS NULL OR a.IsDeleted       = 0)
+           AND b.Id = 3`;
 
-    // Validate the results
-    if (projectResult.recordset.length === 0 || deviceResult.recordset.length === 0) {
-      return res.status(400).send('Invalid ProjectID or DeviceID');
+    let projectReq   = poolBU.request().input('input', isNumeric ? sql.Int : sql.VarChar, projectId);
+    let projectRes   = await projectReq.query(primaryQuery);
+
+    let projectRecord;
+    if (projectRes.recordset.length > 0) {
+      projectRecord = projectRes.recordset[0];
+    } else {
+      // fallback: CompanyNameByBuId
+      const allCompanies = await poolComp.request()
+        .query(`SELECT Id, ProjectName AS Description, ParentId FROM CompanyNameByBuId`);
+
+      const match = allCompanies.recordset.find(r =>
+        isNumeric ? r.Id === parseInt(projectId)
+                  : r.Description.trim().toLowerCase() === projectId.trim().toLowerCase()
+      );
+
+      if (!match) return res.status(400).send('Invalid ProjectID / Name');
+
+      projectRecord = match;
     }
 
-    const BusinessUnit = projectResult.recordset[0].Description;
-    const DeviceSName = deviceResult.recordset[0].DeviceSName;
-    const DeviceLocation = deviceResult.recordset[0].DeviceLocation;
-    const DeviceSerialNumber = deviceResult.recordset[0].SerialNumber;
+    const resolvedProjectId   = projectRecord.Id;
+    const resolvedProjectName = projectRecord.Description;
 
-    const pool1 = await poolPromise;
-    await pool1.request()
-      .input('ProjectID', sql.Int, projectId)
+    // ---------- 2️⃣  DEVICE LOOK-UP ----------------------------------
+    const poolDevices = await poolPromise3;
+    const deviceRes   = await poolDevices.request()
       .input('DeviceID', sql.Int, deviceId)
-      .input('BusinessUnit', sql.VarChar, BusinessUnit)
-      .input('DeviceSName', sql.VarChar, DeviceSName)
-      .input('DeviceLocation', sql.VarChar, DeviceLocation)
-      .input('SerialNumber', sql.VarChar, DeviceSerialNumber)
-      .input('Status', sql.VarChar, 'Active')
+      .query(`SELECT DeviceSName, DeviceLocation, SerialNumber
+              FROM dbo.Devices WHERE DeviceID = @DeviceID`);
+
+    if (deviceRes.recordset.length === 0)
+      return res.status(400).send('Invalid DeviceID');
+
+    const { DeviceSName, DeviceLocation, SerialNumber } = deviceRes.recordset[0];
+
+    // ---------- 3️⃣  INSERT LINK-ROW ---------------------------------
+    const poolStatus = await poolPromise;
+    await poolStatus.request()
+      .input('ProjectID',     sql.Int,    resolvedProjectId)
+      .input('DeviceID',      sql.Int,    deviceId)
+      .input('BusinessUnit',  sql.VarChar, resolvedProjectName)
+      .input('DeviceSName',   sql.VarChar, DeviceSName)
+      .input('DeviceLocation',sql.VarChar, DeviceLocation)
+      .input('SerialNumber',  sql.VarChar, SerialNumber)
+      .input('Status',        sql.VarChar, 'Active')
       .query(`
-        INSERT INTO ProjectDeviceStatus (ProjectID, DeviceID, BusinessUnit, DeviceSName, DeviceLocation, SerialNumber, Status)
-        VALUES (@ProjectID, @DeviceID, @BusinessUnit, @DeviceSName, @DeviceLocation, @SerialNumber, @Status)
+        INSERT INTO ProjectDeviceStatus
+              (ProjectID, DeviceID, BusinessUnit, DeviceSName, DeviceLocation, SerialNumber, Status)
+        VALUES(@ProjectID, @DeviceID, @BusinessUnit, @DeviceSName, @DeviceLocation, @SerialNumber, @Status)
       `);
 
-    res.status(200).json({ success: true });
+    return res.status(200).json({ success: true });
   } catch (err) {
     console.error(err);
-    res.status(500).send('Server error');
+    return res.status(500).send('Server error');
   }
 };
-
 
 const getProjectDeviceStatus = async (req, res) => {
   try {
@@ -1447,7 +1535,7 @@ const getLaboursWithOldAttendance = async () => {
   }
 };
 
-cron.schedule('08 01 * * *', async () => {
+cron.schedule('08 02 * * *', async () => {
   logger.info('Running labour attendance check at 01:08 AM');
   try {
     const newLaboursProcessed = await getLaboursWithOldAttendance();  // Cache the results and get count
