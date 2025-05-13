@@ -1,18 +1,19 @@
 const { sql, poolPromise2 } = require('../config/dbConfig2');
 const { poolPromise3 } = require('../config/dbConfig3');
 const { poolPromise } = require('../config/dbConfig');
+const { poolPromise4 } = require('../config/dbConfigSCPL');
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios')
 const multer = require('multer');
 const { upload } = require('../server');
 const xml2js = require('xml2js');
-const labourModel = require('../models/labourModel');        
+const labourModel = require('../models/labourModel');
 const cron = require('node-cron');
 const logger = require('../logger'); // Assuming logger is defined in logger.js   
 const { createLogger, format, transports } = require('winston');
-const { isHoliday } = require('../models/labourModel');    
-const xlsx = require('xlsx');        
+const { isHoliday } = require('../models/labourModel');
+const xlsx = require('xlsx');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 // const baseUrl = 'http://localhost:4000/uploads/';
@@ -58,7 +59,6 @@ const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 //     }
 // }
 
-
 async function handleCheckAadhaar(req, res) {
     const { aadhaarNumber } = req.body;
 
@@ -66,20 +66,24 @@ async function handleCheckAadhaar(req, res) {
         const labourRecords = await labourModel.checkAadhaarExists(aadhaarNumber);
 
         if (labourRecords && labourRecords.length > 0) {
-            const labourIDs = labourRecords.map(record => record.LabourID);
-
-            // Check for skipCheck eligibility
             const resubmittedRecord = labourRecords.find(record =>
-                (record.status === 'Resubmitted' && record.isApproved === 3) ||
-                (record.status === 'Disable' && record.isApproved === 4)
+                (record.status === 'Pending' && record.isApproved === 0) ||
+                (record.status === 'Approved' && record.isApproved === 1) ||
+                (record.status === 'Rejected' && record.isApproved === 2)
             );
 
-            return res.status(200).json({
-                exists: true,
-                LabourIDs: labourIDs,
-                skipCheck: !!resubmittedRecord,
-                LabourID: resubmittedRecord?.LabourID || null
-            });
+            if (resubmittedRecord) {
+                const labourIDs = labourRecords.map(record => record.LabourID);
+
+                return res.status(200).json({
+                    exists: true,
+                    LabourIDs: labourIDs
+                });
+            } else {
+                const labourIDs = labourRecords.map(record => record.LabourID);
+                return res.status(200).json({ exists: false, skipCheck: true, LabourIDs: labourIDs });
+            }
+
         } else {
             return res.status(200).json({ exists: false });
         }
@@ -90,59 +94,9 @@ async function handleCheckAadhaar(req, res) {
 }
 
 
-// async function handleCheckAadhaar(req, res) {
-//     const { aadhaarNumber } = req.body;
-//     //console.log('Request Body: AaadharNumber Ch----------', req.body);
-
-//     try {
-//         const labourRecord = await labourModel.checkAadhaarExists(aadhaarNumber);
-
-//         if (labourRecord) {
-//             if (labourRecord.status === 'Resubmitted' && labourRecord.isApproved === 3) {
-//                 //console.log("Returning skipCheck for Resubmitted and isApproved 3");
-//                 return res.status(200).json({ exists: false, skipCheck: true });
-//             } else {
-//                 //console.log("Returning exists true");
-//                 return res.status(200).json({ exists: true });
-//             }
-//         } else {
-//             //console.log("Returning exists false");
-//             return res.status(200).json({ exists: false });
-//         }
-//     } catch (error) {
-//         console.error('Error in handleCheckAadhaar:', error);
-//         return res.status(500).json({ error: 'Error checking Aadhaar number' });
-//     };
-// };
-
-
-
-// async function handleCheckAadhaar(req, res) {
-//     const { aadhaarNumber } = req.body;
-
-//     try {
-//         const labourRecord = await labourModel.checkAadhaarExists(aadhaarNumber);
-
-//         if (labourRecord) {
-//             if (labourRecord.status === 'Resubmitted' && labourRecord.isApproved === 3) {
-//                 // const formData = await labourModel.getFormDataByAadhaar(aadhaarNumber);
-//                 return res.status(200).json({ exists: true, formData: labourRecord });
-//             } else {
-//                 return res.status(200).json({ exists: true });
-//             }
-//         } else {
-//             return res.status(200).json({ exists: false });
-//         }
-//     } catch (error) {
-//         console.error('Error in handleCheckAadhaar:', error);
-//         return res.status(500).json({ error: 'Error checking Aadhaar number' });
-//     }
-// }
-
 async function getNextUniqueID(req, res) {
     try {
         const departmentId = parseInt(req.query.departmentId, 10);
-console.log("departmentId --->",departmentId)
         if (isNaN(departmentId)) {
             return res.status(400).json({ message: 'Invalid or missing departmentId' });
         }
@@ -154,6 +108,16 @@ console.log("departmentId --->",departmentId)
         res.status(500).json({ message: 'Internal server error' });
     }
 };
+
+// async function getNextUniqueID(req, res) {
+//     try {
+//         const nextID = await labourModel.getNextUniqueID();
+//         res.json({ nextID });
+//     } catch (error) {
+//         console.error('Error in getNextUniqueID:', error.message);
+//         res.status(500).json({ message: 'Internal server error' });
+//     };
+// };
 
 
 // async function getNextUniqueID(req, res) {
@@ -198,10 +162,10 @@ async function createRecord(req, res) {
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, labourCategoryId } = req.body;
 
-            const finalOnboardName = Array.isArray(OnboardName) ? OnboardName[0] : OnboardName;
+        const finalOnboardName = Array.isArray(OnboardName) ? OnboardName[0] : OnboardName;
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files;
-        //console.log('Received IDs:', { departmentId, designationId, labourCategoryId });
+        // console.log('Received IDs:', { projectName, departmentId, designationId, labourCategoryId });
         // Validate file fields
         if (!photoSrc || !uploadIdProof) {
             return res.status(400).json({ msg: 'All file fields are required' });
@@ -234,98 +198,102 @@ async function createRecord(req, res) {
         retirementDate.setFullYear(retirementDate.getFullYear() + 60);
 
         // **********************************  NEW  ********************
-        const pool = await poolPromise2;
-        const projectRequest = pool.request();
-
+        // Primary check on Framework.BusinessUnit (Server 1)
+const pool = await poolPromise4;
         const isNumeric = !isNaN(projectName);
+        const projectRequest = pool.request();
         projectRequest.input('projectName', isNumeric ? sql.Int : sql.VarChar, projectName);
 
-        let query;
-        if (isNumeric) {
-            query = `
-        SELECT a.id, a.Description 
-        FROM Framework.BusinessUnit a
-        LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
-        WHERE a.id = @projectName
-        AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-        AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
-        AND b.Id = 3
-    `;
+        let projectResult;
+        let location = "";
+        let businessUnit = "";
+        let projectId;
+        let parentId;
+
+        // 1. Try primary query from Framework.BusinessUnit
+        const primaryQuery = isNumeric
+            ? `
+                SELECT Id, Description, Type, Email1, ParentId 
+                FROM Framework.BusinessUnit 
+                WHERE Type = 'B' 
+                AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
+                AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0)
+                AND Id = @projectName
+              `
+            : `
+                SELECT a.Id, a.Description, a.Type, a.Email1, a.ParentId
+                FROM Framework.BusinessUnit a
+                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
+                WHERE a.Description = @projectName
+                AND (a.IsDiscontinueBU IS NULL OR a.IsDiscontinueBU = 0)
+                AND (a.IsDeleted IS NULL OR a.IsDeleted = 0)
+                AND b.Id = 3
+              `;
+
+        const primaryResult = await projectRequest.query(primaryQuery);
+
+        if (primaryResult.recordset.length > 0) {
+            const record = primaryResult.recordset[0];
+            projectResult = record;
+            location = record.Description;
+            businessUnit = record.Description;
+            projectId = record.Id;
+            parentId = record.ParentId;
         } else {
-            query = `
-        SELECT a.id, a.Description 
-        FROM Framework.BusinessUnit a
-        LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
-        WHERE a.Description = @projectName
-        AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-        AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
-        AND b.Id = 3
-    `;
+            console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
+
+            const pool2 = await poolPromise;
+            const fallbackQuery = `
+                SELECT Id, ProjectName AS Description, Type, ParentId
+                FROM CompanyNameByBuId
+            `;
+            const fallbackResult = await pool2.request().query(fallbackQuery);
+
+            const match = fallbackResult.recordset.find(comp =>
+                isNumeric ? comp.Id === parseInt(projectName) : comp.Description.trim().toLowerCase() === projectName.trim().toLowerCase()
+            );
+
+            if (!match) {
+                return res.status(400).json({ msg: 'Invalid project name' });
+            }
+
+            projectResult = match;
+            location = match.Description;
+            businessUnit = match.Description;
+            projectId = match.Id;
+            parentId = match.ParentId;
         }
 
-        //console.log(`Querying for projectName: ${projectName}`); // Debug log
+        // 2. Determine Company Name using ParentId from resolved record
+        const pool5 = await poolPromise;
+        const companyNameResult = await pool5.request().query(`
+            SELECT Description AS Company_Name 
+            FROM CompanyNameByBuId 
+            WHERE ParentId = ${parentId}
+        `);
 
-        const projectResult = await projectRequest.query(query);
-
-        if (projectResult.recordset.length === 0) {
-            // //console.log('Invalid project name:', projectName); 
-            return res.status(400).json({ msg: 'Invalid project name' });
+        let salaryBu = location;
+        if (companyNameResult.recordset.length > 0) {
+            const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
+            if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
+                salaryBu = `${companyNameFromDb} - HO`;
+            }
         }
 
-        const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
-        const businessUnit = projectResult.recordset[0].Description;
-        //console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
-
-        // **********************************  NEW  ********************
-
-        let salaryBu;
-        const projectId = projectResult.recordset[0].id;
-        const parentIdResult = await pool.request().query(`
-    SELECT ParentId 
-    FROM Framework.BusinessUnit 
-    WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-    AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-    AND Id = ${projectId}
-`);
-
-        if (parentIdResult.recordset.length === 0) {
-            return res.status(404).send('ParentId not found for the selected project');
-        }
-
-        const parentId = parentIdResult.recordset[0].ParentId;
-
-        const companyNameResult = await pool.request().query(`
-    SELECT Id, Description AS Company_Name 
-    FROM Framework.BusinessUnit 
-    WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-    AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-    AND Id = ${parentId}
-`);
-
-        const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
-
-        if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
-            salaryBu = `${companyNameFromDb} - HO`;
-        } else {
-            salaryBu = location;
-        }
-
-
-        // Fetch department description
-        const departmentRequest = pool.request();
+        // 3. Department Info
+        const departmentRequest = pool5.request();
         departmentRequest.input('departmentId', sql.Int, departmentId);
         const departmentQuery = `
-     SELECT a.Description AS Department_Name
-     FROM Payroll.Department a
-     WHERE a.Id = @departmentId
- `;
+            SELECT [id], [farvision_code] AS Code, [farvision_id] AS Id, [farvision_description] AS Description 
+            FROM [Departments] 
+            WHERE [farvision_id] = @departmentId
+        `;
         const departmentResult = await departmentRequest.query(departmentQuery);
-
         if (departmentResult.recordset.length === 0) {
             return res.status(404).send('Department not found');
         }
-
-        const departmentName = departmentResult.recordset[0].Department_Name;
+        const departmentName = departmentResult.recordset[0].Description;
+        // console.log('departmentResult++',departmentName)
 
         const creationDate = new Date();
         //console.log('Received OnboardName:', finalOnboardName);
@@ -348,7 +316,19 @@ async function createRecord(req, res) {
 
 async function getAllRecords(req, res) {
     try {
+        console.log('getAllRecords')
         const records = await labourModel.getAll();
+        return res.status(200).json(records);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
+
+async function getAllRecordsLaboursOnboarding(req, res) {
+    try {
+        const records = await labourModel.getAllLaboursOnboarding();
         return res.status(200).json(records);
     } catch (error) {
         console.error(error);
@@ -372,8 +352,6 @@ async function getRecordById(req, res) {
 }
 
 
-
-
 async function createRecordUpdate(req, res) {
     try {
         //console.log('Request Body: check----------', req.body);
@@ -386,16 +364,16 @@ async function createRecordUpdate(req, res) {
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
         } = req.body;
 
-        let finalOnboardName = Array.isArray(OnboardName) 
-        ? OnboardName.filter(name => name && name.trim() !== '').pop() 
-        : OnboardName;
+        let finalOnboardName = Array.isArray(OnboardName)
+            ? OnboardName.filter(name => name && name.trim() !== '').pop()
+            : OnboardName;
 
         if (!finalOnboardName || finalOnboardName.trim() === '') {
             console.error('OnboardName is missing or empty.');
             return res.status(400).json({ msg: 'OnboardName is required.' });
         }
-finalOnboardName = finalOnboardName.toUpperCase();
-        
+        finalOnboardName = finalOnboardName.toUpperCase();
+
         if (!finalOnboardName || finalOnboardName.trim() === '') {
             console.error('OnboardName is missing or empty.');
             return res.status(400).json({ msg: 'OnboardName is required.' });
@@ -425,7 +403,7 @@ finalOnboardName = finalOnboardName.toUpperCase();
 
         const safeDepartmentId = String(departmentId);
         const safeDesignationId = String(designationId);
-        const safeProjectName = isNaN(projectName) ? projectName : String(projectName); 
+        const safeProjectName = isNaN(projectName) ? projectName : String(projectName);
 
         //console.log('Converted Values:', {
         //     safeProjectName,
@@ -472,69 +450,77 @@ finalOnboardName = finalOnboardName.toUpperCase();
         const retirementDate = new Date(dateOfBirth);
         retirementDate.setFullYear(retirementDate.getFullYear() + 60);
 
-        const pool = await poolPromise2;
+        const pool = await poolPromise4;
+        const isNumeric = !isNaN(projectName);
         const projectRequest = pool.request();
+        projectRequest.input('projectName', isNumeric ? sql.Int : sql.VarChar, projectName);
 
-        projectRequest.input('projectName', isNaN(safeProjectName) ? sql.VarChar : sql.Int, safeProjectName);
+        let projectResult;
+        let location = "";
+        let businessUnit = "";
+        let projectId;
+        let parentId;
 
-        let query;
-        if (!isNaN(safeProjectName)) {
-            query = `
-                SELECT a.id, a.Description 
-                FROM Framework.BusinessUnit a
-                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
-                WHERE a.id = @projectName
-                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
-                AND b.Id = 3
-            `;
-        } else {
-            query = `
-                SELECT a.id, a.Description 
+        // 1. Try primary query from Framework.BusinessUnit
+        const primaryQuery = isNumeric
+            ? `
+                SELECT Id, Description, Type, Email1, ParentId 
+                FROM Framework.BusinessUnit 
+                WHERE Type = 'B' 
+                AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
+                AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0)
+                AND Id = @projectName
+              `
+            : `
+                SELECT a.Id, a.Description, a.Type, a.Email1, a.ParentId
                 FROM Framework.BusinessUnit a
                 LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
                 WHERE a.Description = @projectName
-                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+                AND (a.IsDiscontinueBU IS NULL OR a.IsDiscontinueBU = 0)
+                AND (a.IsDeleted IS NULL OR a.IsDeleted = 0)
                 AND b.Id = 3
+              `;
+
+        const primaryResult = await projectRequest.query(primaryQuery);
+
+        if (primaryResult.recordset.length > 0) {
+            const record = primaryResult.recordset[0];
+            projectResult = record;
+            location = record.Description;
+            businessUnit = record.Description;
+            projectId = record.Id;
+            parentId = record.ParentId;
+        } else {
+            console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
+
+            const pool2 = await poolPromise;
+            const fallbackQuery = `
+                SELECT Id, ProjectName AS Description, Type, ParentId
+                FROM CompanyNameByBuId
             `;
+            const fallbackResult = await pool2.request().query(fallbackQuery);
+
+            const match = fallbackResult.recordset.find(comp =>
+                isNumeric ? comp.Id === parseInt(projectName) : comp.Description.trim().toLowerCase() === projectName.trim().toLowerCase()
+            );
+
+            if (!match) {
+                return res.status(400).json({ msg: 'Invalid project name' });
+            }
+
+            projectResult = match;
+            location = match.Description;
+            businessUnit = match.Description;
+            projectId = match.Id;
+            parentId = match.ParentId;
         }
 
-        //console.log(`Querying for projectName: ${safeProjectName}`); // Debug log
-
-        const projectResult = await projectRequest.query(query);
-
-        if (projectResult.recordset.length === 0) {
-            //console.log('Invalid project name:', safeProjectName); // Debug log
-            return res.status(400).json({ msg: 'Invalid project name-------' });
-        }
-
-        const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
-        const businessUnit = projectResult.recordset[0].Description;
-        //console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
-
-        let salaryBu;
-        const projectId = projectResult.recordset[0].id;
-        const parentIdResult = await pool.request().query(`
-            SELECT ParentId 
-            FROM Framework.BusinessUnit 
-            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-            AND Id = ${projectId}
-        `);
-
-        if (parentIdResult.recordset.length === 0) {
-            return res.status(404).send('ParentId not found for the selected project');
-        }
-
-        const parentId = parentIdResult.recordset[0].ParentId;
-
-        const companyNameResult = await pool.request().query(`
-            SELECT Id, Description AS Company_Name 
-            FROM Framework.BusinessUnit 
-            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-            AND Id = ${parentId}
+        // const parentId = parentIdResult.recordset[0].ParentId;
+        const pool5 = await poolPromise;
+        const companyNameResult = await pool5.request().query(`
+              SELECT Description AS Company_Name 
+        FROM CompanyNameByBuId 
+        WHERE ParentId = ${parentId}
         `);
 
         const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
@@ -559,9 +545,8 @@ finalOnboardName = finalOnboardName.toUpperCase();
         }
 
         const departmentQuery = `
-            SELECT a.Description AS Department_Name
-            FROM Payroll.Department a
-            WHERE a.Id = @departmentId
+             SELECT [id], [farvision_code] AS Code, [farvision_id] AS Id, [farvision_description] AS Description 
+      FROM [Departments] WHERE [farvision_id] = @departmentId
         `;
         const departmentResult = await departmentRequest.query(departmentQuery);
 
@@ -570,7 +555,7 @@ finalOnboardName = finalOnboardName.toUpperCase();
             return res.status(404).send('Department not found');
         }
 
-        const departmentName = departmentResult.recordset[0].Department_Name;
+        const departmentName = departmentResult.recordset[0].Description;
 
         const creationDate = new Date();
 
@@ -621,22 +606,22 @@ async function updateRecord(req, res) {
 
         // Extract fields from request body
         const {
-           id, LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
+            id, LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
         } = req.body;
 
         //console.log('LabourID from request body:', LabourID);
-        let finalOnboardName = Array.isArray(OnboardName) 
-        ? OnboardName.filter(name => name && name.trim() !== '').pop() 
-        : OnboardName;
+        let finalOnboardName = Array.isArray(OnboardName)
+            ? OnboardName.filter(name => name && name.trim() !== '').pop()
+            : OnboardName;
 
         if (!finalOnboardName || finalOnboardName.trim() === '') {
             console.error('OnboardName is missing or empty.');
             return res.status(400).json({ msg: 'OnboardName is required.' });
         }
-finalOnboardName = finalOnboardName.toUpperCase();
+        finalOnboardName = finalOnboardName.toUpperCase();
 
         //console.log('Cleaned OnboardName:', finalOnboardName);
         // Check if LabourID exists
@@ -697,81 +682,103 @@ finalOnboardName = finalOnboardName.toUpperCase();
         const retirementDate = new Date(dateOfBirth);
         retirementDate.setFullYear(retirementDate.getFullYear() + 60);
 
-        const pool = await poolPromise2;
+        const pool = await poolPromise4;
+        const isNumeric = !isNaN(projectName);
         const projectRequest = pool.request();
-        projectRequest.input('projectName', isNaN(safeProjectName) ? sql.VarChar : sql.Int, safeProjectName);
+        projectRequest.input('projectName', isNumeric ? sql.Int : sql.VarChar, projectName);
 
-        let query;
-        if (!isNaN(safeProjectName)) {
-            query = `
-                SELECT a.id, a.Description 
-                FROM Framework.BusinessUnit a
-                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
-                WHERE a.id = @projectName
-                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
-                AND b.Id = 3
-            `;
-        } else {
-            query = `
-                SELECT a.id, a.Description 
+        let projectResult;
+        let location = "";
+        let businessUnit = "";
+        let projectId;
+        let parentId;
+
+        // 1. Try primary query from Framework.BusinessUnit
+        const primaryQuery = isNumeric
+            ? `
+                SELECT Id, Description, Type, Email1, ParentId 
+                FROM Framework.BusinessUnit 
+                WHERE Type = 'B' 
+                AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
+                AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0)
+                AND Id = @projectName
+              `
+            : `
+                SELECT a.Id, a.Description, a.Type, a.Email1, a.ParentId
                 FROM Framework.BusinessUnit a
                 LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
                 WHERE a.Description = @projectName
-                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+                AND (a.IsDiscontinueBU IS NULL OR a.IsDiscontinueBU = 0)
+                AND (a.IsDeleted IS NULL OR a.IsDeleted = 0)
                 AND b.Id = 3
+              `;
+
+        const primaryResult = await projectRequest.query(primaryQuery);
+
+        if (primaryResult.recordset.length > 0) {
+            const record = primaryResult.recordset[0];
+            projectResult = record;
+            location = record.Description;
+            businessUnit = record.Description;
+            projectId = record.Id;
+            parentId = record.ParentId;
+        } else {
+            console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
+
+            const pool2 = await poolPromise;
+            const fallbackQuery = `
+                SELECT Id, ProjectName AS Description, Type, ParentId
+                FROM CompanyNameByBuId
             `;
+            const fallbackResult = await pool2.request().query(fallbackQuery);
+
+            const match = fallbackResult.recordset.find(comp =>
+                isNumeric ? comp.Id === parseInt(projectName) : comp.Description.trim().toLowerCase() === projectName.trim().toLowerCase()
+            );
+
+            if (!match) {
+                return res.status(400).json({ msg: 'Invalid project name' });
+            }
+
+            projectResult = match;
+            location = match.Description;
+            businessUnit = match.Description;
+            projectId = match.Id;
+            parentId = match.ParentId;
         }
 
-        //console.log(`Querying for projectName: ${safeProjectName}`);
-
-        const projectResult = await projectRequest.query(query);
-
-        if (projectResult.recordset.length === 0) {
-            //console.log('Invalid project name:', safeProjectName);
-            return res.status(400).json({ msg: 'Invalid project name' });
-        }
-
-        const location = projectResult.recordset[0].Description;
-        const businessUnit = projectResult.recordset[0].Description;
-        //console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
-
-        let salaryBu;
-        const projectId = projectResult.recordset[0].id;
-        const parentIdResult = await pool.request().query(`
-            SELECT ParentId 
-            FROM Framework.BusinessUnit 
-            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-            AND Id = ${projectId}
-        `);
-
-        if (parentIdResult.recordset.length === 0) {
-            return res.status(404).send('ParentId not found for the selected project');
-        }
-
-        const parentId = parentIdResult.recordset[0].ParentId;
-
-        const companyNameResult = await pool.request().query(`
-            SELECT Id, Description AS Company_Name 
-            FROM Framework.BusinessUnit 
-            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-            AND Id = ${parentId}
+        // const parentId = parentIdResult.recordset[0].ParentId;
+        const pool5 = await poolPromise;
+        const companyNameResult = await pool5.request().query(`
+              SELECT Description AS Company_Name 
+        FROM CompanyNameByBuId 
+        WHERE ParentId = ${parentId}
         `);
 
         const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
 
-        salaryBu = companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED' ? `${companyNameFromDb} - HO` : location;
+        if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
+            salaryBu = `${companyNameFromDb} - HO`;
+        } else {
+            salaryBu = location;
+        }
 
+        // Fetch department description
         const departmentRequest = pool.request();
-        departmentRequest.input('departmentId', safeDepartmentId);
+
+        // Validate and log departmentId before setting SQL input
+        //console.log('Setting SQL input for departmentId:', safeDepartmentId);
+        if (safeDepartmentId !== null) {
+            departmentRequest.input('departmentId', safeDepartmentId);
+            //console.log("departmentId", departmentId)
+        } else {
+            //console.log('Invalid departmentId provided:', departmentId);
+            return res.status(400).send('Invalid departmentId');
+        }
 
         const departmentQuery = `
-            SELECT a.Description AS Department_Name
-            FROM Payroll.Department a
-            WHERE a.Id = @departmentId
+             SELECT [id], [farvision_code] AS Code, [farvision_id] AS Id, [farvision_description] AS Description 
+      FROM [Departments] WHERE [farvision_id] = @departmentId
         `;
         const departmentResult = await departmentRequest.query(departmentQuery);
 
@@ -780,7 +787,7 @@ finalOnboardName = finalOnboardName.toUpperCase();
             return res.status(404).send('Department not found');
         }
 
-        const departmentName = departmentResult.recordset[0].Department_Name;
+        const departmentName = departmentResult.recordset[0].Description;
 
         const creationDate = new Date();
         //console.log('Received OnboardName Edit button functionlity:', finalOnboardName);
@@ -860,28 +867,42 @@ finalOnboardName = finalOnboardName.toUpperCase();
 
 async function updateRecordWithDisable(req, res) {
     try {
-        //console.log('Request Body: check----------', req.body);
-        //console.log('Request Files:', req.files); 
-
-        const {
-            LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
-            address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
-            accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
+        let {
+            LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber,
+            gender, dateOfJoining, address, pincode, taluka, district, village, state,
+            emergencyContact, bankName, branch, accountNumber, ifscCode, projectName,
+            labourCategory, department, workingHours, contractorName, contractorNumber,
+            designation, title, Marital_Status, companyName, Induction_Date, Inducted_By,
+            OnboardName, expiryDate, departmentId, designationId, isResubmit, hideResubmit , isCompanyTransfer, isSiteTransfer
         } = req.body;
+        console.log("req.body-->", req.body)
 
-        let finalOnboardName = Array.isArray(OnboardName) 
-        ? OnboardName.filter(name => name && name.trim() !== '').pop() 
-        : OnboardName;
+        const parseBitField = (val) => {
+            if (val === null || val === undefined || val === '' || val === 'null') return null;
+            if (typeof val === 'boolean') return val;
+            if (typeof val === 'string') {
+                const lowered = val.trim().toLowerCase();
+                if (lowered === 'true' || lowered === '1') return true;
+                if (lowered === 'false' || lowered === '0') return false;
+            }
+            return null;
+        };
+
+        const parsedIsResubmit = parseBitField(isResubmit);
+        const parsedHideResubmit = parseBitField(hideResubmit);
+        const parsedIsCompanyTransfer = parseBitField(isCompanyTransfer);
+        const parsedIsSiteTransfer = parseBitField(isSiteTransfer);
+
+        let finalOnboardName = Array.isArray(OnboardName)
+            ? OnboardName.filter(n => n && n.trim() !== '').pop()
+            : OnboardName;
 
         if (!finalOnboardName || finalOnboardName.trim() === '') {
-            console.error('OnboardName is missing or empty.');
             return res.status(400).json({ msg: 'OnboardName is required.' });
         }
-finalOnboardName = finalOnboardName.toUpperCase();
-        //console.log('Cleaned OnboardName Resubmitted button:', finalOnboardName);
-        if (!LabourID ) {
-            console.error('LabourID is missing from request body.');
+        finalOnboardName = finalOnboardName.toUpperCase();
+
+        if (!LabourID) {
             return res.status(400).json({ msg: 'LabourID is required.' });
         }
 
@@ -890,32 +911,16 @@ finalOnboardName = finalOnboardName.toUpperCase();
             'UN-SKILLED': 2,
             'SEMI-SKILLED': 3
         };
-
         const safeLabourCategoryId = String(labourCategoryMap[labourCategory]) || null;
-
         if (safeLabourCategoryId === null) {
-            //console.log('Invalid labourCategory:', labourCategory);
             return res.status(400).json({ msg: 'Invalid labourCategory provided' });
         }
 
-        const safeConvertToInt = (value) => {
-            if (value === 'null' || value === '' || value === undefined) return null;
-            const parsedValue = parseInt(value, 10);
-            return isNaN(parsedValue) ? null : parsedValue;
-        };
-
         const safeDepartmentId = String(departmentId);
         const safeDesignationId = String(designationId);
-        const safeProjectName = isNaN(projectName) ? projectName : String(projectName); 
+        const safeProjectName = String(projectName);
 
-        // console.log('Converted Values:', {
-        //     safeProjectName,
-        //     safeDepartmentId,
-        //     safeDesignationId,
-        //     safeLabourCategoryId
-        // });
-
-        if (safeProjectName === null || safeDepartmentId === null || safeDesignationId === null) {
+        if (!safeProjectName || !safeDepartmentId || !safeDesignationId) {
             return res.status(400).json({ msg: 'Missing required fields: projectName, departmentId, or designationId' });
         }
 
@@ -925,7 +930,7 @@ finalOnboardName = finalOnboardName.toUpperCase();
             photoSrc = null,
             uploadIdProof = null,
             uploadInductionDoc = null
-        } = req.files || {};  // Use {} as fallback if req.files is undefined
+        } = req.files || {};
 
         const processFileField = (bodyField, fileField) => {
             if (fileField) {
@@ -937,7 +942,7 @@ finalOnboardName = finalOnboardName.toUpperCase();
             }
             return null; // No data available
         };
-        
+   
 
         const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
         const backImageUrl = processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
@@ -945,81 +950,90 @@ finalOnboardName = finalOnboardName.toUpperCase();
         const IdProofImageUrl = processFileField(req.body.uploadIdProof, uploadIdProof);
         const uploadInductionDocImageUrl = processFileField(req.body.uploadInductionDoc, uploadInductionDoc);
 
-
         const dateOfJoiningDate = new Date(dateOfJoining);
         const fromDate = dateOfJoiningDate;
         const period = dateOfJoiningDate.toLocaleString('default', { month: 'long', year: 'numeric' }).replace(' ', '-');
+
         const validTillDate = new Date(dateOfJoiningDate);
         validTillDate.setFullYear(validTillDate.getFullYear() + 1);
+
         const retirementDate = new Date(dateOfBirth);
         retirementDate.setFullYear(retirementDate.getFullYear() + 60);
 
-        const pool = await poolPromise2;
+        const pool = await poolPromise4;
+        const isNumeric = !isNaN(projectName);
         const projectRequest = pool.request();
+        projectRequest.input('projectName', isNumeric ? sql.Int : sql.VarChar, projectName);
 
-        projectRequest.input('projectName', isNaN(safeProjectName) ? sql.VarChar : sql.Int, safeProjectName);
+        let projectResult;
+        let location = "";
+        let businessUnit = "";
+        let projectId;
+        let parentId;
 
-        let query;
-        if (!isNaN(safeProjectName)) {
-            query = `
-                SELECT a.id, a.Description 
-                FROM Framework.BusinessUnit a
-                LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
-                WHERE a.id = @projectName
-                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
-                AND b.Id = 3
-            `;
-        } else {
-            query = `
-                SELECT a.id, a.Description 
+        // 1. Try primary query from Framework.BusinessUnit
+        const primaryQuery = isNumeric
+            ? `
+                SELECT Id, Description, Type, Email1, ParentId 
+                FROM Framework.BusinessUnit 
+                WHERE Type = 'B' 
+                AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
+                AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0)
+                AND Id = @projectName
+              `
+            : `
+                SELECT a.Id, a.Description, a.Type, a.Email1, a.ParentId
                 FROM Framework.BusinessUnit a
                 LEFT JOIN Framework.BusinessUnitSegment b ON b.Id = a.SegmentId
                 WHERE a.Description = @projectName
-                AND (a.IsDiscontinueBU = 0 OR a.IsDiscontinueBU IS NULL)
-                AND (a.IsDeleted = 0 OR a.IsDeleted IS NULL)
+                AND (a.IsDiscontinueBU IS NULL OR a.IsDiscontinueBU = 0)
+                AND (a.IsDeleted IS NULL OR a.IsDeleted = 0)
                 AND b.Id = 3
+              `;
+
+        const primaryResult = await projectRequest.query(primaryQuery);
+
+        if (primaryResult.recordset.length > 0) {
+            const record = primaryResult.recordset[0];
+            projectResult = record;
+            location = record.Description;
+            businessUnit = record.Description;
+            projectId = record.Id;
+            parentId = record.ParentId;
+        } else {
+            console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
+
+            const pool2 = await poolPromise;
+            const fallbackQuery = `
+                SELECT Id, ProjectName AS Description, Type, ParentId
+                FROM CompanyNameByBuId
             `;
+            const fallbackResult = await pool2.request().query(fallbackQuery);
+
+            const match = fallbackResult.recordset.find(comp =>
+                isNumeric ? comp.Id === parseInt(projectName) : comp.Description.trim().toLowerCase() === projectName.trim().toLowerCase()
+            );
+
+            if (!match) {
+                return res.status(400).json({ msg: 'Invalid project name' });
+            }
+
+            projectResult = match;
+            location = match.Description;
+            businessUnit = match.Description;
+            projectId = match.Id;
+            parentId = match.ParentId;
         }
 
-        //console.log(`Querying for projectName: ${safeProjectName}`); // Debug log
-
-        const projectResult = await projectRequest.query(query);
-
-        if (projectResult.recordset.length === 0) {
-            //console.log('Invalid project name:', safeProjectName); // Debug log
-            return res.status(400).json({ msg: 'Invalid project name-------' });
-        }
-
-        const location = projectResult.recordset[0].Description; // Store the Business_Unit name in location
-        const businessUnit = projectResult.recordset[0].Description;
-        //console.log(`Found project Description: ${location}, BusinessUnit: ${businessUnit}`);
-
-        let salaryBu;
-        const projectId = projectResult.recordset[0].id;
-        const parentIdResult = await pool.request().query(`
-            SELECT ParentId 
-            FROM Framework.BusinessUnit 
-            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-            AND Id = ${projectId}
+        // const parentId = parentIdResult.recordset[0].ParentId;
+        const pool5 = await poolPromise;
+        const companyNameResult = await pool5.request().query(`
+              SELECT Description AS Company_Name 
+        FROM CompanyNameByBuId 
+        WHERE ParentId = ${parentId}
         `);
 
-        if (parentIdResult.recordset.length === 0) {
-            return res.status(404).send('ParentId not found for the selected project');
-        }
-
-        const parentId = parentIdResult.recordset[0].ParentId;
-
-        const companyNameResult = await pool.request().query(`
-            SELECT Id, Description AS Company_Name 
-            FROM Framework.BusinessUnit 
-            WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-            AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-            AND Id = ${parentId}
-        `);
-
-        const companyNameFromDb = companyNameResult.recordset[0].Company_Name;
+        const companyNameFromDb = companyNameResult.recordset[0].Company_Name || '';
 
         if (companyNameFromDb === 'SANKALP CONTRACTS PRIVATE LIMITED') {
             salaryBu = `${companyNameFromDb} - HO`;
@@ -1028,22 +1042,21 @@ finalOnboardName = finalOnboardName.toUpperCase();
         }
 
         // Fetch department description
-        const departmentRequest = pool.request();
+        const departmentRequest = pool5.request();
 
         // Validate and log departmentId before setting SQL input
-        //console.log('Setting SQL input for departmentId:', safeDepartmentId);
+        console.log('Setting SQL input for departmentId:', safeDepartmentId);
         if (safeDepartmentId !== null) {
             departmentRequest.input('departmentId', safeDepartmentId);
-            //console.log("departmentId", departmentId)
+            console.log("departmentId", departmentId)
         } else {
-            //console.log('Invalid departmentId provided:', departmentId);
+            console.log('Invalid departmentId provided:', departmentId);
             return res.status(400).send('Invalid departmentId');
         }
 
         const departmentQuery = `
-            SELECT a.Description AS Department_Name
-            FROM Payroll.Department a
-            WHERE a.Id = @departmentId
+             SELECT [id], [farvision_code] AS Code, [farvision_id] AS Id, [farvision_description] AS Description 
+      FROM [Departments] WHERE [farvision_id] = @departmentId
         `;
         const departmentResult = await departmentRequest.query(departmentQuery);
 
@@ -1052,12 +1065,14 @@ finalOnboardName = finalOnboardName.toUpperCase();
             return res.status(404).send('Department not found');
         }
 
-        const departmentName = departmentResult.recordset[0].Department_Name;
+      
+        
+        
 
+        const departmentName = departmentResult.recordset[0].Description;
         const creationDate = new Date();
 
-
-        //console.log('Received OnboardName Resubmmit button functionlity:', finalOnboardName);
+       
 
         const data = await labourModel.registerDataUpdateDisable({
             LabourID, labourOwnership,
@@ -1066,29 +1081,169 @@ finalOnboardName = finalOnboardName.toUpperCase();
             uploadIdProof: IdProofImageUrl,
             uploadInductionDoc: uploadInductionDocImageUrl,
             name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
-            Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining,
-            From_Date: fromDate.toISOString().split('T')[0], Period: period, address,
-            pincode, taluka, district, village, state, emergencyContact,
-            photoSrc: photoSrcUrl, bankName, branch, accountNumber, ifscCode, projectName,
-            labourCategory, department, workingHours, location, SalaryBu: salaryBu, businessUnit,
+            Group_Join_Date: dateOfJoining,
+            ConfirmDate: dateOfJoining,
+            From_Date: fromDate.toISOString().split('T')[0],
+            Period: period,
+            address, pincode, taluka, district, village, state, emergencyContact,
+            photoSrc: photoSrcUrl, bankName, branch, accountNumber, ifscCode,
+            projectName, labourCategory, department, workingHours,
+            location, SalaryBu: salaryBu, businessUnit,
             contractorName, contractorNumber, designation, title, Marital_Status, companyName,
             Induction_Date, Inducted_By, OnboardName: finalOnboardName, expiryDate,
             ValidTill: validTillDate.toISOString().split('T')[0],
-            retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location,
-            CreationDate: creationDate.toISOString(), departmentId: safeDepartmentId, departmentName, designationId: safeDesignationId,
-            labourCategoryId: safeLabourCategoryId
+            retirementDate: retirementDate.toISOString().split('T')[0],
+            WorkingBu: location,
+            CreationDate: creationDate.toISOString(),
+            departmentId: safeDepartmentId, departmentName,
+            designationId: safeDesignationId,
+            labourCategoryId: safeLabourCategoryId,
+            isResubmit: parsedIsResubmit,
+            hideResubmit: parsedHideResubmit,
+            isCompanyTransfer: parsedIsCompanyTransfer,
+            isSiteTransfer: parsedIsSiteTransfer
         });
 
-
-        //console.log('dataupdate', data)
-
-        return res.status(201).json({ msg: "User created successfully", data: data });
+        return res.status(201).json({ msg: "User created successfully", data });
     } catch (err) {
         console.error(err);
         return res.status(500).json({ msg: 'Internal server error' });
-    };
+    }
+}
 
-};
+
+
+const sanitizeInt = v =>
+    (v !== undefined && v !== null && v !== '' && v !== 'null') ? parseInt(v, 10) : null;
+  
+  // converts various truthy / falsy strings → boolean / null
+  const parseBit = v => {
+    if (v === null || v === undefined || v === '' || v === 'null') return null;
+    if (typeof v === 'boolean') return v;
+    const s = String(v).trim().toLowerCase();
+    if (s === 'true' || s === '1') return true;
+    if (s === 'false' || s === '0') return false;
+    return null;
+  };
+  
+
+// async function updateRecordWithDisable(req, res) {
+//     try {
+//       let {
+//         LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber,
+//         gender, dateOfJoining, address, pincode, taluka, district, village, state,
+//         emergencyContact, bankName, branch, accountNumber, ifscCode, projectName,
+//         labourCategory, department, workingHours, contractorName, contractorNumber,
+//         designation, title, Marital_Status, companyName, Induction_Date, Inducted_By,
+//         OnboardName, expiryDate, departmentId, designationId, isResubmit, hideResubmit,
+//         isCompanyTransfer, isSiteTransfer
+//       } = req.body;
+//   console.log("req.body updateRecordDisable--->", req.body)
+//       /* ---------- basic validation ---------- */
+//       if (!LabourID) return res.status(400).json({ msg: 'LabourID is required.' });
+  
+//       const onboardArray = Array.isArray(OnboardName)
+//         ? OnboardName.filter(n => n && n.trim())
+//         : [OnboardName];
+//       const finalOnboardName = (onboardArray.pop() || '').toUpperCase();
+//       if (!finalOnboardName) return res.status(400).json({ msg: 'OnboardName is required.' });
+  
+//       /* ---------- numeric & enum sanitising ---------- */
+//       const rawDeptId    = sanitizeInt(departmentId);
+//       const rawDeptCode  = sanitizeInt(department);           // fallback if id missing
+//       const safeDepartmentId   = rawDeptId ?? rawDeptCode;
+//       const safeDesignationId  = sanitizeInt(designationId);
+//       const labourCatMap = { 'SKILLED': 1, 'UN-SKILLED': 2, 'SEMI-SKILLED': 3 };
+//       const safeLabourCategoryId = labourCatMap[labourCategory] ?? null;
+  
+//       if (!projectName || !safeDepartmentId || !safeDesignationId) {
+//         return res.status(400).json({ msg: 'Missing projectName / departmentId / designationId' });
+//       }
+  
+//       /* ---------- file url helpers ---------- */
+//       const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files || {};
+//       const url = (bodyField, fileField) =>
+//         fileField ? baseUrl + path.basename(fileField[0].path) :
+//         (typeof bodyField === 'string' && bodyField.startsWith('http') ? bodyField : null);
+  
+//       /* ---------- dates ---------- */
+//       const joinDate  = new Date(dateOfJoining);
+//       const fromDate  = joinDate.toISOString().split('T')[0];
+//       const period    = joinDate.toLocaleString('default', { month:'long', year:'numeric' }).replace(' ','-');
+//       const validTill = new Date(joinDate); validTill.setFullYear(validTill.getFullYear()+1);
+//       const retireDt  = new Date(dateOfBirth); retireDt.setFullYear(retireDt.getFullYear()+60);
+  
+//       /* ---------- resolve project ---------- */
+//       const pool = await poolPromise4;
+//       const projReq = pool.request().input('projectName', !isNaN(projectName) ? sql.Int : sql.VarChar, projectName);
+//       const primaryQ = !isNaN(projectName)
+//         ? `SELECT Id,Description,ParentId FROM Framework.BusinessUnit WHERE Type='B' AND IsDeleted=0 AND Id=@projectName`
+//         : `SELECT a.Id,a.Description,a.ParentId FROM Framework.BusinessUnit a LEFT JOIN Framework.BusinessUnitSegment b ON b.Id=a.SegmentId
+//            WHERE a.Description=@projectName AND a.IsDeleted=0 AND b.Id=3`;
+  
+//       let { recordset } = await projReq.query(primaryQ);
+//       console.log("object----> projectname", recordset)
+//       if (!recordset.length) {
+//         const alt = await (await poolPromise).request().query('SELECT Id,ProjectName AS Description,ParentId FROM CompanyNameByBuId');
+//         recordset = alt.recordset.filter(r =>
+//           !isNaN(projectName) ? r.Id === +projectName : r.Description.trim().toLowerCase() === projectName.trim().toLowerCase()
+//         );
+//         if (!recordset.length) return res.status(400).json({ msg:'Invalid project name' });
+//       }
+//       const { Description: location, Id: projectId, ParentId: parentId } = recordset[0];
+  
+//       /* ---------- company name & department ---------- */
+//       const poolG = await poolPromise;
+//       const compRs = await poolG.request().query(`SELECT Description FROM CompanyNameByBuId WHERE ParentId=${parentId}`);
+//       const salaryBu = compRs.recordset[0]?.Description === 'SANKALP CONTRACTS PRIVATE LIMITED'
+//         ? 'SANKALP CONTRACTS PRIVATE LIMITED - HO'
+//         : location;
+  
+//       const deptRs = await poolG.request().input('departmentId', sql.Int, safeDepartmentId)
+//         .query('SELECT farvision_description FROM Departments WHERE farvision_id=@departmentId');
+//       if (!deptRs.recordset.length) return res.status(404).json({ msg:'Department not found' });
+  
+//       /* ---------- bit fields parsed ---------- */
+//       const bits = {
+//         isResubmit:        parseBit(isResubmit),
+//         hideResubmit:      parseBit(hideResubmit),
+//         isCompanyTransfer: parseBit(isCompanyTransfer),
+//         isSiteTransfer:    parseBit(isSiteTransfer)
+//       };
+  
+//       /* ---------- save ---------- */
+//       const data = await labourModel.registerDataUpdateDisable({
+//         LabourID, labourOwnership,
+//         uploadAadhaarFront : url(req.body.uploadAadhaarFront , uploadAadhaarFront ),
+//         uploadAadhaarBack  : url(req.body.uploadAadhaarBack  , uploadAadhaarBack  ),
+//         uploadIdProof      : url(req.body.uploadIdProof      , uploadIdProof      ),
+//         uploadInductionDoc : url(req.body.uploadInductionDoc , uploadInductionDoc ),
+//         photoSrc           : url(req.body.photoSrc           , photoSrc           ),
+//         name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
+//         Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining,
+//         From_Date: fromDate, Period: period,
+//         address, pincode, taluka, district, village, state, emergencyContact,
+//         bankName, branch, accountNumber, ifscCode,
+//         projectName, labourCategory, department, workingHours,
+//         location, SalaryBu: salaryBu, businessUnit: location,
+//         contractorName, contractorNumber, designation, title, Marital_Status, companyName,
+//         Induction_Date, Inducted_By, OnboardName: finalOnboardName, expiryDate,
+//         ValidTill: validTill.toISOString().split('T')[0],
+//         retirementDate: retireDt.toISOString().split('T')[0],
+//         WorkingBu: location, CreationDate: new Date().toISOString(),
+//         departmentId: safeDepartmentId, departmentName: deptRs.recordset[0].farvision_description,
+//         designationId: safeDesignationId, labourCategoryId: safeLabourCategoryId,
+//         ...bits
+//       });
+  
+//       return res.status(201).json({ msg:'User created successfully', data });
+//     } catch (err) {
+//       console.error('updateRecordWithDisable error:', err);
+//       return res.status(500).json({ msg:'Internal server error' });
+//     }
+//   }
+
+
 
 
 // Define multer storage configuration
@@ -1239,34 +1394,14 @@ async function getAllLabours(req, res) {
 
 async function approveLabour(req, res) {
     const id = parseInt(req.params.id, 10);
-    console.log(`Received id: ${req.params.id}, Parsed id: ${id}`);
+    const { labourID } = req.body;
 
     if (isNaN(id)) {
         return res.status(400).json({ message: 'Invalid labour ID' });
     }
 
     try {
-        const pool = await poolPromise;
-
-        // Step 1: Get departmentId for the labour entry
-        const depResult = await pool.request().query(`
-            SELECT departmentId FROM labourOnboarding WHERE id = ${id}
-        `);
-
-        if (!depResult.recordset.length) {
-            return res.status(404).json({ message: 'Labour not found' });
-        }
-
-        const departmentId = depResult.recordset[0].departmentId;
-
-        // Step 2: Generate ID based on department
-        const nextID = await labourModel.getNextUniqueID(departmentId);
-
-         console.log('Approving labour ID:', id);
-       console.log('Generated nextID:', nextID);
-
-        // Step 3: Approve the labour
-        const success = await labourModel.approveLabour(id, nextID);
+        const success = await labourModel.approveLabour(id, labourID);
         if (success) {
             res.json({ success: true, message: 'Labour approved successfully.', data: success });
         } else {
@@ -1423,7 +1558,7 @@ async function editbuttonLabour(req, res) {
 async function esslapi(req, res) {
     try {
         const approvedLaboursXml = req.body; // This is the XML body from your request
-        
+
         // Parse the incoming XML to extract relevant values
         const parser = new xml2js.Parser({ explicitArray: false });
         const approvedLabours = await parser.parseStringPromise(approvedLaboursXml);
@@ -1566,7 +1701,7 @@ async function updateHideResubmitLabour(req, res) {
 
         // Call the model function to update hideResubmit
         const updated = await labourModel.updateHideResubmit(id, hideResubmit);
-        
+
         if (updated === 0) {
             return res.status(404).json({ error: 'Record not found' });
         }
@@ -1824,11 +1959,31 @@ const cronLogger = createLogger({
     ]
 });
 
+function roundOvertime(overtimeHours) {
+    if (overtimeHours <= 0) return 0;
+
+    const hours = Math.floor(overtimeHours);
+    let minutes = Math.round((overtimeHours - hours) * 60);
+
+    if (minutes < 15) {
+        minutes = 0;
+    } else if (minutes < 45) {
+        minutes = 30; // Convert to 0.5 hr
+    } else {
+        minutes = 0;
+        return hours + 1;
+    }
+
+    return hours + (minutes / 60);
+}
+
 
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
+    console.log("yesterday", yesterday)
     yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
+    console.log("formattedYesterday",formattedYesterday)
 
     console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
     console.log(`Processing Attendance for Date: ${formattedYesterday}`);
@@ -1838,152 +1993,420 @@ async function runDailyAttendanceCron() {
     try {
         // Call the function to process attendance
         console.log('Calling processLaboursAttendance function...');
-        await processLaboursAttendance(formattedYesterday);
+        // await processLaboursAttendance(formattedYesterday);
+        const approvedLabours = await getAllLaboursAttendanceDaily(formattedYesterday);
         console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
-     // Update attendance summary for all approved laborers
-     const approvedLabours = await labourModel.getAllApprovedLabours();
-     for (let labour of approvedLabours) {
-         const { labourId } = labour;
-         await labourModel.insertOrUpdateLabourAttendanceSummary(labourId, formattedYesterday);
-     }
+        // Update attendance summary for all approved laborers
+        // const approvedLabours = await labourModel.getAllApprovedLabours();
+        // const approvedLabours = await labourModel.getAllApprovedOrMonthlyDisabledLabours(formattedYesterday);
 
-     console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
-     cronLogger.info(`Cron job completed successfully for Date: ${formattedYesterday}`);
- } catch (error) {
-     console.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
-     cronLogger.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
- }
+        for (let labour of approvedLabours) {
+            const { labourId } = labour;
+            await labourModel.insertOrUpdateLabourAttendanceSummary(labourId, formattedYesterday);
+        }
+
+        console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
+        cronLogger.info(`Cron job completed successfully for Date: ${formattedYesterday}`);
+    } catch (error) {
+        console.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
+        cronLogger.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
+    }
+}
+
+/**
+ * End-to-end attendance processor.
+ * @param {string} attendanceDate – ISO date string in YYYY-MM-DD format (e.g. '2025-05-03').
+ * @returns {Promise<void>}
+ */
+async function getAllLaboursAttendanceDaily(attendanceDate) {
+    console.info(`[ATTENDANCE] Processing attendance for ${attendanceDate}...`);
+    /* ---------- guardrails & parameter normalisation ---------- */
+    if (!attendanceDate) throw new Error('attendanceDate is required (YYYY-MM-DD).');
+
+    const target = new Date(attendanceDate);
+    if (isNaN(target)) throw new Error(`Invalid attendanceDate supplied → ${attendanceDate}`);
+
+    const parsedYear  = target.getFullYear();           // e.g. 2025
+    const parsedMonth = target.getMonth() + 1;      
+    const processedDay = target.getDate();    // 1-based month index
+    const daysInMonth = new Date(parsedYear, parsedMonth, 0).getDate();
+    console.log("daysInMonth=--->",daysInMonth)
+
+    /* ---------- labour cohort ---------- */
+    const approvedLabours =
+        // await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
+        await labourModel.getAllApprovedOrMonthlyDisabledLabours();
+        // await labourModel.getAllApprovedLabours();
+
+
+    if (!approvedLabours?.length) {
+        console.info(`[ATTENDANCE] No approved labours for ${parsedYear}-${parsedMonth}.`);
+        return;
+    }
+console.log("approvedLabours?.length",approvedLabours?.length)
+    /* ---------- per-labour daily crunch ---------- */
+    for (const labour of approvedLabours) {
+
+        const { labourId, workingHours } = labour;
+        const shiftHours   = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+        const halfDayHours = shiftHours === 9 ? 4.5 : 4;
+
+        let present = 0, half = 0, miss = 0, absent = 0;
+        let rawOT = 0, roundedOT = 0, payrollOT = 0, manualOT = 0;
+        const monthRows = [];
+
+        const punches = await labourModel.getAttendanceByLabourId(labourId, parsedMonth, parsedYear);
+
+        // for (let d = 1; d <= daysInMonth; d++) {
+        //     const dateISO = `${parsedYear}-${String(parsedMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        //     const punchesForDay = punches.filter(p =>
+        //         new Date(p.punch_date).toISOString().startsWith(dateISO));
+        const punchesForDay = punches.filter(p =>
+            new Date(p.punch_date).toISOString().startsWith(attendanceDate));
+
+            const { status, firstPunch, lastPunch, totalHours } =
+                determineStatus(punchesForDay, shiftHours, halfDayHours, workingHours);
+
+            /* ----- overtime funnel ----- */
+            let OT = 0;
+            if (status === 'P' && totalHours > shiftHours) OT = totalHours - shiftHours;
+            const OTrounded  = roundOvertime(OT);            // company rounding convention
+            const OTmanual   = Math.min(OTrounded, 4);       // manual capping rule (<=4 h)
+
+            /* ----- status KPIs ----- */
+            switch (status) {
+                case 'P':  present++; break;
+                case 'HD': half++;   break;
+                case 'MP': miss++;   break;
+                default:   absent++;
+            }
+            rawOT       += OT;
+            roundedOT   += OTrounded;
+            payrollOT   += OTrounded;
+            manualOT    += OTmanual;
+
+            /* ----- device / project refs ----- */
+            const fDev   = firstPunch?.Device_id ?? null;
+            const lDev   = lastPunch?.Device_id  ?? null;
+            const projFP = fDev ? await labourModel.getProjectIdByDeviceId(fDev) : null;
+            const projLP = lDev ? await labourModel.getProjectIdByDeviceId(lDev) : null;
+            const dateISO = attendanceDate;
+
+            /* ----- persistable detail row ----- */
+            monthRows.push({
+                labourId,
+                projectName: parseInt(labour.projectName, 10),
+                date: dateISO,
+                firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
+                firstPunchAttendanceId: firstPunch?.attendance_id ?? null,
+                firstPunchDeviceId: fDev,
+                lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
+                lastPunchAttendanceId: lastPunch?.attendance_id ?? null,
+                lastPunchDeviceId: lDev,
+                totalHours: Number(totalHours || 0).toFixed(2),
+                overtime: OT.toFixed(2),
+                PayrollCalRoundOffOvertime: OTrounded.toFixed(2),
+                OvertimeManually: OTmanual.toFixed(2),
+                status,
+                creationDate: new Date(),
+                projectIdFromDevicefirstPunch: projFP,
+                projectIdFromDeviceLastPunch:  projLP
+            });
+        
+
+        /* ---------- monthly summary ---------- */
+        const summary = {
+            labourId,
+            projectName: parseInt(labour.projectName, 10),
+            totalDays: processedDay,
+            presentDays: present,
+            halfDays:    half,
+            missPunchDays: miss,
+            absentDays:  absent,
+            totalOvertimeHours: Number(rawOT.toFixed(2)),
+            PayrollCalRoundoffTotalOvertime: Number(payrollOT.toFixed(2)),
+            RoundOffTotalOvertime: Number(roundedOT.toFixed(2)),
+            TotalOvertimeHoursManually: Number(manualOT.toFixed(2)),
+            shift: workingHours,
+            creationDate: new Date(),
+            selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2,'0')}`
+        };
+
+        /* ---------- persistence ---------- */
+        await labourModel.insertIntoLabourAttendanceSummary(summary);
+        for (const row of monthRows) {
+            await labourModel.insertIntoLabourAttendanceDetails(row);
+        }
+    }
+
+    for (const labour of approvedLabours) {
+        const { labourId } = labour;
+        await labourModel.insertOrUpdateLabourAttendanceSummary(labourId, attendanceDate);
+    }
+
+    console.info(`[ATTENDANCE] Completed processing for ${parsedYear}-${String(parsedMonth).padStart(2,'0')}`);
+    console.info(`[ATTENDANCE] Summary updates completed for ${attendanceDate}`);
 }
 
 
-// function formatTimeToHoursMinutes(timeString) {
+
+// async function getAttendance(req, res) {
 //     try {
-//         const date = new Date(timeString);
-//         if (isNaN(date.getTime())) return "-";
-//         const hours = date.getUTCHours().toString().padStart(2, "0");
-//         const minutes = date.getUTCMinutes().toString().padStart(2, "0");
-//         const seconds = date.getUTCSeconds().toString().padStart(2, "0");
-//         return `${hours}:${minutes}:${seconds}`;
-//     } catch (error) {
-//         return "-";
+//         const { labourId } = req.params;
+//         const { month, year } = req.query;
+//         logger.info('Received request for attendance:', { labourId, month, year });
+
+//         const attendance = await labourModel.getAttendanceByLabourId(labourId, month, year);
+//         logger.info('Attendance data fetched from the database:', attendance);
+
+//         if (!attendance || attendance.length === 0) {
+//             logger.info('No attendance found for this labour in the selected month');
+//             return res.status(404).json({ message: 'No attendance found for this labour in the selected month' });
+//         }
+
+//         const labourDetails = await labourModel.getLabourDetailsById(labourId);
+//         const shiftHours = labourDetails.workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+//         const halfDayHours = shiftHours === 9 ? 4.5 : 4;
+
+//         const daysInMonth = new Date(year, month, 0).getDate();
+//         let presentDays = 0;
+//         let halfDays = 0;
+//         let missPunchDays = 0;
+//         let totalOvertimeHours = 0;
+//         let monthlyAttendance = [];
+
+//         for (let day = 1; day <= daysInMonth; day++) {
+//             const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+//             const punchesForDay = attendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
+
+//             let status = 'A';
+//             let totalHours = 0;
+//             let overtime = 0;
+
+//             if (punchesForDay.length > 0) {
+//                 punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+
+//                 const firstPunch = punchesForDay[0];
+//                 const lastPunch = punchesForDay[punchesForDay.length - 1];
+
+//                 totalHours = calculateHoursWorked(firstPunch.punch_date, firstPunch.punch_time, lastPunch.punch_time);
+
+//                 if (firstPunch && lastPunch && totalHours >= shiftHours) {
+//                     status = 'P';
+//                     presentDays++;
+//                     overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
+//                 } else if (firstPunch && totalHours < halfDayHours) {
+//                     status = 'MP';
+//                     missPunchDays++;
+//                 } else if (totalHours >= halfDayHours) {
+//                     status = 'HD';
+//                     halfDays++;
+//                 }
+
+//                 monthlyAttendance.push({
+//                     date,
+//                     firstPunch: {
+//                         time: formatTimeToHoursMinutes(firstPunch.punch_time),
+//                         attendanceId: firstPunch.attendance_id,
+//                         deviceId: firstPunch.Device_id,
+//                     },
+//                     lastPunch: {
+//                         time: formatTimeToHoursMinutes(lastPunch.punch_time),
+//                         attendanceId: lastPunch.attendance_id,
+//                         deviceId: lastPunch.Device_id,
+//                     },
+//                     totalHours,
+//                     overtime,
+//                     status,
+//                 });
+
+//                 totalOvertimeHours += overtime;
+//             } else {
+//                 monthlyAttendance.push({
+//                     date,
+//                     status: 'A',
+//                     totalHours: 0,
+//                     overtime: 0,
+//                 });
+//             }
+//         }
+
+//         logger.info('Calculated attendance:', {
+//             labourId,
+//             totalDays: daysInMonth,
+//             presentDays,
+//             halfDays,
+//             missPunchDays,
+//             totalOvertimeHours,
+//             shift: labourDetails.workingHours,
+//             monthlyAttendance,
+//         });
+
+//         res.json({
+//             labourId,
+//             totalDays: daysInMonth,
+//             presentDays,
+//             halfDays,
+//             missPunchDays,
+//             totalOvertimeHours,
+//             shift: labourDetails.workingHours,
+//             monthlyAttendance,
+//         });
+//     } catch (err) {
+//         logger.error('Error getting attendance for month', err);
+//         res.status(500).json({ message: 'Error getting attendance for the month' });
 //     }
 // }
 
-// // Helper function to calculate hours worked between two times (dynamic date)
-// function calculateHoursWorked(punchDate, firstPunch, lastPunch) {
-//     const punchDateStr = punchDate.toISOString().split('T')[0]; // Extract date from punchDate
-//     const punchInTime = new Date(`${punchDateStr}T${firstPunch.toISOString().split('T')[1]}`); // Combine date and time
-//     const punchOutTime = new Date(`${punchDateStr}T${lastPunch.toISOString().split('T')[1]}`); // Combine date and time
-
-//     const totalHours = (punchOutTime - punchInTime) / (1000 * 60 * 60); // Convert milliseconds to hours
-//     return totalHours.toFixed(2);  // Return hours with 2 decimal places
-// };
-
+/**
+ * Processes and records the attendance of a specific labour for a specified month and year.
+ * Implements rules for Present, Half Day, Absent, and Miss Punch statuses based on punch data.
+ * @param {Object} req - Express request object containing params labourId and query parameters month and year.
+ * @param {Object} res - Express response object.
+ */
 async function getAttendance(req, res) {
     try {
         const { labourId } = req.params;
         const { month, year } = req.query;
-        logger.info('Received request for attendance:', { labourId, month, year });
 
-        const attendance = await labourModel.getAttendanceByLabourId(labourId, month, year);
-        logger.info('Attendance data fetched from the database:', attendance);
-
-        if (!attendance || attendance.length === 0) {
-            logger.info('No attendance found for this labour in the selected month');
-            return res.status(404).json({ message: 'No attendance found for this labour in the selected month' });
+        // Validate input
+        if (!labourId || !month || !year) {
+            return res.status(400).json({ message: 'LabourId, Month, and Year are required' });
         }
 
-        const labourDetails = await labourModel.getLabourDetailsById(labourId);
-        const shiftHours = labourDetails.workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+        const parsedMonth = parseInt(month, 10);
+        const parsedYear = parseInt(year, 10);
+
+        if (isNaN(parsedMonth) || isNaN(parsedYear)) {
+            return res.status(400).json({ message: 'Invalid month or year' });
+        }
+
+        // Fetch labour details
+        const labour = await labourModel.getLabourDetailsById(labourId);
+
+        if (!labour) {
+            return res.status(404).json({ message: 'Labour not found' });
+        }
+
+        const { workingHours } = labour;
+        const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
         const halfDayHours = shiftHours === 9 ? 4.5 : 4;
 
-        const daysInMonth = new Date(year, month, 0).getDate();
-        let presentDays = 0;
-        let halfDays = 0;
-        let missPunchDays = 0;
-        let totalOvertimeHours = 0;
+        const daysInMonth = new Date(parsedYear, parsedMonth, 0).getDate(); // Total days in the month
+
+        let presentDays = 0, halfDays = 0, missPunchDays = 0, absentDays = 0;
+        let totalOvertimeHours = 0, roundOffTotalOvertime = 0, PayrollCalRoundoffTotalOvertime = 0;
+        let totalManualOvertimeManually = 0;
         let monthlyAttendance = [];
 
+        // Fetch attendance records for the labour for the month
+        const labourAttendance = await labourModel.getAttendanceByLabourId(labourId, parsedMonth, parsedYear);
+
         for (let day = 1; day <= daysInMonth; day++) {
-            const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-            const punchesForDay = attendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
+            const date = `${parsedYear}-${String(parsedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const punchesForDay = labourAttendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
 
-            let status = 'A';
-            let totalHours = 0;
-            let overtime = 0;
+            let { status, firstPunch, lastPunch, totalHours } = determineStatus(punchesForDay, shiftHours, halfDayHours, workingHours);
 
-            if (punchesForDay.length > 0) {
-                punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+            let overtime = 0, dailyRoundOffOvertime = 0;
+            let firstPunchAttendanceId = null, firstPunchDeviceId = null;
+            let lastPunchAttendanceId = null, lastPunchDeviceId = null;
+            let projectIdFromDevicefirstPunch = null;
+            let projectIdFromDeviceLastPunch = null;
 
-                const firstPunch = punchesForDay[0];
-                const lastPunch = punchesForDay[punchesForDay.length - 1];
-
-                totalHours = calculateHoursWorked(firstPunch.punch_date, firstPunch.punch_time, lastPunch.punch_time);
-
-                if (firstPunch && lastPunch && totalHours >= shiftHours) {
-                    status = 'P';
-                    presentDays++;
-                    overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
-                } else if (firstPunch && totalHours < halfDayHours) {
-                    status = 'MP';
-                    missPunchDays++;
-                } else if (totalHours >= halfDayHours) {
-                    status = 'HD';
-                    halfDays++;
+            if (firstPunch) {
+                firstPunchAttendanceId = firstPunch.attendance_id;
+                firstPunchDeviceId = firstPunch.Device_id;
+                if (firstPunchDeviceId) {
+                    projectIdFromDevicefirstPunch = await labourModel.getProjectIdByDeviceId(firstPunchDeviceId);
                 }
-
-                monthlyAttendance.push({
-                    date,
-                    firstPunch: {
-                        time: formatTimeToHoursMinutes(firstPunch.punch_time),
-                        attendanceId: firstPunch.attendance_id,
-                        deviceId: firstPunch.Device_id,
-                    },
-                    lastPunch: {
-                        time: formatTimeToHoursMinutes(lastPunch.punch_time),
-                        attendanceId: lastPunch.attendance_id,
-                        deviceId: lastPunch.Device_id,
-                    },
-                    totalHours,
-                    overtime,
-                    status,
-                });
-
-                totalOvertimeHours += overtime;
-            } else {
-                monthlyAttendance.push({
-                    date,
-                    status: 'A',
-                    totalHours: 0,
-                    overtime: 0,
-                });
             }
+
+            if (lastPunch) {
+                lastPunchAttendanceId = lastPunch.attendance_id;
+                lastPunchDeviceId = lastPunch.Device_id;
+                if (lastPunchDeviceId) {
+                    projectIdFromDeviceLastPunch = await labourModel.getProjectIdByDeviceId(lastPunchDeviceId);
+                }
+            }
+
+            // ✅ **Overtime Calculation**
+            if (status === 'P') {
+                overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
+            }
+
+            // ✅ **Overtime Rounding**
+            dailyRoundOffOvertime = roundOvertime(overtime);
+
+            // ✅ **Limit OvertimeManually to 4 hours**
+            let OvertimeManually = dailyRoundOffOvertime > 4 ? 4 : dailyRoundOffOvertime;
+
+            // ✅ **Update Counters**
+            switch (status) {
+                case 'P': presentDays++; break;
+                case 'HD': halfDays++; break;
+                case 'MP': missPunchDays++; break;
+                case 'A': absentDays++; break;
+                default: absentDays++;
+            }
+
+            totalOvertimeHours += overtime;
+            PayrollCalRoundoffTotalOvertime += roundOvertime(overtime);
+            roundOffTotalOvertime += dailyRoundOffOvertime;
+            totalManualOvertimeManually += OvertimeManually;
+
+            const safeTotalHours = typeof totalHours === 'number' && !isNaN(totalHours) ? totalHours : 0;
+
+            // ✅ **Prepare Attendance Data**
+            monthlyAttendance.push({
+                labourId,
+                projectName: parseInt(labour.projectName, 10),
+                date,
+                firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
+                firstPunchAttendanceId,
+                firstPunchDeviceId,
+                lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
+                lastPunchAttendanceId,
+                lastPunchDeviceId,
+                totalHours: safeTotalHours.toFixed(2),
+                overtime: overtime.toFixed(2),
+                PayrollCalRoundOffOvertime: dailyRoundOffOvertime.toFixed(2),
+                OvertimeManually: OvertimeManually.toFixed(2),
+                status,
+                creationDate: new Date(),
+                projectIdFromDevicefirstPunch,
+                projectIdFromDeviceLastPunch,
+            });
         }
 
-        logger.info('Calculated attendance:', {
+        // ✅ **Prepare Summary**
+        const summary = {
             labourId,
+            projectName: parseInt(labour.projectName, 10),
             totalDays: daysInMonth,
             presentDays,
             halfDays,
             missPunchDays,
-            totalOvertimeHours,
-            shift: labourDetails.workingHours,
+            absentDays,
+            totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(2)),
+            PayrollCalRoundoffTotalOvertime: parseFloat(PayrollCalRoundoffTotalOvertime.toFixed(2)),
+            RoundOffTotalOvertime: parseFloat(roundOffTotalOvertime.toFixed(2)),
+            TotalOvertimeHoursManually: parseFloat(totalManualOvertimeManually.toFixed(2)),
+            shift: workingHours,
+            creationDate: new Date(),
+            selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`,
+        };
+
+        // ✅ **Return Data**
+        res.status(200).json({
+            message: 'Attendance processed successfully',
+            summary,
             monthlyAttendance,
         });
 
-        res.json({
-            labourId,
-            totalDays: daysInMonth,
-            presentDays,
-            halfDays,
-            missPunchDays,
-            totalOvertimeHours,
-            shift: labourDetails.workingHours,
-            monthlyAttendance,
-        });
     } catch (err) {
-        logger.error('Error getting attendance for month', err);
-        res.status(500).json({ message: 'Error getting attendance for the month' });
+        console.error('Error processing attendance:', err);
+        res.status(500).json({ message: 'Error processing attendance' });
     }
 }
 
@@ -2313,102 +2736,113 @@ async function getAllLaboursAttendance(req, res) {
         }
 
         // Fetch all approved labours
-        const approvedLabours = await labourModel.getAllApprovedLabours();
+        // const approvedLabours = await labourModel.getAllApprovedLabours();
+        const approvedLabours = await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
+
 
         if (!approvedLabours || approvedLabours.length === 0) {
             return res.status(404).json({ message: 'No approved labours found' });
         }
 
-        // Determine number of days in the specified month
-        const daysInMonth = new Date(parsedYear, parsedMonth, 0).getDate();
+        const daysInMonth = new Date(parsedYear, parsedMonth, 0).getDate(); // Total days in the month
 
-        // Iterate through each approved labour
         for (let labour of approvedLabours) {
             const { labourId, workingHours } = labour;
-            const shiftHours = getShiftHours(workingHours);
-            const halfDayHours = getHalfDayHours(shiftHours);
+            const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+            const halfDayHours = shiftHours === 9 ? 4.5 : 4;
 
-            // Initialize counters
-            let presentDays = 0;
-            let halfDays = 0;
-            let missPunchDays = 0;
-            let absentDays = 0;
-            let totalOvertimeHours = 0;
+            let presentDays = 0, halfDays = 0, missPunchDays = 0, absentDays = 0;
+            let totalOvertimeHours = 0, roundOffTotalOvertime = 0, PayrollCalRoundoffTotalOvertime = 0;
+            let totalManualOvertimeManually = 0;
             let monthlyAttendance = [];
 
-            // Fetch attendance records for the labour for the specified month and year
+            // Fetch attendance records for the labour for the month
             const labourAttendance = await labourModel.getAttendanceByLabourId(labourId, parsedMonth, parsedYear);
 
-            // Process each day of the month
             for (let day = 1; day <= daysInMonth; day++) {
                 const date = `${parsedYear}-${String(parsedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const punchesForDay = labourAttendance.filter(
-                    (att) => new Date(att.punch_date).toISOString().split('T')[0] === date
-                );
+                const punchesForDay = labourAttendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
 
-                // Determine attendance status based on punches
-                const { status, firstPunch, lastPunch, misPunch, totalHours } = determineStatus(punchesForDay, shiftHours, halfDayHours, workingHours);
+                let { status, firstPunch, lastPunch, totalHours } = determineStatus(punchesForDay, shiftHours, halfDayHours, workingHours);
 
-                let overtime = 0;
-                let firstPunchAttendanceId = null;
-                let firstPunchDeviceId = null;
-                let lastPunchAttendanceId = null;
-                let lastPunchDeviceId = null;
+                let overtime = 0, dailyRoundOffOvertime = 0;
+                let firstPunchAttendanceId = null, firstPunchDeviceId = null;
+                let lastPunchAttendanceId = null, lastPunchDeviceId = null;
+                let projectIdFromDevicefirstPunch = null;
+                let projectIdFromDeviceLastPunch = null;
 
                 if (firstPunch) {
                     firstPunchAttendanceId = firstPunch.attendance_id;
                     firstPunchDeviceId = firstPunch.Device_id;
+                    if (firstPunchDeviceId) {
+                        projectIdFromDevicefirstPunch = await labourModel.getProjectIdByDeviceId(firstPunchDeviceId);
+                    }
                 }
 
                 if (lastPunch) {
                     lastPunchAttendanceId = lastPunch.attendance_id;
                     lastPunchDeviceId = lastPunch.Device_id;
+                    if (lastPunchDeviceId) {
+                        projectIdFromDeviceLastPunch = await labourModel.getProjectIdByDeviceId(lastPunchDeviceId);
+                    }
                 }
 
-                // Update counters based on status
+                //    let projectIdFromDevicefirstPunch = projectIdFromDevicefirstPunchIn || null;
+                //    let projectIdFromDeviceLastPunch = projectIdFromDeviceLastPunchIn || null;
+
+                // ✅ **Overtime Calculation**
+                if (status === 'P') {
+                    overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
+                }
+
+                // ✅ **Overtime Rounding**
+                dailyRoundOffOvertime = roundOvertime(overtime);
+                // console.log("dailyRoundOffOvertime",dailyRoundOffOvertime)
+
+                // ✅ **Limit OvertimeManually to 4 hours**
+                let OvertimeManually = dailyRoundOffOvertime > 4 ? 4 : dailyRoundOffOvertime;
+
+                // console.log("OvertimeManually",OvertimeManually)
+
+                // ✅ **Update Counters**
                 switch (status) {
-                    case 'P':
-                        presentDays++;
-                        overtime = totalHours > shiftHours ? parseFloat((totalHours - shiftHours).toFixed(2)) : 0;
-                        break;
-                    case 'HD':
-                        halfDays++;
-                        break;
-                    case 'MP':
-                        missPunchDays++;
-                        break;
-                    case 'A':
-                        absentDays++;
-                        break;
-                    default:
-                        absentDays++;
+                    case 'P': presentDays++; break;
+                    case 'HD': halfDays++; break;
+                    case 'MP': missPunchDays++; break;
+                    case 'A': absentDays++; break;
+                    default: absentDays++;
                 }
 
                 totalOvertimeHours += overtime;
+                PayrollCalRoundoffTotalOvertime += roundOvertime(overtime)
+                roundOffTotalOvertime += dailyRoundOffOvertime;
+                totalManualOvertimeManually += OvertimeManually;
 
-                // Ensure totalHours is a valid number
                 const safeTotalHours = typeof totalHours === 'number' && !isNaN(totalHours) ? totalHours : 0;
 
-                // Prepare attendance record for the day
+                // ✅ **Prepare Attendance Data**
                 monthlyAttendance.push({
                     labourId,
                     projectName: parseInt(labour.projectName, 10),
                     date,
                     firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
-                    firstPunchAttendanceId: firstPunchAttendanceId,
-                    firstPunchDeviceId: firstPunchDeviceId,
+                    firstPunchAttendanceId,
+                    firstPunchDeviceId,
                     lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
-                    lastPunchAttendanceId: lastPunchAttendanceId,
-                    lastPunchDeviceId: lastPunchDeviceId,
+                    lastPunchAttendanceId,
+                    lastPunchDeviceId,
                     totalHours: safeTotalHours.toFixed(2),
-                    overtime: overtime.toFixed(1),
+                    overtime: overtime.toFixed(2),
+                    PayrollCalRoundOffOvertime: dailyRoundOffOvertime.toFixed(2),
+                    OvertimeManually: OvertimeManually.toFixed(2),
                     status,
-                    misPunch,
                     creationDate: new Date(),
+                    projectIdFromDevicefirstPunch,
+                    projectIdFromDeviceLastPunch,
                 });
             }
 
-            // Prepare summary for the labour
+            // ✅ **Prepare Summary**
             const summary = {
                 labourId,
                 projectName: parseInt(labour.projectName, 10),
@@ -2417,27 +2851,196 @@ async function getAllLaboursAttendance(req, res) {
                 halfDays,
                 missPunchDays,
                 absentDays,
-                totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(1)),
+                totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(2)),
+                PayrollCalRoundoffTotalOvertime: parseFloat(PayrollCalRoundoffTotalOvertime.toFixed(2)),
+                RoundOffTotalOvertime: parseFloat(roundOffTotalOvertime.toFixed(2)),
+                TotalOvertimeHoursManually: parseFloat(totalManualOvertimeManually.toFixed(2)),
                 shift: workingHours,
                 creationDate: new Date(),
-                selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`, // e.g., "2024-11"
+                selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`,
             };
-
-            // Insert summary into LabourAttendanceSummary
+            //  console.log(`Inserting Attendance for ${labourId} on:`, summary);
+            // ✅ **Insert Summary & Attendance**
             await labourModel.insertIntoLabourAttendanceSummary(summary);
-
-            // Insert daily attendance into LabourAttendanceDetails
             for (let dayAttendance of monthlyAttendance) {
+                // console.log(`Inserting Attendance for ${labourId} on ${dayAttendance.date}:`, dayAttendance);
                 await labourModel.insertIntoLabourAttendanceDetails(dayAttendance);
             }
         }
-
         res.status(200).json({ message: 'Attendance processed successfully' });
     } catch (err) {
         console.error('Error processing attendance:', err);
         res.status(500).json({ message: 'Error processing attendance' });
     }
-}
+};
+
+// ---------------------------------------------------------------------------------------------------------------------------------  START   ----------------------------------------------
+// const req = {query: {month: '3', year: '2025'}};
+//   const res = {
+//     status: function (code) {
+//       return {
+//         json: function (obj) {
+//           console.log(`Status ${code}:`, obj);
+//         }
+//       };
+//     }
+//   };
+//   // Run it
+//   (async () => {
+//     try {
+//       await getAllLaboursAttendance(req, res);
+//     } catch (err) {
+//       console.error('Manual run failed:', err);
+//     }
+//   })();
+// -----------------------------------------------------------------------------------------------------------------------------   END ---------------------------------
+
+// async function getAllLaboursAttendance(req, res) {
+//     try {
+//         const { month, year } = req.query;
+
+//         // Validate input
+//         if (!month || !year) {
+//             return res.status(400).json({ message: 'Month and Year are required' });
+//         }
+
+//         const parsedMonth = parseInt(month, 10);
+//         const parsedYear = parseInt(year, 10);
+
+//         if (isNaN(parsedMonth) || isNaN(parsedYear)) {
+//             return res.status(400).json({ message: 'Invalid month or year' });
+//         }
+
+//         // Fetch all approved labours
+//         const approvedLabours = await labourModel.getAllApprovedLabours();
+
+//         if (!approvedLabours || approvedLabours.length === 0) {
+//             return res.status(404).json({ message: 'No approved labours found' });
+//         }
+
+//         // Determine number of days in the specified month
+//         const daysInMonth = new Date(parsedYear, parsedMonth, 0).getDate();
+
+//         // Iterate through each approved labour
+//         for (let labour of approvedLabours) {
+//             const { labourId, workingHours } = labour;
+//             const shiftHours = getShiftHours(workingHours);
+//             const halfDayHours = getHalfDayHours(shiftHours);
+
+//             // Initialize counters
+//             let presentDays = 0;
+//             let halfDays = 0;
+//             let missPunchDays = 0;
+//             let absentDays = 0;
+//             let totalOvertimeHours = 0;
+//             let monthlyAttendance = [];
+//             let roundOffTotalOvertime = 0;
+
+//             // Fetch attendance records for the labour for the specified month and year
+//             const labourAttendance = await labourModel.getAttendanceByLabourId(labourId, parsedMonth, parsedYear);
+
+//             // Process each day of the month
+//             for (let day = 1; day <= daysInMonth; day++) {
+//                 const date = `${parsedYear}-${String(parsedMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+//                 const punchesForDay = labourAttendance.filter(
+//                     (att) => new Date(att.punch_date).toISOString().split('T')[0] === date
+//                 );
+
+//                 // Determine attendance status based on punches
+//                 const { status, firstPunch, lastPunch, misPunch, totalHours } = determineStatus(punchesForDay, shiftHours, halfDayHours, workingHours);
+
+//                 let overtime = 0;
+//                 let dailyRoundOffOvertime = 0;
+//                 let firstPunchAttendanceId = null;
+//                 let firstPunchDeviceId = null;
+//                 let lastPunchAttendanceId = null;
+//                 let lastPunchDeviceId = null;
+
+//                 if (firstPunch) {
+//                     firstPunchAttendanceId = firstPunch.attendance_id;
+//                     firstPunchDeviceId = firstPunch.Device_id;
+//                 }
+
+//                 if (lastPunch) {
+//                     lastPunchAttendanceId = lastPunch.attendance_id;
+//                     lastPunchDeviceId = lastPunch.Device_id;
+//                 }
+
+//                 // Update counters based on status
+//                 switch (status) {
+//                     case 'P':
+//                         presentDays++;
+//                         overtime = totalHours > shiftHours ? parseFloat((totalHours - shiftHours).toFixed(2)) : 0;
+//                         dailyRoundOffOvertime = overtime > 4 ? 4 : overtime;
+//                         break;
+//                     case 'HD':
+//                         halfDays++;
+//                         break;
+//                     case 'MP':
+//                         missPunchDays++;
+//                         break;
+//                     case 'A':
+//                         absentDays++;
+//                         break;
+//                     default:
+//                         absentDays++;
+//                 }
+
+//                 totalOvertimeHours += overtime;
+//                 roundOffTotalOvertime += dailyRoundOffOvertime;
+//                 // Ensure totalHours is a valid number
+//                 const safeTotalHours = typeof totalHours === 'number' && !isNaN(totalHours) ? totalHours : 0;
+
+//                 // Prepare attendance record for the day
+//                 monthlyAttendance.push({
+//                     labourId,
+//                     projectName: parseInt(labour.projectName, 10),
+//                     date,
+//                     firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
+//                     firstPunchAttendanceId: firstPunchAttendanceId,
+//                     firstPunchDeviceId: firstPunchDeviceId,
+//                     lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
+//                     lastPunchAttendanceId: lastPunchAttendanceId,
+//                     lastPunchDeviceId: lastPunchDeviceId,
+//                     totalHours: safeTotalHours.toFixed(2),
+//                     overtime: overtime.toFixed(1),
+//                     status,
+//                     misPunch,
+//                     creationDate: new Date(),
+//                 });
+//             }
+
+//             // Prepare summary for the labour
+//             const summary = {
+//                 labourId,
+//                 projectName: parseInt(labour.projectName, 10),
+//                 totalDays: daysInMonth,
+//                 presentDays,
+//                 halfDays,
+//                 missPunchDays,
+//                 absentDays,
+//                 totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(1)),
+//                 RoundOffTotalOvertime: parseFloat(roundOffTotalOvertime.toFixed(2)),
+//                 shift: workingHours,
+//                 creationDate: new Date(),
+//                 selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`, // e.g., "2024-11"
+//             };
+
+//             // Insert summary into LabourAttendanceSummary
+//             await labourModel.insertIntoLabourAttendanceSummary(summary);
+
+//             // Insert daily attendance into LabourAttendanceDetails
+//             for (let dayAttendance of monthlyAttendance) {
+//                 await labourModel.insertIntoLabourAttendanceDetails(dayAttendance);
+//             }
+//         }
+
+//         res.status(200).json({ message: 'Attendance processed successfully' });
+//     } catch (err) {
+//         console.error('Error processing attendance:', err);
+//         res.status(500).json({ message: 'Error processing attendance' });
+//     }
+// }
 
 
 // async function processLaboursAttendance(date) {
@@ -2596,127 +3199,206 @@ async function getAllLaboursAttendance(req, res) {
 async function processLaboursAttendance(date) {
     try {
         const attendanceDate = new Date(date);
-        if (isNaN(attendanceDate.getTime())) {
-            throw new Error('Invalid date format');
-        }
+        console.log("attendanceDate--->",attendanceDate)
+        if (isNaN(attendanceDate.getTime())) throw new Error('Invalid date format');
 
         const approvedLabours = await labourModel.getAllApprovedLabours();
-
-        if (!approvedLabours || approvedLabours.length === 0) {
-            console.log('No approved labours found');
-            return;
-        }
+        if (!approvedLabours || approvedLabours.length === 0) return;
 
         for (let labour of approvedLabours) {
-            const { labourId, workingHours } = labour;
-            const shiftHours = getShiftHours(workingHours);
-            const halfDayHours = getHalfDayHours(shiftHours);
+            const { labourId, workingHours, projectName } = labour;
+            const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+            const halfDayHours = shiftHours === 9 ? 4.5 : 4;
 
-            let presentDays = 0;
-            let halfDays = 0;
-            let missPunchDays = 0;
-            let absentDays = 0;
-            let totalOvertimeHours = 0;
             let dailyAttendance = [];
+            let totalOvertimeHours = 0;
 
             const labourAttendance = await labourModel.getAttendanceByLabourIdForDate(labourId, attendanceDate);
+            let status = 'A', totalHours = 0, rawOvertime = 0;
 
-            // Determine attendance status based on punches
-            const { status, firstPunch, lastPunch, misPunch, totalHours } = determineStatus(
-                labourAttendance,
-                shiftHours,
-                halfDayHours,
-                workingHours
-            );
+            if (labourAttendance.length > 0) {
+                labourAttendance.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+                const firstPunch = labourAttendance[0];
+                const lastPunch = labourAttendance[labourAttendance.length - 1];
 
-            let overtimeHours = 0;
-            let firstPunchAttendanceId = null;
-            let firstPunchDeviceId = null;
-            let lastPunchAttendanceId = null;
-            let lastPunchDeviceId = null;
+                totalHours = (new Date(lastPunch.punch_time) - new Date(firstPunch.punch_time)) / (1000 * 60 * 60);
 
-            if (firstPunch) {
-                firstPunchAttendanceId = firstPunch.attendance_id;
-                firstPunchDeviceId = firstPunch.Device_id;
+                if (totalHours >= shiftHours) {
+                    status = 'P';
+                    rawOvertime = Math.max(totalHours - shiftHours, 0);
+                } else if (totalHours >= halfDayHours) {
+                    status = 'HD';
+                } else if (totalHours > 0) {
+                    status = 'MP';
+                }
             }
 
-            if (lastPunch) {
-                lastPunchAttendanceId = lastPunch.attendance_id;
-                lastPunchDeviceId = lastPunch.Device_id;
-            }
+            // ✅ **Apply Overtime Rounding**
+            const roundedOvertime = roundOvertime(rawOvertime);
+            const OvertimeManually = Math.min(roundedOvertime, 4);
+            totalOvertimeHours += roundedOvertime;
 
-            // Update counters based on status
-            switch (status) {
-                case 'P':
-                    presentDays++;
-                    overtimeHours = totalHours > shiftHours ? parseFloat((totalHours - shiftHours).toFixed(2)) : 0;
-                    break;
-                case 'HD':
-                    halfDays++;
-                    break;
-                case 'MP':
-                    missPunchDays++;
-                    break;
-                case 'A':
-                    absentDays++;
-                    break;
-                default:
-                    absentDays++;
-            }
-
-            totalOvertimeHours += overtimeHours;
-
-            // Ensure totalHours is a valid number
-            const safeTotalHours = typeof totalHours === 'number' && !isNaN(totalHours) ? totalHours : 0;
-
-            // Prepare attendance record for the day
+            // ✅ **Save Attendance Record**
             dailyAttendance.push({
                 labourId,
-                projectName: parseInt(labour.projectName, 10),
+                projectName: parseInt(projectName, 10),
                 date: attendanceDate.toISOString().split('T')[0],
-                firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
-                firstPunchAttendanceId: firstPunchAttendanceId,
-                firstPunchDeviceId: firstPunchDeviceId,
-                lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
-                lastPunchAttendanceId: lastPunchAttendanceId,
-                lastPunchDeviceId: lastPunchDeviceId,
-                totalHours: safeTotalHours.toFixed(2),
-                overtime: overtimeHours.toFixed(2),
+                totalHours: totalHours.toFixed(2),
+                overtime: roundedOvertime.toFixed(2),
+                PayrollCalRoundOffOvertime: roundedOvertime.toFixed(2),
+                OvertimeManually: OvertimeManually.toFixed(2),
                 status,
-                misPunch,
                 creationDate: new Date(),
             });
 
-            // Insert into LabourAttendanceDetails
-            for (let dayAttendance of dailyAttendance) {
-                // console.log(`Inserting Attendance for ${labourId} on ${dayAttendance.date}:`, dayAttendance);
-                await labourModel.insertIntoLabourAttendanceDetails(dayAttendance);
+            for (let record of dailyAttendance) {
+                await labourModel.insertIntoLabourAttendanceDetails(record);
             }
 
-            // Create and insert summary data
-            const summary = {
+            await labourModel.insertIntoLabourAttendanceSummary({
                 labourId,
-                projectName: parseInt(labour.projectName, 10),
-                totalDays: 1, // Since processing a single date
-                presentDays,
-                halfDays,
-                missPunchDays,
-                absentDays,
+                totalDays: 1,
+                presentDays: status === 'P' ? 1 : 0,
+                halfDays: status === 'HD' ? 1 : 0,
+                absentDays: status === 'A' ? 1 : 0,
                 totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(2)),
                 shift: workingHours,
+                selectedMonth: attendanceDate.toISOString().substring(0, 7),
                 creationDate: new Date(),
-                selectedMonth: attendanceDate.toISOString().substring(0, 7), // e.g., "2024-11"
-            };
-//  console.log(`Summary for LabourId ${labourId}:`, summary);
-            await labourModel.insertIntoLabourAttendanceSummary(summary);
+            });
         }
-
-        console.log('Daily attendance processed successfully');
     } catch (err) {
         console.error('Error processing attendance:', err);
-        throw err; // Re-throw the error if needed elsewhere
+        throw err;
     }
 }
+
+// async function processLaboursAttendance(date) {
+//     try {
+//         const attendanceDate = new Date(date);
+//         if (isNaN(attendanceDate.getTime())) {
+//             throw new Error('Invalid date format');
+//         }
+
+//         const approvedLabours = await labourModel.getAllApprovedLabours();
+
+//         if (!approvedLabours || approvedLabours.length === 0) {
+//             console.log('No approved labours found');
+//             return;
+//         }
+
+//         for (let labour of approvedLabours) {
+//             const { labourId, workingHours } = labour;
+//             // const shiftHours = getShiftHours(workingHours);
+//             // const halfDayHours = getHalfDayHours(shiftHours);
+//             const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+//             const halfDayHours = shiftHours === 9 ? 4.5 : 4;
+
+//             let presentDays = 0;
+//             let halfDays = 0;
+//             let missPunchDays = 0;
+//             let absentDays = 0;
+//             let totalOvertimeHours = 0;
+//             let dailyAttendance = [];
+
+//             const labourAttendance = await labourModel.getAttendanceByLabourIdForDate(labourId, attendanceDate);
+
+//             // Determine attendance status based on punches
+//             const { status, firstPunch, lastPunch, misPunch, totalHours } = determineStatus(
+//                 labourAttendance,
+//                 shiftHours,
+//                 halfDayHours,
+//                 workingHours
+//             );
+
+//             let overtimeHours = 0;
+//             let firstPunchAttendanceId = null;
+//             let firstPunchDeviceId = null;
+//             let lastPunchAttendanceId = null;
+//             let lastPunchDeviceId = null;
+
+//             if (firstPunch) {
+//                 firstPunchAttendanceId = firstPunch.attendance_id;
+//                 firstPunchDeviceId = firstPunch.Device_id;
+//             }
+
+//             if (lastPunch) {
+//                 lastPunchAttendanceId = lastPunch.attendance_id;
+//                 lastPunchDeviceId = lastPunch.Device_id;
+//             }
+
+//             // Update counters based on status
+//             switch (status) {
+//                 case 'P':
+//                     presentDays++;
+//                     overtimeHours = totalHours > shiftHours ? parseFloat((totalHours - shiftHours).toFixed(2)) : 0;
+//                     break;
+//                 case 'HD':
+//                     halfDays++;
+//                     break;
+//                 case 'MP':
+//                     missPunchDays++;
+//                     break;
+//                 case 'A':
+//                     absentDays++;
+//                     break;
+//                 default:
+//                     absentDays++;
+//             }
+
+//             totalOvertimeHours += overtimeHours;
+
+//             // Ensure totalHours is a valid number
+//             const safeTotalHours = typeof totalHours === 'number' && !isNaN(totalHours) ? totalHours : 0;
+
+//             // Prepare attendance record for the day
+//             dailyAttendance.push({
+//                 labourId,
+//                 projectName: parseInt(labour.projectName, 10),
+//                 date: attendanceDate.toISOString().split('T')[0],
+//                 firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
+//                 firstPunchAttendanceId: firstPunchAttendanceId,
+//                 firstPunchDeviceId: firstPunchDeviceId,
+//                 lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
+//                 lastPunchAttendanceId: lastPunchAttendanceId,
+//                 lastPunchDeviceId: lastPunchDeviceId,
+//                 totalHours: safeTotalHours.toFixed(2),
+//                 overtime: overtimeHours.toFixed(2),
+//                 status,
+//                 misPunch,
+//                 creationDate: new Date(),
+//             });
+
+//             // Insert into LabourAttendanceDetails
+//             for (let dayAttendance of dailyAttendance) {
+//                 // console.log(`Inserting Attendance for ${labourId} on ${dayAttendance.date}:`, dayAttendance);
+//                 await labourModel.insertIntoLabourAttendanceDetails(dayAttendance);
+//             }
+
+//             // Create and insert summary data
+//             const summary = {
+//                 labourId,
+//                 projectName: parseInt(labour.projectName, 10),
+//                 totalDays: 1, // Since processing a single date
+//                 presentDays,
+//                 halfDays,
+//                 missPunchDays,
+//                 absentDays,
+//                 totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(2)),
+//                 shift: workingHours,
+//                 creationDate: new Date(),
+//                 selectedMonth: attendanceDate.toISOString().substring(0, 7), // e.g., "2024-11"
+//             };
+// //  console.log(`Summary for LabourId ${labourId}:`, summary);
+//             await labourModel.insertIntoLabourAttendanceSummary(summary);
+//         }
+
+//         console.log('Daily attendance processed successfully');
+//     } catch (err) {
+//         console.error('Error processing attendance:', err);
+//         throw err; // Re-throw the error if needed elsewhere
+//     }
+// }
 
 // New API endpoint to get cached attendance
 async function getCachedAttendance(req, res) {
@@ -2807,7 +3489,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('47 11 * * *', async () => {
+cron.schedule('37 04 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
@@ -3162,45 +3844,45 @@ cron.schedule('47 11 * * *', async () => {
 //             const currentDate = new Date();
 //             const currentMonth = currentDate.getMonth() + 1;
 //             const currentYear = currentDate.getFullYear();
-    
+
 //             const approvedLabours = await labourModel.getAllApprovedLabours();
 //             const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
 //             const results = [];
-    
+
 //             for (let i = 0; i < approvedLabours.length; i++) {
 //                 const { labourId, workingHours } = approvedLabours[i];
 //                 cronLogger.info(`Fetching attendance for labour ID: ${labourId}`);
 //                 const labourAttendance = await labourModel.getAttendanceByLabourId(labourId, currentMonth, currentYear);
 //                 // cronLogger.info(`Fetched attendance for labour ID ${labourId}:`, { labourAttendance });
-    
+
 //                 const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
 //                 const halfDayHours = shiftHours === 9 ? 4.5 : 4;
 //                 const maxOvertimeHours = 120;
 //                 let presentDays = 0;
 //                 let totalOvertimeHours = 0;
 //                 let monthlyAttendance = [];
-    
+
 //                 for (let day = 1; day <= daysInMonth; day++) {
 //                     const date = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 //                     const punchesForDay = labourAttendance.filter(att => new Date(att.punch_date).toISOString().split('T')[0] === date);
-    
+
 //                     if (punchesForDay.length > 0) {
 //                         punchesForDay.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
-    
+
 //                         const firstPunch = punchesForDay[0].punch_time;
 //                         const lastPunch = punchesForDay[punchesForDay.length - 1].punch_time;
-    
+
 //                         const totalHours = calculateHoursWorked(punchesForDay[0].punch_date, firstPunch, lastPunch);
 //                         let overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
-    
+
 //                         // Apply half-day logic
 //                         if (totalHours > halfDayHours && totalHours < shiftHours) {
 //                             overtime = 0; // No overtime if hours are between half-day and full shift
 //                         }
-    
+
 //                         presentDays++;
 //                         totalOvertimeHours += overtime;
-    
+
 //                         monthlyAttendance.push({
 //                             date,
 //                             firstPunch: `${date}T${firstPunch.toISOString().split('T')[1]}`,
@@ -3218,10 +3900,10 @@ cron.schedule('47 11 * * *', async () => {
 //                         });
 //                     }
 //                 }
-    
+
 //                 // Cap the total overtime hours to the maximum allowed
 //                 totalOvertimeHours = Math.min(totalOvertimeHours, maxOvertimeHours);
-    
+
 //                 const calculatedAttendance = {
 //                     labourId,
 //                     totalDays: daysInMonth,
@@ -3230,25 +3912,25 @@ cron.schedule('47 11 * * *', async () => {
 //                     shift: workingHours,
 //                     monthlyAttendance
 //                 };
-    
+
 //                 cronLogger.info('Calculated attendance for labour ID:', { labourId, calculatedAttendance });
 //                 //console.log('Calculated attendance for labour ID newly attendance:', labourId, calculatedAttendance);
-    
+
 //                 results.push(calculatedAttendance);
 //             }
-    
+
 //             // Log the calculated attendance for all labours
 //             cronLogger.info('Calculated attendance for all approved labours:', { results });
-    
+
 //             cronLogger.info('Completed fetching attendance for all approved labours:', { results });
-    
+
 //             // Cache the results
 //             cachedAttendance = results;
 //         } catch (err) {
 //             cronLogger.error('Error during cron job to fetch attendance data', err);
 //         }
 //     });
-    
+
 // -------------------------------------------------  IMP  END --------------------------
 
 
@@ -3469,20 +4151,20 @@ async function getAttendanceDetailsForSingleLabour(req, res) {
 async function getAttendanceCalenderSingleLabour(req, res) {
     const { id: labourId } = req.params;
     const { month, year } = req.query;
-  
+
     if (!labourId || !month || !year) {
-      return res.status(400).json({ message: 'Labour ID, Month, and Year are required' });
+        return res.status(400).json({ message: 'Labour ID, Month, and Year are required' });
     }
-  
+
     try {
-      const details = await labourModel.showAttendanceCalenderSingleLabour(labourId, month, year);
-      res.status(200).json(details);
+        const details = await labourModel.showAttendanceCalenderSingleLabour(labourId, month, year);
+        res.status(200).json(details);
     } catch (error) {
-      console.error('Error fetching attendance details for a single labour:', error);
-      res.status(500).json({ message: 'Error fetching attendance details' });
+        console.error('Error fetching attendance details for a single labour:', error);
+        res.status(500).json({ message: 'Error fetching attendance details' });
     }
-  };
-  
+};
+
 
 async function saveAttendance(req, res) {
     const { labourId, month, year, attendance } = req.body;
@@ -3567,13 +4249,31 @@ async function upsertAttendance(req, res) {
         workingHours,
         onboardName,
         AttendanceStatus,
+        markWeeklyOff,
+        updatedFields,
     } = req.body;
-    //console.log('req.body the upsertAttendance', req.body)
-
     // Validate input
+console.log("req.body for attendance--->", req.body)
+
     if (!labourId || !date) {
         return res.status(400).json({
             message: 'Labour ID and Date are required.',
+        });
+    }
+
+    const pool = await poolPromise;
+    const checkAdminApproval = await pool.request()
+        .input('labourId', sql.NVarChar, labourId)
+        .input('AttendanceId', sql.Int, AttendanceId)
+        .query(`
+        SELECT *
+        FROM [LabourAttendanceApproval]
+        WHERE LabourID = @labourId AND AttendanceId = @AttendanceId AND ApprovalStatus = 'Pending'
+    `);
+
+    if (checkAdminApproval.recordset.length > 0) {
+        return res.status(400).json({
+            message: 'Attendance is Already Pending with Admin Approval.',
         });
     }
 
@@ -3598,17 +4298,35 @@ async function upsertAttendance(req, res) {
             ? onboardName.filter((name) => name !== 'null' && name.trim() !== '')[0]
             : onboardName;
 
-            const timesUpdated = await labourModel.getTimesUpdateForMonth(labourId, date);
+        const timesUpdated = await labourModel.getTimesUpdateForMonth(labourId, date);
 
-            if (AttendanceStatus !== "MP") {
-                await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName);
-                return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
-            };
+        if (markWeeklyOff === true) {
+            await labourModel.upsertAttendance({
+                labourId,
+                date,
+                firstPunchManually,
+                lastPunchManually,
+                overtimeManually,
+                remarkManually,
+                workingHours,
+                onboardName: finalOnboardName,
+                editUserName: finalOnboardName,
+                markWeeklyOff,
+                updatedFields,
+            });
 
-            if (AttendanceStatus === "MP" && timesUpdated >= 3) {
-                await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName);
-                return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
-            };
+            return res.status(200).json({ message: 'Attendance updated successfully.' });
+        }
+
+        if (AttendanceStatus !== "MP") {
+            await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff, updatedFields);
+            return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
+        };
+
+        if (AttendanceStatus === "MP" && timesUpdated >= 3) {
+            await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff, updatedFields);
+            return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
+        };
 
         // Call the model to perform upsert
         await labourModel.upsertAttendance({
@@ -3620,7 +4338,9 @@ async function upsertAttendance(req, res) {
             remarkManually,
             workingHours,
             onboardName: finalOnboardName,
-            editUserName: finalOnboardName, 
+            editUserName: finalOnboardName,
+            markWeeklyOff,
+            AttendanceStatus
         });
 
         res.status(200).json({ message: 'Attendance updated successfully.' });
@@ -3631,30 +4351,28 @@ async function upsertAttendance(req, res) {
 }
 
 async function approveAttendanceController(req, res) {
-    const { id } = req.query;
-console.log('id',id)
-    if (!id) {
+    const { AttendanceId } = req.query;
+    if (!AttendanceId) {
         return res.status(400).json({ message: 'id is required.' });
     }
 
     try {
-        const result = await labourModel.approveAttendance(id);
+        const result = await labourModel.approveAttendance(AttendanceId);
         res.status(200).json(result);
     } catch (error) {
         console.error('Error in approving attendance:', error);
         res.status(error.statusCode || 500).json({ message: error.message });
     }
-}
+};
 
 async function rejectAttendanceControllerAdmin(req, res) {
-    const { id, rejectReason } = req.query;
-//console.log('id___rejectAttendanceControllerAdmin',req.query)
-    if (!id) {
+    const { AttendanceId, rejectReason } = req.query;
+    if (!AttendanceId) {
         return res.status(400).json({ message: 'id is required.' });
     }
 
     try {
-        const result = await labourModel.rejectAttendanceAdmin(id, rejectReason);
+        const result = await labourModel.rejectAttendanceAdmin(AttendanceId, rejectReason);
         res.status(200).json(result);
     } catch (error) {
         console.error('Error in approving attendance:', error);
@@ -3664,14 +4382,12 @@ async function rejectAttendanceControllerAdmin(req, res) {
 
 
 async function rejectAttendanceController(req, res) {
-    const id = parseInt(req.params.id, 10); // Extract ID from route parameter
-    const { rejectReason } = req.body; // Extract rejection reason from request body
+    const { AttendanceId, rejectReason } = req.query;
+    // const id = parseInt(req.params.id, 10); 
+    // const { rejectReason } = req.body; 
 
-    //console.log('req.params.id', req.params.id)
-    //console.log('req.body:', req.body); // Debug log
-    //console.log('rejectReason:', rejectReason); // Debug log
 
-    if (isNaN(id)) {
+    if (isNaN(AttendanceId)) {
         return res.status(400).json({ message: 'Invalid attendance ID.' });
     }
 
@@ -3680,7 +4396,7 @@ async function rejectAttendanceController(req, res) {
     }
 
     try {
-        const success = await labourModel.rejectAttendance(id, rejectReason); // Call model function
+        const success = await labourModel.rejectAttendance(AttendanceId, rejectReason); // Call model function
         if (success) {
             res.json({ success: true, message: 'Attendance rejected successfully.' });
         } else {
@@ -3696,14 +4412,15 @@ async function rejectAttendanceController(req, res) {
 // -------------------------------------------------------------  Excel import and Export controller function ----------------
 const exportAttendance = async (req, res) => {
     try {
-        const { startDate, endDate, projectName } = req.query;
+        const { startDate, endDate, projectName, department } = req.query;
+
 
         if (!startDate || !endDate || !projectName) {
             return res.status(400).json({ message: 'Missing required parameters: startDate, endDate, or projectId.' });
         }
 
         // Fetch attendance data filtered by date range and projectId
-        const attendanceData = await labourModel.getAttendanceByDateRange(projectName, startDate, endDate);
+        const attendanceData = await labourModel.getAttendanceByDateRange(projectName, startDate, endDate, department);
 
         if (attendanceData.length === 0) {
             return res.status(404).json({ message: 'No attendance data found for the selected criteria.' });
@@ -3727,7 +4444,7 @@ const exportAttendance = async (req, res) => {
     }
 };
 
-  const importAttendance = async (req, res) => {
+const importAttendance = async (req, res) => {
     try {
         const workbook = xlsx.readFile(req.file.path);
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -3769,6 +4486,22 @@ const exportAttendance = async (req, res) => {
             //console.log(`${unmatchedRows.length} rows inserted successfully.`);
         }
 
+        // After updating/inserting, update LabourAttendanceSummary overtime totals.
+        // Group by LabourId and SelectedMonth (derived from Date as YYYY-MM)
+        const groups = {};
+        validData.forEach((row) => {
+            const labourId = row.LabourId;
+            // Extract "YYYY-MM" from the date string ("YYYY-MM-DD")
+            const selectedMonth = row.Date.substring(0, 7);
+            const key = `${labourId}_${selectedMonth}`;
+            groups[key] = { labourId, selectedMonth };
+        });
+
+        // Iterate over each group and update summary overtime totals
+        for (const key in groups) {
+            await labourModel.updateTotalOvertimeHours(groups[key].labourId, groups[key].selectedMonth);
+        }
+
         res.send({
             message: 'Data imported successfully',
             matchedRows: matchedRows.length,
@@ -3796,9 +4529,9 @@ async function LabourAttendanceApproval(req, res) {
 //       const workbook = xlsx.readFile(req.file.path);
 //       const sheet = workbook.Sheets[workbook.SheetNames[0]];
 //       const data = xlsx.utils.sheet_to_json(sheet);
-  
+
 //       //console.log('Excel data loaded:', data);
-  
+
 //       // Convert Excel date serial to valid date string
 //       const convertExcelDate = (serial) => {
 //         const utcDays = Math.floor(serial - 25569);
@@ -3806,33 +4539,33 @@ async function LabourAttendanceApproval(req, res) {
 //         const dateInfo = new Date(utcValue * 1000);
 //         return dateInfo.toISOString().split('T')[0]; // Format YYYY-MM-DD
 //       };
-  
+
 //       // Normalize data
 //       const validData = data.map((row) => ({
 //         ...row,
 //         Date: typeof row.Date === 'number' ? convertExcelDate(row.Date) : row.Date,
 //       }));
-  
+
 //       //console.log('Normalized data:', validData);
-  
+
 //       // Match rows
 //       const { matchedRows, unmatchedRows } = await labourModel.getMatchedRows(validData);
-  
+
 //       //console.log('Matched rows:', matchedRows);
 //       //console.log('Unmatched rows:', unmatchedRows);
-  
+
 //       // Update matched rows
 //       if (matchedRows.length > 0) {
 //         await labourModel.updateMatchedRows(matchedRows);
 //         //console.log(`${matchedRows.length} rows updated successfully.`);
 //       }
-  
+
 //       // Insert unmatched rows
 //       if (unmatchedRows.length > 0) {
 //         await labourModel.insertUnmatchedRows(unmatchedRows);
 //         //console.log(`${unmatchedRows.length} rows inserted successfully.`);
 //       }
-  
+
 //       res.send({
 //         message: 'Data imported successfully',
 //         matchedRows: matchedRows.length,
@@ -3843,7 +4576,7 @@ async function LabourAttendanceApproval(req, res) {
 //       res.status(500).send({ message: error.message });
 //     }
 //   };
-  
+
 // ---------------------------------       end imp changes 06-12-2024-----------------------
 
 // --------------------------------------------------    LABOUR WAGES MODULE 20-12-2024  ----------------------------------------------------
@@ -3881,7 +4614,7 @@ const getLabourMonthlyWages = async (req, res) => {
 const upsertLabourMonthlyWages = async (req, res) => {
     try {
         const payload = req.body;
-
+        console.log("payload ===", payload)
         if (!payload.labourId || !payload.payStructure) {
             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
         }
@@ -3891,6 +4624,8 @@ const upsertLabourMonthlyWages = async (req, res) => {
 
         if (result && result.WageID) {
             return res.status(200).json({ WageID: result.WageID, message: 'Wages upserted successfully' });
+        } else if (result && !result.success) {
+            return res.status(200).json({ message: result.message });
         } else {
             return res.status(500).json({ message: 'Failed to upsert wages' });
         }
@@ -3961,7 +4696,7 @@ const markWagesForApprovalController = async (req, res) => {
     try {
         const payload = req.body;
         const { wageId, labourId, dailyWages, perHourWages, monthlyWages, yearlyWages, effectiveDate, fixedMonthlyWages, weeklyOff, payStructure, wagesEditedBy, remarks } = payload;
-console.log('payload for wages new 55',payload)
+        // console.log('payload for wages new 55',payload)
         if (!wageId || !labourId || !payStructure) {
             return res.status(400).json({ message: 'Wage ID, Labour ID, and Pay Structure are required' });
         }
@@ -4024,7 +4759,7 @@ const handleApproval = async (req, res) => {
 
 async function approveWagesControllerAdmin(req, res) {
     const { ApprovalID } = req.query;
-    //console.log('id___approveWagesControllerAdmin',ApprovalID)
+    // console.log('id___approveWagesControllerAdmin', ApprovalID)
     if (!ApprovalID) {
         return res.status(400).json({ message: 'WageID is required.' });
     }
@@ -4067,38 +4802,80 @@ const addWageApproval = async (req, res) => {
     }
 };
 
+// const exportWagesexcelSheet = async (req, res) => {
+//     try {
+//         let { projectName, month } = req.query;
+
+//         if (!month) {
+//             return res.status(400).json({ message: 'Missing required parameter: month' });
+//         }
+
+//         if (!projectName || projectName.trim() === "") {
+//             projectName = "all";  // ✅ Ensure "all" is used instead of an empty string
+//         }
+
+//         const startDate = `${month}-01`;
+//         const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
+//             .toISOString()
+//             .split('T')[0];
+
+//         console.log(`Fetching wages for projectName: ${projectName}, startDate: ${startDate}, endDate: ${endDate}`);
+
+//         // Fetch wages data
+//         const wagesData = await labourModel.getWagesByDateRange(projectName, startDate, endDate);
+
+//         if (!wagesData || wagesData.length === 0) {
+//             return res.status(404).json({ message: 'No data found for the selected criteria.' });
+//         }
+
+//         // Create Excel workbook and worksheet
+//         const workbook = xlsx.utils.book_new();
+//         const worksheet = xlsx.utils.json_to_sheet(wagesData);
+//         xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
+
+//         // Generate Excel file as buffer
+//         const fileName = projectName === "all"
+//             ? `Approved_Labours_${month}.xlsx`
+//             : `Wages_${projectName}_${month}.xlsx`;
+
+//         res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+//         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+//         res.send(xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+//     } catch (error) {
+//         console.error('Error exporting Wages:', error);
+//         res.status(500).json({ message: 'Error exporting Wages data.' });
+//     }
+// };
+
 const exportWagesexcelSheet = async (req, res) => {
     try {
-        let { projectName, month } = req.query;
+        let { projectName, month, payStructure } = req.query;
 
         if (!month) {
             return res.status(400).json({ message: 'Missing required parameter: month' });
         }
 
+        // Use "all" if projectName is missing or empty.
         if (!projectName || projectName.trim() === "") {
-            projectName = "all";  // ✅ Ensure "all" is used instead of an empty string
+            projectName = "all";
         }
 
+        // Calculate the date range for the given month.
         const startDate = `${month}-01`;
         const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
             .toISOString()
             .split('T')[0];
 
-        console.log(`Fetching wages for projectName: ${projectName}, startDate: ${startDate}, endDate: ${endDate}`);
 
-        // Fetch wages data
-        const wagesData = await labourModel.getWagesByDateRange(projectName, startDate, endDate);
+        // Fetch wages data (or approved onboarding rows if no matching wages).
+        const wagesData = await labourModel.getWagesByDateRange(projectName, payStructure, startDate, endDate);
 
-        if (!wagesData || wagesData.length === 0) {
-            return res.status(404).json({ message: 'No data found for the selected criteria.' });
-        }
-
-        // Create Excel workbook and worksheet
+        // Create the Excel workbook.
         const workbook = xlsx.utils.book_new();
         const worksheet = xlsx.utils.json_to_sheet(wagesData);
         xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
 
-        // Generate Excel file as buffer
+        // Set the file name.
         const fileName = projectName === "all"
             ? `Approved_Labours_${month}.xlsx`
             : `Wages_${projectName}_${month}.xlsx`;
@@ -4111,6 +4888,20 @@ const exportWagesexcelSheet = async (req, res) => {
         res.status(500).json({ message: 'Error exporting Wages data.' });
     }
 };
+
+// Optionally preset payStructure for dedicated endpoints.
+const exportMonthlyWagesExcel = async (req, res) => {
+    req.query.payStructure = 'Monthly Wages';
+    exportWagesexcelSheet(req, res);
+};
+
+const exportFixedWagesExcel = async (req, res) => {
+    req.query.payStructure = 'Fix Monthly Wages';
+    exportWagesexcelSheet(req, res);
+};
+
+
+
 
 /**
  * Converts an Excel serial date to a JavaScript Date object.
@@ -4157,7 +4948,7 @@ const importWages = async (req, res) => {
         }
 
         fs.unlinkSync(filePath); // Clean up uploaded file
-         //console.log(' errors===errors',errors)
+        //console.log(' errors===errors',errors)
         if (errors.length > 0) {
             // Generate error Excel file
             const errorWorkbook = xlsx.utils.book_new();
@@ -4190,15 +4981,31 @@ const importWages = async (req, res) => {
 
 const getWagesAndLabourOnboardingJoincontroller = async (req, res) => {
     try {
-      // Get filters from query parameters (e.g., ?ProjectID=...&DepartmentID=...)
-      const filters = req.query;
-      const joinWagesLabour = await labourModel.getWagesAndLabourOnboardingJoin(filters);
-      res.status(200).json(joinWagesLabour);
+        // Get filters from query parameters (e.g., ?ProjectID=...&DepartmentID=...)
+        const filters = req.query;
+        const joinWagesLabour = await labourModel.getWagesAndLabourOnboardingJoin(filters);
+        res.status(200).json(joinWagesLabour);
     } catch (error) {
-      console.error('Error fetching data:', error);
-      res.status(500).json({ message: 'Error fetching data', error });
+        console.error('Error fetching data:', error);
+        res.status(500).json({ message: 'Error fetching data', error });
     }
-  };
+};
+
+const getAttendanceReportAndLabourOnboardingJoincontroller = async (req, res) => {
+    try {
+        const filters = {
+            ProjectID: req.query.ProjectID || '',
+            DepartmentID: req.query.DepartmentID || ''
+        };
+        console.log('filters', filters);
+        const joinAttendanceLabour = await labourModel.getAttendanceReportAAndLabourOnboardingJoin(filters);
+        res.status(200).json(joinAttendanceLabour);
+    } catch (error) {
+        console.error('Error fetching data:', error);
+        res.status(500).json({ message: 'Error fetching data', error });
+    }
+};
+
 
 async function searchLaboursFromWages(req, res) {
     const { q } = req.query;
@@ -4212,6 +5019,106 @@ async function searchLaboursFromWages(req, res) {
     }
 }
 
+async function searchLaboursFromVariableInput(req, res) {
+    const { q } = req.query;
+
+    try {
+        const results = await labourModel.searchFromVariableInput(q);
+        return res.json(results);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
+
+async function searchLaboursFromSiteTransfer(req, res) {
+    const { q } = req.query;
+
+    try {
+        const results = await labourModel.searchLaboursFromSiteTransfer(q);
+        return res.json(results);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
+async function searchAttendance(req, res) {
+    const { q } = req.query;
+
+    try {
+        const results = await labourModel.searchAttendance(q);
+        return res.json(results);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
+
+
+async function updateOTHoursAttendance(req, res) {
+    try {
+        const {
+            labourId,
+            date,
+            AttendanceId,
+            firstPunchManually,
+            lastPunchManually,
+            overtimeManually,
+            remarkManually,
+            workingHours,
+            onboardName,
+            AttendanceStatus,
+            markWeeklyOff,
+            updatedFields,
+        } = req.body;
+
+
+        // 🔒 Required field validations
+        if (!labourId || !date || typeof overtimeManually === 'undefined') {
+            return res.status(400).json({ message: 'Missing required fields: labourId, date, or overtimeManually.' });
+        }
+
+        if (!Array.isArray(updatedFields) || updatedFields.length === 0) {
+            return res.status(400).json({ message: 'updatedFields must be a non-empty array.' });
+        }
+
+        const isOnlyOTUpdate = updatedFields.length === 1 && updatedFields[0] === 'overtimemanually';
+        if (!isOnlyOTUpdate) {
+            return res.status(400).json({ message: 'Only overtimeManually update is allowed through this endpoint.' });
+        }
+
+        const finalOnboardName = onboardName || 'System';
+
+        // ✅ Build only relevant fields based on updatedFields
+        const updatePayload = {
+            labourId,
+            date,
+            AttendanceId,
+            onboardName: finalOnboardName,
+            editUserName: finalOnboardName,
+        };
+
+        if (updatedFields.includes('overtimemanually') && overtimeManually !== undefined) {
+            updatePayload.overtimeManually = overtimeManually;
+        }
+
+        // ❌ If no actual fields to update, reject
+        const keysToUpdate = Object.keys(updatePayload).filter(k => !['labourId', 'date', 'AttendanceId', 'onboardName', 'editUserName'].includes(k));
+        if (keysToUpdate.length === 0) {
+            return res.status(400).json({ message: 'No valid fields to update.' });
+        }
+        // 📥 Call model
+        await labourModel.upsertAttendance(updatePayload);
+
+        return res.status(200).json({ message: 'Overtime manually updated successfully.' });
+
+    } catch (error) {
+        console.error('Error updating overtime manually:', error);
+        return res.status(error.statusCode || 500).json({ message: error.message || 'Internal server error.' });
+    }
+}
 
 
 module.exports = {
@@ -4222,6 +5129,7 @@ module.exports = {
     getRecordById,
     updateRecord,
     deleteRecord,
+    getAllRecordsLaboursOnboarding,
     searchLabours,
     getAllLabours,
     approveLabour,
@@ -4275,5 +5183,13 @@ module.exports = {
     approveWagesControllerAdmin,
     rejectWagesControllerAdmin,
     checkExistingWagesController,
-    markWagesForApprovalController
+    markWagesForApprovalController,
+    exportMonthlyWagesExcel,
+    exportFixedWagesExcel,
+    searchLaboursFromSiteTransfer,
+    searchAttendance,
+    searchLaboursFromVariableInput,
+    getAttendanceReportAndLabourOnboardingJoincontroller,
+    getAllLaboursAttendanceDaily,
+    updateOTHoursAttendance
 };
