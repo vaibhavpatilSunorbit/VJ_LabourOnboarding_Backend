@@ -4,7 +4,12 @@ const labourController = require('../controllers/labourController');
 const multer = require('multer');
 const upload = multer({ dest: 'uploads/' });
 const JSZip = require('jszip');
+const axios = require('axios');
+const xml2js = require('xml2js');
+const ExcelJS = require('exceljs');
+const { poolPromise } = require('../config/dbConfig');
 
+const app = express();
 
 router.post('/check-aadhaar', labourController.handleCheckAadhaar);
 router.get('/next-id', labourController.getNextUniqueID);
@@ -85,17 +90,49 @@ router.put('/admin/rejectWages', labourController.rejectWagesControllerAdmin);
 router.get('/exportMonthlyWagesExcel', labourController.exportMonthlyWagesExcel);
 router.get('/exportFixedWagesExcel', labourController.exportFixedWagesExcel);
 
-// ------------------------------------------------------- IMP ROUTE AND GET USING VIEW DETAILS FOR LABOUR --------------------------------------------------
-router.get('/:id', labourController.getRecordById);
-router.get('/:id/download/full-form', (req, res) => {
-    const { id } = req.params;
-    const filePath = path.join(__dirname, 'uploads', `full_form_${id}.pdf`);
-    if (fs.existsSync(filePath)) {
-        res.download(filePath, `full_form_${id}.pdf`);
-    } else {
-        res.status(404).send('File not found.');
+router.get('/download-excel', async (req, res) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request().query('SELECT * FROM [dbo].[labourOnboarding]');
+        const data = result.recordset;
+
+        // Create a new workbook and a sheet
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('SSMS Data');
+
+        // Add headers to the sheet
+        worksheet.columns = Object.keys(data[0]).map(key => ({ header: key, key }));
+
+        // Add data to the sheet
+        data.forEach(row => {
+            worksheet.addRow(row);
+        });
+
+        // Adjust column widths
+        worksheet.columns.forEach(column => {
+            let maxLength = 0;
+            column.eachCell({ includeEmpty: true }, cell => {
+                const cellValueLength = cell.value ? cell.value.toString().length : 0;
+                maxLength = Math.max(maxLength, cellValueLength);
+            });
+            column.width = maxLength < 10 ? 10 : maxLength + 2; // Minimum width of 10, or length of content + 2
+        });
+
+        // Set the response headers for download
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=ssms_data.xlsx');
+
+        // Send the workbook to the client
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        console.error('Error generating Excel file:', error);
+        res.status(500).send('Error generating Excel file');
     }
 });
+
+// ------------------------------------------------------- IMP ROUTE AND GET USING VIEW DETAILS FOR LABOUR --------------------------------------------------
+
 
 router.post('/laboursCreateRecord', upload.fields([
     { name: 'uploadAadhaarFront' },
@@ -130,6 +167,8 @@ router.put('/updatelabourDisableStatus/:id', upload.fields([
     { name: 'uploadInductionDoc' },
     { name: 'photoSrc' }
 ]), labourController.updateRecordWithDisable);
+
+
 
 router.get('/:id/download/aadhaar-card', async (req, res) => {
     const { id } = req.params;
@@ -179,6 +218,17 @@ router.get('/:id/download/aadhaar-card', async (req, res) => {
             });
     } else {
         res.status(404).send('No documents found for download.');
+    }
+});
+
+router.get('/:id', labourController.getRecordById);
+router.get('/:id/download/full-form', (req, res) => {
+    const { id } = req.params;
+    const filePath = path.join(__dirname, 'uploads', `full_form_${id}.pdf`);
+    if (fs.existsSync(filePath)) {
+        res.download(filePath, `full_form_${id}.pdf`);
+    } else {
+        res.status(404).send('File not found.');
     }
 });
 

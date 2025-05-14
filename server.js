@@ -219,46 +219,46 @@ app.use('/api/labours', labourRoutes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Add the route to download the Excel file
-app.get('/download-excel', async (req, res) => {
-    try {
-        const pool = await poolPromise;
-        const result = await pool.request().query('SELECT * FROM labourOnboarding');
-        const data = result.recordset;
+// app.get('/download-excel', async (req, res) => {
+//     try {
+//         const pool = await poolPromise;
+//         const result = await pool.request().query('SELECT * FROM labourOnboarding');
+//         const data = result.recordset;
 
-        // Create a new workbook and a sheet
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('SSMS Data');
+//         // Create a new workbook and a sheet
+//         const workbook = new ExcelJS.Workbook();
+//         const worksheet = workbook.addWorksheet('SSMS Data');
 
-        // Add headers to the sheet
-        worksheet.columns = Object.keys(data[0]).map(key => ({ header: key, key }));
+//         // Add headers to the sheet
+//         worksheet.columns = Object.keys(data[0]).map(key => ({ header: key, key }));
 
-        // Add data to the sheet
-        data.forEach(row => {
-            worksheet.addRow(row);
-        });
+//         // Add data to the sheet
+//         data.forEach(row => {
+//             worksheet.addRow(row);
+//         });
 
-        // Adjust column widths
-        worksheet.columns.forEach(column => {
-            let maxLength = 0;
-            column.eachCell({ includeEmpty: true }, cell => {
-                const cellValueLength = cell.value ? cell.value.toString().length : 0;
-                maxLength = Math.max(maxLength, cellValueLength);
-            });
-            column.width = maxLength < 10 ? 10 : maxLength + 2; // Minimum width of 10, or length of content + 2
-        });
+//         // Adjust column widths
+//         worksheet.columns.forEach(column => {
+//             let maxLength = 0;
+//             column.eachCell({ includeEmpty: true }, cell => {
+//                 const cellValueLength = cell.value ? cell.value.toString().length : 0;
+//                 maxLength = Math.max(maxLength, cellValueLength);
+//             });
+//             column.width = maxLength < 10 ? 10 : maxLength + 2; // Minimum width of 10, or length of content + 2
+//         });
 
-        // Set the response headers for download
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', 'attachment; filename=ssms_data.xlsx');
+//         // Set the response headers for download
+//         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+//         res.setHeader('Content-Disposition', 'attachment; filename=ssms_data.xlsx');
 
-        // Send the workbook to the client
-        await workbook.xlsx.write(res);
-        res.end();
-    } catch (error) {
-        console.error('Error generating Excel file:', error);
-        res.status(500).send('Error generating Excel file');
-    }
-});
+//         // Send the workbook to the client
+//         await workbook.xlsx.write(res);
+//         res.end();
+//     } catch (error) {
+//         console.error('Error generating Excel file:', error);
+//         res.status(500).send('Error generating Excel file');
+//     }
+// });
 
 
 
