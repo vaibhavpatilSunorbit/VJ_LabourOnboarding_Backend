@@ -3472,10 +3472,14 @@ console.log("updasertAttendnace",labourId,date,firstPunchManually,lastPunchManua
         }
         // console.log("finalOvertimeManually",finalOvertimeManually)
         if (AttendanceStatus === 'MP') {
-            payrollCalRoundOffOvertime = totalHours;
-            finalOvertimeManually = totalHours;
-            rawOvertime = totalHours; // also affects Overtime field
+            const potentialOvertime = totalHours - shiftHours;
+            const adjustedOvertime = potentialOvertime > 0 ? potentialOvertime : 0;
+
+            rawOvertime = adjustedOvertime;
+            payrollCalRoundOffOvertime = roundOvertime(rawOvertime);
+            finalOvertimeManually = payrollCalRoundOffOvertime;
         }
+
 
         // 7) MERGE/Upsert the attendance record
         const mergeQuery = `
@@ -3653,7 +3657,6 @@ console.log("updasertAttendnace",labourId,date,firstPunchManually,lastPunchManua
             }
             totalOvertimeHrs += dailyRoundedOT;
             totalManualOvertime += finalOTManually;
-
             monthlyAttendance.push({
                 labourId,
                 projectName,
@@ -3669,7 +3672,6 @@ console.log("updasertAttendnace",labourId,date,firstPunchManually,lastPunchManua
                 overtimeManually: finalOTManually
             });
         }
-
         // 9c) Insert monthly summary if needed
         const summary = {
             labourId,
@@ -4062,7 +4064,7 @@ async function getAttendanceByDateRange(projectNameStr, startDate, endDate, depa
             lad.ProjectName, 
             lo.BusinessUnit,
             lo.departmentName,
-            lo.Status,
+            lad.Status,
             lad.FirstPunchManually, 
             lad.LastPunchManually, 
             lad.OvertimeManually, 
@@ -4912,8 +4914,6 @@ async function getWagesByDateRange(projectName, payStructure, startDate, endDate
 //     return result.recordset;
 // };
 
-
-
 async function insertWagesData(row) {
     const pool = await poolPromise;
 
@@ -4922,7 +4922,7 @@ async function insertWagesData(row) {
     if (row.From_Date) {
         const dateObj = new Date(row.From_Date);
         if (!isNaN(dateObj)) {
-            fromDate = dateObj.toISOString().split('T')[0]; // Extract date part (YYYY-MM-DD)
+            fromDate = dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
         } else {
             throw new Error(`Invalid From_Date value: ${row.From_Date}`);
         }
@@ -4932,16 +4932,14 @@ async function insertWagesData(row) {
     let effectiveDate = null;
     if (row.EffectiveDate) {
         if (typeof row.EffectiveDate === "number") {
-            // Excel stores dates as numbers (serial date format)
             const excelDate = new Date((row.EffectiveDate - 25569) * 86400 * 1000);
-            effectiveDate = excelDate.toISOString().split('T')[0]; // Convert to YYYY-MM-DD
+            effectiveDate = excelDate.toISOString().split('T')[0];
         } else if (typeof row.EffectiveDate === "string") {
-            // Handle DD-MM-YYYY format
             const parts = row.EffectiveDate.split('-');
             if (parts.length === 3) {
-                const [day, month, year] = parts.map((part) => parseInt(part, 10));
+                const [day, month, year] = parts.map(p => parseInt(p, 10));
                 if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-                    effectiveDate = new Date(year, month - 1, day).toISOString().split('T')[0]; // YYYY-MM-DD
+                    effectiveDate = new Date(year, month - 1, day).toISOString().split('T')[0];
                 } else {
                     throw new Error(`Invalid EffectiveDate format: ${row.EffectiveDate}`);
                 }
@@ -4959,23 +4957,24 @@ async function insertWagesData(row) {
         throw new Error(`Invalid PayStructure value: ${row.PayStructure}`);
     }
 
-    // Check for both DAILY WAGES and FIXED MONTHLY WAGES in the same row
+    // No WeeklyOff for DAILY WAGES
     if (row.PayStructure === 'DAILY WAGES' && row.WeeklyOff) {
         throw new Error('Cannot have WeeklyOff for DAILY WAGES PayStructure');
     }
 
     // Validate WeeklyOff for FIXED MONTHLY WAGES
+    let weeklyOffValue = null;
     if (row.PayStructure === 'FIXED MONTHLY WAGES') {
-        if (!row.WeeklyOff) {
-            throw new Error(`Invalid WeeklyOff value: ${row.WeeklyOff}`);
+        if (row.WeeklyOff == null || row.WeeklyOff === '') {
+            throw new Error('WeeklyOff is required for FIXED MONTHLY WAGES');
         }
-        const weeklyOff = parseInt(row.WeeklyOff, 10);
-        if (isNaN(weeklyOff) || weeklyOff <= 0 || weeklyOff > 4) {
-            throw new Error('WeeklyOff must be a number between 0 and 4 for FIXED MONTHLY WAGES');
+        if (!/^[0-4]$/.test(row.WeeklyOff)) {
+            throw new Error('WeeklyOff must be an integer between 0 and 4 (inclusive)');
         }
+        weeklyOffValue = parseInt(row.WeeklyOff, 10);
     }
 
-    // Fetch working hours for the LabourID from the labourOnboarding table
+    // Fetch working hours for the LabourID
     const result = await pool
         .request()
         .input('LabourID', sql.VarChar, row.LabourID)
@@ -4990,8 +4989,6 @@ async function insertWagesData(row) {
     }
 
     const workingHours = result.recordset[0].workingHours;
-
-    // Determine the hours per day based on workingHours value
     let hoursPerDay;
     if (workingHours === 'FLEXI SHIFT - 9 HRS') {
         hoursPerDay = 9;
@@ -5013,28 +5010,28 @@ async function insertWagesData(row) {
         if (isNaN(dailyWages)) {
             throw new Error(`Invalid DailyWages value: ${row.DailyWages}`);
         }
-
-        perHourWages = dailyWages / hoursPerDay; // Calculate per hour wages based on workingHours
-        monthlyWages = dailyWages * 26; // Assuming 26 working days/month
-        yearlyWages = monthlyWages * 12; // 12 months/year
+        perHourWages = dailyWages / hoursPerDay;
+        monthlyWages = dailyWages * 26;
+        yearlyWages = monthlyWages * 12;
     } else if (row.PayStructure === 'FIXED MONTHLY WAGES') {
-        fixedMonthlyWages = parseFloat(row.FixedMonthlyWages) || "";
+        fixedMonthlyWages = parseFloat(row.FixedMonthlyWages) || 0;
     }
 
+    // Check for existing pending entry
     const existingPending = await pool
-    .request()
-    .input('LabourID', sql.VarChar, row.LabourID)
-    .query(`
-        SELECT WageID 
-        FROM [dbo].[LabourMonthlyWages] 
-        WHERE LabourID = @LabourID AND ApprovalStatusWages = 'Pending'
-    `);
+        .request()
+        .input('LabourID', sql.VarChar, row.LabourID)
+        .query(`
+            SELECT WageID 
+            FROM [dbo].[LabourMonthlyWages] 
+            WHERE LabourID = @LabourID AND ApprovalStatusWages = 'Pending'
+        `);
 
-if (existingPending.recordset.length > 0) {
-    throw new Error(`Wage entry with 'Pending' approval already exists for LabourID ${row.LabourID}`);
-}
+    if (existingPending.recordset.length > 0) {
+        throw new Error(`Wage entry with 'Pending' approval already exists for LabourID ${row.LabourID}`);
+    }
 
-    // Insert data into the LabourMonthlyWages table
+    // Insert data
     const request = pool.request();
     request.input('LabourID', sql.VarChar, row.LabourID);
     request.input('WagesEditedBy', sql.VarChar, row.WagesEditedBy || 'System');
@@ -5050,58 +5047,265 @@ if (existingPending.recordset.length > 0) {
     request.input('MonthlyWages', sql.Decimal, monthlyWages);
     request.input('YearlyWages', sql.Decimal, yearlyWages);
     request.input('FixedMonthlyWages', sql.Decimal, fixedMonthlyWages);
-    request.input('WeeklyOff', sql.Int, parseInt(row.WeeklyOff, 10) || null);
+    request.input('WeeklyOff', sql.Int, Number.isNaN(weeklyOffValue) ? null : weeklyOffValue);
     request.input('EffectiveDate', sql.Date, effectiveDate);
     request.input('CreatedAt', sql.DateTime, new Date());
     request.input('isApprovalSendAdmin', sql.Bit, 1);
+    request.input('accountNumber', sql.VarChar, row.accountNumber);
 
     const insertResult = await request.query(`
         INSERT INTO [dbo].[LabourMonthlyWages] 
-        (LabourID, WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, EffectiveDate, CreatedAt, isApprovalSendAdmin)
+        (LabourID, WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, EffectiveDate, CreatedAt, isApprovalSendAdmin, accountNumber)
         OUTPUT INSERTED.WageID
-        VALUES (@LabourID, @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @FixedMonthlyWages, @WeeklyOff, @EffectiveDate, @CreatedAt, @isApprovalSendAdmin)
+        VALUES (@LabourID, @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @FixedMonthlyWages, @WeeklyOff, @EffectiveDate, @CreatedAt, @isApprovalSendAdmin, @accountNumber)
     `);
 
     const WageID = insertResult.recordset[0].WageID;
 
-    // Now, perform the UPDATE and INSERT operations concurrently
+    // Concurrent update and approval insert
     const updatePromise = pool.request()
         .input('WageID', sql.Int, WageID)
         .query(`
-        UPDATE [dbo].[LabourMonthlyWages]
-        SET ApprovalStatusWages = 'Pending',
-            EditDate = GETDATE()
-        WHERE WageID = @WageID
-      `);
+            UPDATE [dbo].[LabourMonthlyWages]
+            SET ApprovalStatusWages = 'Pending',
+                EditDate = GETDATE()
+            WHERE WageID = @WageID
+        `);
 
     const approvalPromise = pool.request()
         .input('WageID', sql.Int, WageID)
         .input('LabourID', sql.VarChar, row.LabourID)
+        .input('name', sql.VarChar, row.name)
         .input('DailyWages', sql.Decimal, dailyWages)
         .input('MonthlyWages', sql.Decimal, monthlyWages)
         .input('FixedMonthlyWages', sql.Decimal, fixedMonthlyWages)
         .input('PerHourWages', sql.Decimal, perHourWages)
         .input('YearlyWages', sql.Decimal, yearlyWages)
         .input('EffectiveDate', sql.Date, effectiveDate)
-        .input('WeeklyOff', sql.Int, parseInt(row.WeeklyOff, 10) || null)
+        .input('WeeklyOff', sql.Int, Number.isNaN(weeklyOffValue) ? null : weeklyOffValue)
         .input('PayStructure', sql.VarChar, row.PayStructure)
         .input('WagesEditedBy', sql.VarChar, row.WagesEditedBy || 'System')
         .query(`
-        INSERT INTO [WagesAdminApprovals] (
-            WageID, LabourID, DailyWages, MonthlyWages, FixedMonthlyWages, PerHourWages, YearlyWages, EffectiveDate,
-            WeeklyOff, PayStructure, WagesEditedBy, ApprovalStatus, Remarks, CreatedAt
-        )
-        VALUES (
-            @WageID, @LabourID, @DailyWages, @MonthlyWages, @FixedMonthlyWages, @PerHourWages, @YearlyWages, @EffectiveDate,
-            @WeeklyOff, @PayStructure, @WagesEditedBy, 'Pending', '', GETDATE()
-        )
-      `);
+            INSERT INTO [dbo].[WagesAdminApprovals] (
+                WageID, LabourID, name, DailyWages, MonthlyWages, FixedMonthlyWages, PerHourWages, YearlyWages, EffectiveDate,
+                WeeklyOff, PayStructure, WagesEditedBy, ApprovalStatus, Remarks, CreatedAt
+            )
+            VALUES (
+                @WageID, @LabourID, @name, @DailyWages, @MonthlyWages, @FixedMonthlyWages, @PerHourWages, @YearlyWages, @EffectiveDate,
+                @WeeklyOff, @PayStructure, @WagesEditedBy, 'Pending', '', GETDATE()
+            )
+        `);
 
-    // Wait for both queries to complete
     await Promise.all([updatePromise, approvalPromise]);
 
-    return { success: true, LabourID: row.LabourID, WageID: WageID, message: 'Wages inserted and sent for approval.' };
+    return { success: true, LabourID: row.LabourID, WageID, message: 'Wages inserted and sent for approval.' };
 }
+
+
+// async function insertWagesData(row) {
+//     const pool = await poolPromise;
+
+//     // Convert Excel date to JavaScript date or handle as null
+//     let fromDate = null;
+//     if (row.From_Date) {
+//         const dateObj = new Date(row.From_Date);
+//         if (!isNaN(dateObj)) {
+//             fromDate = dateObj.toISOString().split('T')[0]; // Extract date part (YYYY-MM-DD)
+//         } else {
+//             throw new Error(`Invalid From_Date value: ${row.From_Date}`);
+//         }
+//     }
+
+//     // Handle EffectiveDate
+//     let effectiveDate = null;
+//     if (row.EffectiveDate) {
+//         if (typeof row.EffectiveDate === "number") {
+//             // Excel stores dates as numbers (serial date format)
+//             const excelDate = new Date((row.EffectiveDate - 25569) * 86400 * 1000);
+//             effectiveDate = excelDate.toISOString().split('T')[0]; // Convert to YYYY-MM-DD
+//         } else if (typeof row.EffectiveDate === "string") {
+//             // Handle DD-MM-YYYY format
+//             const parts = row.EffectiveDate.split('-');
+//             if (parts.length === 3) {
+//                 const [day, month, year] = parts.map((part) => parseInt(part, 10));
+//                 if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+//                     effectiveDate = new Date(year, month - 1, day).toISOString().split('T')[0]; // YYYY-MM-DD
+//                 } else {
+//                     throw new Error(`Invalid EffectiveDate format: ${row.EffectiveDate}`);
+//                 }
+//             } else {
+//                 throw new Error(`Invalid EffectiveDate format: ${row.EffectiveDate}`);
+//             }
+//         } else {
+//             throw new Error(`Unexpected EffectiveDate type: ${typeof row.EffectiveDate}`);
+//         }
+//     }
+
+//     // Validate PayStructure
+//     const validPayStructures = ['DAILY WAGES', 'FIXED MONTHLY WAGES'];
+//     if (!row.PayStructure || !validPayStructures.includes(row.PayStructure)) {
+//         throw new Error(`Invalid PayStructure value: ${row.PayStructure}`);
+//     }
+
+//     // Check for both DAILY WAGES and FIXED MONTHLY WAGES in the same row
+//     if (row.PayStructure === 'DAILY WAGES' && row.WeeklyOff) {
+//         throw new Error('Cannot have WeeklyOff for DAILY WAGES PayStructure');
+//     }
+
+//     // if (row.PayStructure === 'FIXED MONTHLY WAGES') {
+//     //     if (!row.WeeklyOff) {
+//     //         throw new Error(`Invalid WeeklyOff value: ${row.WeeklyOff}`);
+//     //     }
+//     //     const weeklyOff = parseInt(row.WeeklyOff, 10);
+//     //     if (isNaN(weeklyOff) || weeklyOff < 0 || weeklyOff > 4) {
+//     //         throw new Error('WeeklyOff must be a number between 0 and 4 for FIXED MONTHLY WAGES');
+//     //     }
+//     // }
+
+// if (row.PayStructure === 'FIXED MONTHLY WAGES') {
+//   // 1) Only reject if it's truly missing (null/undefined/empty), but allow "0".
+//   if (row.WeeklyOff == null || row.WeeklyOff === '') {
+//     throw new Error(`WeeklyOff is required for FIXED MONTHLY WAGES`);
+//   }
+
+//   // 2) Use a regex to allow only the characters "0", "1", "2", "3" or "4" (no minus sign!)
+//   if (!/^[0-4]$/.test(row.WeeklyOff)) {
+//     throw new Error('WeeklyOff must be an integer between 0 and 4 (inclusive)');
+//   }
+
+//   // 3) If you still want it as a Number:
+//   const weeklyOff = Number(row.WeeklyOff);
+//   // weeklyOff is now 0,1,2,3, or 4
+// }
+
+//     // Fetch working hours for the LabourID from the labourOnboarding table
+//     const result = await pool
+//         .request()
+//         .input('LabourID', sql.VarChar, row.LabourID)
+//         .query(`
+//             SELECT LabourID AS labourId, workingHours 
+//             FROM [dbo].[labourOnboarding] 
+//             WHERE LabourID = @LabourID
+//         `);
+
+//     if (result.recordset.length === 0) {
+//         throw new Error(`LabourID ${row.LabourID} not found in labourOnboarding table`);
+//     }
+
+//     const workingHours = result.recordset[0].workingHours;
+
+//     // Determine the hours per day based on workingHours value
+//     let hoursPerDay;
+//     if (workingHours === 'FLEXI SHIFT - 9 HRS') {
+//         hoursPerDay = 9;
+//     } else if (workingHours === 'FLEXI SHIFT - 8 HRS') {
+//         hoursPerDay = 8;
+//     } else {
+//         throw new Error(`Invalid workingHours value: ${workingHours}`);
+//     }
+
+//     // Calculate wage-related fields
+//     let dailyWages = null;
+//     let perHourWages = null;
+//     let monthlyWages = null;
+//     let yearlyWages = null;
+//     let fixedMonthlyWages = null;
+
+//     if (row.PayStructure === 'DAILY WAGES') {
+//         dailyWages = parseFloat(row.DailyWages);
+//         if (isNaN(dailyWages)) {
+//             throw new Error(`Invalid DailyWages value: ${row.DailyWages}`);
+//         }
+
+//         perHourWages = dailyWages / hoursPerDay; // Calculate per hour wages based on workingHours
+//         monthlyWages = dailyWages * 26; // Assuming 26 working days/month
+//         yearlyWages = monthlyWages * 12; // 12 months/year
+//     } else if (row.PayStructure === 'FIXED MONTHLY WAGES') {
+//         fixedMonthlyWages = parseFloat(row.FixedMonthlyWages) || "";
+//     }
+
+//     const existingPending = await pool
+//     .request()
+//     .input('LabourID', sql.VarChar, row.LabourID)
+//     .query(`
+//         SELECT WageID 
+//         FROM [dbo].[LabourMonthlyWages] 
+//         WHERE LabourID = @LabourID AND ApprovalStatusWages = 'Pending'
+//     `);
+
+// if (existingPending.recordset.length > 0) {
+//     throw new Error(`Wage entry with 'Pending' approval already exists for LabourID ${row.LabourID}`);
+// }
+
+//     // Insert data into the LabourMonthlyWages table
+//     const request = pool.request();
+//     request.input('LabourID', sql.VarChar, row.LabourID);
+//     request.input('WagesEditedBy', sql.VarChar, row.WagesEditedBy || 'System');
+//     request.input('name', sql.VarChar, row.name);
+//     request.input('projectName', sql.Int, row.projectName);
+//     request.input('companyName', sql.VarChar, row.companyName);
+//     request.input('From_Date', sql.Date, fromDate);
+//     request.input('businessUnit', sql.VarChar, row.businessUnit);
+//     request.input('departmentName', sql.VarChar, row.departmentName);
+//     request.input('PayStructure', sql.VarChar, row.PayStructure);
+//     request.input('DailyWages', sql.Decimal, dailyWages);
+//     request.input('PerHourWages', sql.Decimal, perHourWages);
+//     request.input('MonthlyWages', sql.Decimal, monthlyWages);
+//     request.input('YearlyWages', sql.Decimal, yearlyWages);
+//     request.input('FixedMonthlyWages', sql.Decimal, fixedMonthlyWages);
+//     request.input('WeeklyOff', sql.Int, Number.isNaN(weeklyOffValue) ? null : weeklyOffValue);
+//     request.input('EffectiveDate', sql.Date, effectiveDate);
+//     request.input('CreatedAt', sql.DateTime, new Date());
+//     request.input('isApprovalSendAdmin', sql.Bit, 1);
+//     request.input('accountNumber', sql.VarChar, row.accountNumber);
+
+//     const insertResult = await request.query(`
+//         INSERT INTO [dbo].[LabourMonthlyWages] 
+//         (LabourID, WagesEditedBy, name, projectName, companyName, From_Date, businessUnit, departmentName, PayStructure, DailyWages, PerHourWages, MonthlyWages, YearlyWages, FixedMonthlyWages, WeeklyOff, EffectiveDate, CreatedAt, isApprovalSendAdmin, accountNumber)
+//         OUTPUT INSERTED.WageID
+//         VALUES (@LabourID, @WagesEditedBy, @name, @projectName, @companyName, @From_Date, @businessUnit, @departmentName, @PayStructure, @DailyWages, @PerHourWages, @MonthlyWages, @YearlyWages, @FixedMonthlyWages, @WeeklyOff, @EffectiveDate, @CreatedAt, @isApprovalSendAdmin, @accountNumber)
+//     `);
+
+//     const WageID = insertResult.recordset[0].WageID;
+
+//     // Now, perform the UPDATE and INSERT operations concurrently
+//     const updatePromise = pool.request()
+//         .input('WageID', sql.Int, WageID)
+//         .query(`
+//         UPDATE [dbo].[LabourMonthlyWages]
+//         SET ApprovalStatusWages = 'Pending',
+//             EditDate = GETDATE()
+//         WHERE WageID = @WageID
+//       `);
+
+//     const approvalPromise = pool.request()
+//         .input('WageID', sql.Int, WageID)
+//         .input('LabourID', sql.VarChar, row.LabourID)
+//         .input('DailyWages', sql.Decimal, dailyWages)
+//         .input('MonthlyWages', sql.Decimal, monthlyWages)
+//         .input('FixedMonthlyWages', sql.Decimal, fixedMonthlyWages)
+//         .input('PerHourWages', sql.Decimal, perHourWages)
+//         .input('YearlyWages', sql.Decimal, yearlyWages)
+//         .input('EffectiveDate', sql.Date, effectiveDate)
+//         .input('WeeklyOff', sql.Int, Number.isNaN(weeklyOffValue) ? null : weeklyOffValue)
+//         .input('PayStructure', sql.VarChar, row.PayStructure)
+//         .input('WagesEditedBy', sql.VarChar, row.WagesEditedBy || 'System')
+//         .query(`
+//         INSERT INTO [WagesAdminApprovals] (
+//             WageID, LabourID, DailyWages, MonthlyWages, FixedMonthlyWages, PerHourWages, YearlyWages, EffectiveDate,
+//             WeeklyOff, PayStructure, WagesEditedBy, ApprovalStatus, Remarks, CreatedAt
+//         )
+//         VALUES (
+//             @WageID, @LabourID, @DailyWages, @MonthlyWages, @FixedMonthlyWages, @PerHourWages, @YearlyWages, @EffectiveDate,
+//             @WeeklyOff, @PayStructure, @WagesEditedBy, 'Pending', '', GETDATE()
+//         )
+//       `);
+
+//     // Wait for both queries to complete
+//     await Promise.all([updatePromise, approvalPromise]);
+
+//     return { success: true, LabourID: row.LabourID, WageID: WageID, message: 'Wages inserted and sent for approval.' };
+// }
 
 
 const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
