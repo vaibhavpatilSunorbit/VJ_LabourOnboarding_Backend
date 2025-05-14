@@ -4067,13 +4067,13 @@ async function getWagesByDateRange(projectName, payStructure, approvalStatus) {
         onboarding.From_Date,
         onboarding.businessUnit,
         onboarding.departmentName,
+        onboarding.accountNumber,
         wages.PayStructure,
         wages.DailyWages,
         wages.WeeklyOff,
         wages.FixedMonthlyWages,
         wages.EffectiveDate,
-        wages.ApprovalStatusWages,
-        wages.EffectiveDate
+        wages.ApprovalStatusWages
       FROM [dbo].[labourOnboarding] AS onboarding
       LEFT JOIN RankedWages AS wages
         ON onboarding.LabourID = wages.LabourID

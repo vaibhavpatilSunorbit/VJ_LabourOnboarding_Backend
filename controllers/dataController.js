@@ -2850,6 +2850,33 @@ const editCompanyTransfer = async (req, res) => {
 
 
 
+const getSuperAdminProjectNames = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      select  [Id]
+      ,[name]
+      ,[CreatedAt]
+      ,[emailID]
+      ,[pasword]
+      ,[userType]
+      ,[userToken]
+      ,[contactNo]
+      ,[isApproved]
+      ,[accessPages]
+      ,[plainPassword]
+      ,[assigned_projects] as projectIds
+      ,[assigned_departments] as departmentIds 
+      from [dbo].[Users_New] where Id = 90
+    `);
+    res.json(result.recordset);
+    // console.log('result.recordset}}||',result.recordset)
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  } 
+};
+
 // ------------------------------------------------------------------------------    COMPANY TRANSFER FUNCTION END -------------------------------------------------
 
 
@@ -2892,7 +2919,8 @@ module.exports = {
   companyTransferRequestforAdmin,
   approveCompanyTransfer,
   rejectCompanyTransfer,
-  editCompanyTransfer
+  editCompanyTransfer,
+  getSuperAdminProjectNames
 };
 
 
