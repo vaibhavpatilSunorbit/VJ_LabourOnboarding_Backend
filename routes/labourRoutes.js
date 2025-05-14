@@ -89,7 +89,7 @@ router.put('/admin/rejectWages', labourController.rejectWagesControllerAdmin);
 
 router.get('/exportMonthlyWagesExcel', labourController.exportMonthlyWagesExcel);
 router.get('/exportFixedWagesExcel', labourController.exportFixedWagesExcel);
-
+ 
 router.get('/download-excel', async (req, res) => {
     try {
         const pool = await poolPromise;
