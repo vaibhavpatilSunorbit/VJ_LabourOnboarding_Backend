@@ -1248,7 +1248,15 @@ const exportFixedWagesExcel = async (req, res) => {
 };
 
 
-
+async function getAllLabours(req, res) {
+    try {
+        const filters = req.query;
+        const labours = await labourModel.getAllLabours(filters);
+        res.json(labours);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+}
 
 module.exports = {
     getAllLabours,
