@@ -1122,7 +1122,7 @@ const getAllLaboursWithTransferDetails = async (req, res) => {
 
     // SQL query to fetch transfer site names and createdAt for the provided labour IDs
     const query = `
-      SELECT LabourID, transferSiteName, currentSiteName, createdAt 
+      SELECT LabourID, transferSiteName, currentSiteName, createdAt, siteTransferBy, esslResponseStatus
       FROM [dbo].[API_TransferSite] 
       WHERE LabourID IN (${labourIds.map((id) => `'${id}'`).join(', ')})
     `;
