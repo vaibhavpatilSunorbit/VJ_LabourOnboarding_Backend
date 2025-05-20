@@ -3477,7 +3477,8 @@ console.log("updasertAttendnace",labourId,date,firstPunchManually,lastPunchManua
 
             rawOvertime = adjustedOvertime;
             payrollCalRoundOffOvertime = roundOvertime(rawOvertime);
-            finalOvertimeManually = payrollCalRoundOffOvertime;
+            finalOvertimeManually = Math.min(payrollCalRoundOffOvertime, 4);
+            // finalOvertimeManually = payrollCalRoundOffOvertime;
         }
 
 
