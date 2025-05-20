@@ -934,7 +934,7 @@ async function getOvertimeMonthlyAPI(req, res) {
 async function getSalaryGenerationDataAPIAllLabours(req, res) {
     try {
         const { month, year, labourIds } = req.query;
-        // console.log('req.query for slarygeneration',req.query)
+        console.log('req.query for slarygeneration',req.query)
         if (!month || !year) {
             return res.status(400).json({ message: 'Month and year are required.' });
         }
