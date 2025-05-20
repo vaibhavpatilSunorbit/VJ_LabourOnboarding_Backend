@@ -2879,6 +2879,44 @@ const getSuperAdminProjectNames = async (req, res) => {
 
 // ------------------------------------------------------------------------------    COMPANY TRANSFER FUNCTION END -------------------------------------------------
 
+const getLabourAttendanceCheck = async (req, res) => {
+  try {
+    const { labourId } = req.query;
+
+    if (!labourId) {
+      return res.status(400).json({ message: 'LabourID is required.' });
+    }
+
+    const pool = await poolPromise;
+
+    const query = `
+      SELECT TOP 1 [CreatedAt]
+      FROM [dbo].[LabourAttendanceLogs]
+      WHERE LabourID = @labourId
+      ORDER BY CreatedAt DESC
+    `;
+
+    const result = await pool
+      .request()
+      .input('labourId', labourId)
+      .query(query);
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ message: 'No attendance logs found for this LabourID.' });
+    }
+
+    const lastAttendanceDate = result.recordset[0].CreatedAt;
+
+    res.status(200).json({ lastAttendanceDate });
+  } catch (error) {
+    console.error('Error fetching labour attendance data:', error);
+    res.status(500).json({
+      message: 'Failed to fetch attendance data.',
+      error: error.message,
+    });
+  }
+};
+
 
 
 module.exports = {
@@ -2920,7 +2958,8 @@ module.exports = {
   approveCompanyTransfer,
   rejectCompanyTransfer,
   editCompanyTransfer,
-  getSuperAdminProjectNames
+  getSuperAdminProjectNames,
+  getLabourAttendanceCheck
 };
 
 
