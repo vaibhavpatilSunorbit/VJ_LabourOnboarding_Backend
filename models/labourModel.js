@@ -21,7 +21,6 @@ async function checkAadhaarExists(aadhaarNumber) {
 // async function getNextUniqueID() {
 //     try {
 //         const pool = await poolPromise;
-
 //         // Fetch the maximum LabourID while excluding specific IDs
 //         let lastIDResult = await pool.request().query(`
 //             SELECT MAX(LabourID) AS lastID 
@@ -674,13 +673,13 @@ async function registerDataUpdateDisable(labourData) {
           dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date, From_Date, Period, address, pincode, taluka, district, village,
           state, emergencyContact, photoSrc, bankName, branch, accountNumber, ifscCode, projectName, 
           labourCategory, department, workingHours, contractorName, contractorNumber, designation,
-          status, isApproved, title, Marital_Status, companyName, Induction_Date, Inducted_By, uploadInductionDoc, OnboardName, ValidTill, location, ConfirmDate, retirementDate, SalaryBu, WorkingBu, CreationDate, businessUnit, departmentId, designationId, labourCategoryId, departmentName, isResubmit) 
+          status, isApproved, title, Marital_Status, companyName, Induction_Date, Inducted_By, uploadInductionDoc, OnboardName, ValidTill, location, ConfirmDate, retirementDate, SalaryBu, WorkingBu, CreationDate, businessUnit, departmentId, designationId, labourCategoryId, departmentName) 
           VALUES (
           @LabourID, @labourOwnership, @uploadAadhaarFront, @uploadAadhaarBack, @uploadIdProof, @name, @aadhaarNumber,
           @dateOfBirth, @contactNumber, @gender, @dateOfJoining, @Group_Join_Date, @From_Date, @Period, @address, @pincode, @taluka, @district, @village,
           @state, @emergencyContact, @photoSrc, @bankName, @branch, @accountNumber, @ifscCode, @projectName,
           @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
-          'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId, @departmentName, @isResubmit)
+          'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId, @departmentName)
         `);
         //console.log('Data successfully inserted for OnboardName Resubmmit button:', labourData.OnboardName);
         return result.recordset;
