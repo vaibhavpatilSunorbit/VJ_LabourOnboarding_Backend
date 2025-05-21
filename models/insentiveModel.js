@@ -313,7 +313,7 @@ const getVariablePayAndLabourOnboardingJoin = async (filters = {}) => {
         ON 
             onboarding.LabourID = variablepay.LabourID
         WHERE 
-            onboarding.status = 'Approved'
+            onboarding.status IN ('Approved', 'Disable')
     `;
 
     // 🔍 Handle ProjectID filter (comma-separated)
@@ -852,7 +852,7 @@ async function getVariablePayByDateRange(projectName, startDate, endDate, approv
             : ""
         }
         WHERE 
-            onboarding.status = 'Approved'
+            onboarding.status IN ('Approved', 'Disable')
             ${projectName !== "all" ? "AND onboarding.projectName = @projectName" : ""}
     )
     SELECT 
@@ -2583,23 +2583,21 @@ async function calculateSalaryForLabour(labourId, month, year) {
             const hourlyWage = dailyWageRate / parsedWorkingHours;
 
             const totalHours = totalHoursForMonth - cappedOvertime;
+
+            console.log("totalPossibleHours  ",totalPossibleHours)
+            console.log("hourlyWage",hourlyWage)
+            console.log("totalHours",totalHours)
             
             if (presentDays === daysInSlice) {
                 baseWage = totalPossibleHours * hourlyWage;
-            } else if (totalPossibleHours < totalHours) {
-                baseWage = totalPossibleHours * hourlyWage;
-            } else {
-                if (presentDays < daysInSlice) {
+            }else if (presentDays < daysInSlice) {
                     const totalPossibleHours = presentDays * parsedWorkingHours;
                     if (totalPossibleHours < totalHours) {
                         baseWage = totalPossibleHours * hourlyWage;
                     }else{
                         baseWage = totalHours * hourlyWage;
                     }
-                } else {
-                    baseWage = totalHours * hourlyWage;
-                }
-            }
+                }            
 
         } else {
 
