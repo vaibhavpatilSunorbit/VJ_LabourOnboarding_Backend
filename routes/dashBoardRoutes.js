@@ -12,7 +12,7 @@ router.get('/getAllAPM' ,getAttendanceByPeriod )
 router.get('/getAllActive' ,getAllActiveWorkers)
 router.get('/getAllActivep', getAllActiveWorkersPersentage)
 router.get('/getnotification' ,getAllAdminNotifacation)
-router.get('/getAllNotification' , getNotificationAttendance)
+router.get('/getAllNotification' , getNotificationAttendance) 
 // router.get('/getYesterdayAttendanceCount' ,getYesterdayAttendanceCount)
 
 module.exports = router
