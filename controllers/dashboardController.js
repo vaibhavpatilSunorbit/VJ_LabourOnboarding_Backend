@@ -400,6 +400,50 @@ const getAllActiveWorkersPersentage = async (req, res) => {
   }
 };
 
+const   getAllAdminNotifacation= async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT 
+        currentSiteName,
+        COUNT(*) AS PendingCount
+      FROM [LabourOnboardingForm_TEST].[dbo].[AdminSiteTransferApproval]
+      WHERE 
+        (isAdminApproval = 0 OR isAdminApproval IS NULL)
+        AND (isAdminReject = 0 OR isAdminReject IS NULL)
+        AND adminStatus = 'Pending'
+      GROUP BY currentSiteName
+      ORDER BY PendingCount DESC;
+    `);
+
+    res.json({ success: true, data: result.recordset });  // Return all rows, not just first
+  } catch (error) {
+    console.error('Error fetching admin site transfer notifications:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+
+const getNotificationAttendance = async(req,res)=>{
+   try {
+    const pool = await poolPromise
+    const result = await pool.request().query(`
+    
+     SELECT TOP (5) *
+ FROM [dbo].[LabourAttendanceApproval] where ApprovalStatus = 'Pending'
+ ORDER BY id DESC ;
+   `);
+   res.json({ success: true, data: result.recordset })
+   } catch (error) {
+    console.error('Error fetching admin site transfer notifications:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+   } 
+  // Return all rows, not just first
+
+
+}
+
+
 
 
 module.exports = {
@@ -410,5 +454,7 @@ module.exports = {
   getAllLastDayPAMCount,
   getAttendanceByPeriod,
   getAllActiveWorkers,
-  getAllActiveWorkersPersentage
+  getAllActiveWorkersPersentage,
+  getAllAdminNotifacation,
+  getNotificationAttendance
 }
