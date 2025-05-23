@@ -392,7 +392,7 @@ const getAllActiveWorkersPersentage = async (req, res) => {
           )
         AS DECIMAL(5,2)) AS PresentPercentageOfAllActiveWorkers
     `);
-    
+
     res.json({ success: true, data: result.recordset[0] });
   } catch (error) {
     console.error('Error fetching all-time active workers percentage:', error);
@@ -400,7 +400,7 @@ const getAllActiveWorkersPersentage = async (req, res) => {
   }
 };
 
-const   getAllAdminNotifacation= async (req, res) => {
+const getAllAdminNotifacation = async (req, res) => {
   try {
     const pool = await poolPromise;
     const result = await pool.request().query(`
@@ -424,8 +424,8 @@ const   getAllAdminNotifacation= async (req, res) => {
 };
 
 
-const getNotificationAttendance = async(req,res)=>{
-   try {
+const getNotificationAttendance = async (req, res) => {
+  try {
     const pool = await poolPromise
     const result = await pool.request().query(`
     
@@ -433,17 +433,46 @@ const getNotificationAttendance = async(req,res)=>{
  FROM [dbo].[LabourAttendanceApproval] where ApprovalStatus = 'Pending'
  ORDER BY id DESC ;
    `);
-   res.json({ success: true, data: result.recordset })
-   } catch (error) {
+    res.json({ success: true, data: result.recordset })
+  } catch (error) {
     console.error('Error fetching admin site transfer notifications:', error);
     res.status(500).json({ success: false, message: 'Server error' });
-   } 
+  }
   // Return all rows, not just first
-
-
 }
 
 
+const getNotificationVariablePay = async (req, res) => {
+  try {
+    const pool = await poolPromise
+    const result = await pool.request().query(`
+     
+  SELECT TOP (5) *
+FROM [dbo].[VariablePay] WHERE ApprovalStatusPay ='AdminPending'
+ORDER BY CreatedAt DESC;
+  `);
+    res.json({ success: true, data: result.recordset })
+  } catch (error) {
+    console.error('Error fetching admin site transfer notifications:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+  // Return all rows, not just first
+}
+
+const getNotificationWagesApproval = async(req,res)=>{
+    try {
+          const pool = await poolPromise
+          const result = await pool.request().query(`
+               SELECT TOP (5) *
+                FROM [dbo].[WagesAdminApprovals]
+                ORDER BY CreatedAt DESC;
+            `)
+            res.json({ success: true, data: result.recordset })
+    } catch (error) {
+      console.error('Error fetching admin site transfer notifications:', error);
+      res.status(500).json({ success: false, message: 'Server error' });  
+    }
+}
 
 
 module.exports = {
@@ -456,5 +485,7 @@ module.exports = {
   getAllActiveWorkers,
   getAllActiveWorkersPersentage,
   getAllAdminNotifacation,
-  getNotificationAttendance
+  getNotificationAttendance,
+  getNotificationVariablePay,
+  getNotificationWagesApproval
 }
