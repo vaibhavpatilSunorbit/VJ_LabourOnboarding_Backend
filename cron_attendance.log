@@ -351,3 +351,8 @@
 {"level":"error","message":"Error running cron job for Date: 2025-04-15: parsedMonth is not defined","stack":"ReferenceError: parsedMonth is not defined\n    at runDailyAttendanceCron (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\labourController.js:1749:90)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Task._execution (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\labourController.js:2976:5)","timestamp":"2025-04-16T06:17:01.717Z"}
 {"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-05-20T06:40:00.048Z"}
 {"level":"info","message":"Running cron job for Attendance Date: 2025-05-19","timestamp":"2025-05-20T06:40:00.056Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-05-21T06:40:00.363Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-05-20","timestamp":"2025-05-21T06:40:00.374Z"}
+{"level":"error","message":"Error running cron job for Date: 2025-05-20: approvedLabours is not iterable","stack":"TypeError: approvedLabours is not iterable\n    at runDailyAttendanceCron (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\labourController.js:2003:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Task._execution (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\labourController.js:3494:5)","timestamp":"2025-05-21T08:20:32.990Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-05-23T06:40:00.100Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-05-22","timestamp":"2025-05-23T06:40:00.112Z"}
