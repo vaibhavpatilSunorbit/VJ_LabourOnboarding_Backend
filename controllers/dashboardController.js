@@ -459,19 +459,67 @@ ORDER BY CreatedAt DESC;
   // Return all rows, not just first
 }
 
-const getNotificationWagesApproval = async(req,res)=>{
-    try {
-          const pool = await poolPromise
-          const result = await pool.request().query(`
+const getNotificationWagesApproval = async (req, res) => {
+  try {
+    const pool = await poolPromise
+    const result = await pool.request().query(`
                SELECT TOP (5) *
                 FROM [dbo].[WagesAdminApprovals]
                 ORDER BY CreatedAt DESC;
             `)
-            res.json({ success: true, data: result.recordset })
-    } catch (error) {
-      console.error('Error fetching admin site transfer notifications:', error);
-      res.status(500).json({ success: false, message: 'Server error' });  
-    }
+    res.json({ success: true, data: result.recordset })
+  } catch (error) {
+    console.error('Error fetching admin site transfer notifications:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+}
+
+// DepartmentWiseWagesPercentage 
+
+const getDepartmentWiseWagesPercentage = async (req, res) => {
+  try {
+    const pool = await poolPromise
+    const result = await pool.request().query(`
+            
+            WITH MonthlyDepartmentWages AS (
+  SELECT
+    departmentName,
+    FORMAT(ISNULL(EffectiveDate, FromDate), 'yyyy-MM') AS wageMonth,
+    SUM(ISNULL(MonthlyWages, 0) + ISNULL(FixedMonthlyWages, 0)) AS totalWages
+  FROM [LabourOnboardingForm_TEST].[dbo].[LabourMonthlyWages]
+  WHERE 
+    (MonthlyWages IS NOT NULL OR FixedMonthlyWages IS NOT NULL)
+    AND ApprovalStatusWages = 'Approved'
+  GROUP BY
+    departmentName,
+    FORMAT(ISNULL(EffectiveDate, FromDate), 'yyyy-MM')
+),
+MonthlyTotal AS (
+  SELECT
+    wageMonth,
+    SUM(totalWages) AS grandTotal
+  FROM MonthlyDepartmentWages
+  GROUP BY wageMonth
+)
+SELECT
+  mdw.wageMonth,
+  mdw.departmentName,
+  mdw.totalWages,
+  ROUND(CAST(mdw.totalWages AS FLOAT) / mt.grandTotal * 100, 2) AS WagePayPercentage
+FROM MonthlyDepartmentWages mdw
+JOIN MonthlyTotal mt ON mdw.wageMonth = mt.wageMonth
+ORDER BY mdw.wageMonth DESC, WagePayPercentage DESC;
+
+          `)
+          res.status(200).json({
+            success: true,
+            message: 'Department-wise wage pay percentage calculated successfully.',
+            data: result.recordset
+          });
+  } catch (error) {
+    console.error('Error fetching admin site transfer notifications:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
 }
 
 
@@ -487,5 +535,6 @@ module.exports = {
   getAllAdminNotifacation,
   getNotificationAttendance,
   getNotificationVariablePay,
-  getNotificationWagesApproval
+  getNotificationWagesApproval,
+  getDepartmentWiseWagesPercentage
 }
