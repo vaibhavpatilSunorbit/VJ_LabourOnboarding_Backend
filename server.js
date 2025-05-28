@@ -181,6 +181,7 @@ const dataRoutes = require('./routes/dataRoutes');
 const { poolPromise2 } = require('./config/dbConfig2');
 const { poolPromise } = require('./config/dbConfig');
 const insentiveRoutes = require('./routes/insentiveRoutes');
+const dashBoardRoutes = require('./routes/dashBoardRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -190,6 +191,8 @@ app.use(express.text({ type: 'text/xml' }));
 app.use(cors({
     origin: '*'
 }));
+
+console.log("in server.js")
 
 app.use(bodyParser.json({ limit: '100mb' }));
 app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
@@ -212,111 +215,56 @@ const upload = multer({
     limits: { fileSize: 100 * 1024 * 1024 } // 100MB file size limit
 });
 
+app.use('/api/labours', labourRoutes);
+
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Add the route to download the Excel file
-app.get('/download-excel', async (req, res) => {
-    try {
-        const pool = await poolPromise;
-        const result = await pool.request().query('SELECT * FROM labourOnboarding');
-        const data = result.recordset;
+// app.get('/download-excel', async (req, res) => {
+//     try {
+//         const pool = await poolPromise;
+//         const result = await pool.request().query('SELECT * FROM labourOnboarding');
+//         const data = result.recordset;
 
-        // Create a new workbook and a sheet
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('SSMS Data');
+//         // Create a new workbook and a sheet
+//         const workbook = new ExcelJS.Workbook();
+//         const worksheet = workbook.addWorksheet('SSMS Data');
 
-        // Add headers to the sheet
-        worksheet.columns = Object.keys(data[0]).map(key => ({ header: key, key }));
+//         // Add headers to the sheet
+//         worksheet.columns = Object.keys(data[0]).map(key => ({ header: key, key }));
 
-        // Add data to the sheet
-        data.forEach(row => {
-            worksheet.addRow(row);
-        });
+//         // Add data to the sheet
+//         data.forEach(row => {
+//             worksheet.addRow(row);
+//         });
 
-        // Adjust column widths
-        worksheet.columns.forEach(column => {
-            let maxLength = 0;
-            column.eachCell({ includeEmpty: true }, cell => {
-                const cellValueLength = cell.value ? cell.value.toString().length : 0;
-                maxLength = Math.max(maxLength, cellValueLength);
-            });
-            column.width = maxLength < 10 ? 10 : maxLength + 2; // Minimum width of 10, or length of content + 2
-        });
+//         // Adjust column widths
+//         worksheet.columns.forEach(column => {
+//             let maxLength = 0;
+//             column.eachCell({ includeEmpty: true }, cell => {
+//                 const cellValueLength = cell.value ? cell.value.toString().length : 0;
+//                 maxLength = Math.max(maxLength, cellValueLength);
+//             });
+//             column.width = maxLength < 10 ? 10 : maxLength + 2; // Minimum width of 10, or length of content + 2
+//         });
 
-        // Set the response headers for download
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', 'attachment; filename=ssms_data.xlsx');
+//         // Set the response headers for download
+//         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+//         res.setHeader('Content-Disposition', 'attachment; filename=ssms_data.xlsx');
 
-        // Send the workbook to the client
-        await workbook.xlsx.write(res);
-        res.end();
-    } catch (error) {
-        console.error('Error generating Excel file:', error);
-        res.status(500).send('Error generating Excel file');
-    }
-});
-
-app.get('/labours/:id/download/full-form', (req, res) => {
-    const { id } = req.params;
-    const filePath = path.join(__dirname, 'uploads', `full_form_${id}.pdf`);
-    if (fs.existsSync(filePath)) {
-        res.download(filePath, `full_form_${id}.pdf`);
-    } else {
-        res.status(404).send('File not found.');
-    }
-});
+//         // Send the workbook to the client
+//         await workbook.xlsx.write(res);
+//         res.end();
+//     } catch (error) {
+//         console.error('Error generating Excel file:', error);
+//         res.status(500).send('Error generating Excel file');
+//     }
+// });
 
 
-app.get('/labours/:id/download/aadhaar-card', async (req, res) => {
-    const { id } = req.params;
-    const frontFilePath = path.join(__dirname, 'uploads', `aadhaar_front_${id}.jpg`);
-    const backFilePath = path.join(__dirname, 'uploads', `aadhaar_back_${id}.jpg`);
-    const idProofFilePath = path.join(__dirname, 'uploads', `id_Proof_${id}.jpg`);
-    const inductionFilePath = path.join(__dirname, 'uploads', `induction_${id}.jpg`);  // Corrected filename typo
 
-    // Initialize a JSZip instance
-    const zip = new JSZip();
-    let filesAdded = false;
 
-    // Check and add files to the zip if they exist
-    if (fs.existsSync(frontFilePath)) {
-        const frontFile = fs.readFileSync(frontFilePath);
-        zip.file(`aadhaar_front_${id}.jpg`, frontFile);
-        filesAdded = true;
-    }
 
-    if (fs.existsSync(backFilePath)) {
-        const backFile = fs.readFileSync(backFilePath);
-        zip.file(`aadhaar_back_${id}.jpg`, backFile);
-        filesAdded = true;
-    }
-
-    if (fs.existsSync(idProofFilePath)) {
-        const idFile = fs.readFileSync(idProofFilePath);
-        zip.file(`id_Proof_${id}.jpg`, idFile);
-        filesAdded = true;
-    }
-
-    if (fs.existsSync(inductionFilePath)) {
-        const inductionFile = fs.readFileSync(inductionFilePath);
-        zip.file(`induction_${id}.jpg`, inductionFile);
-        filesAdded = true;
-    }
-
-    // If any files were added to the zip, generate and send the zip file
-    if (filesAdded) {
-        res.set('Content-Type', 'application/zip');
-        res.set('Content-Disposition', `attachment; filename="documents_${id}.zip"`);
-
-        zip.generateNodeStream({ type: 'nodebuffer', streamFiles: true })
-            .pipe(res)
-            .on('finish', () => {
-                console.log(`Document zip for Labour ID ${id} has been generated and sent.`);
-            });
-    } else {
-        res.status(404).send('No documents found for download.');
-    }
-});
 
 
 // app.get('/labours/:id/download/aadhaar-card', async (req, res) => {
@@ -351,44 +299,11 @@ app.get('/labours/:id/download/aadhaar-card', async (req, res) => {
 //     }
 // });
 
-app.post('/labours', upload.fields([
-    { name: 'uploadAadhaarFront' },
-    { name: 'uploadAadhaarBack' },
-    { name: 'uploadIdProof' },
-    { name: 'uploadInductionDoc' },
-    { name: 'photoSrc' }
-]), labourController.createRecord);
 
-app.post('/labours/:id/updateRecord', upload.fields([
-    { name: 'uploadAadhaarFront' },
-    { name: 'uploadAadhaarBack' },
-    { name: 'uploadIdProof' },
-    { name: 'uploadInductionDoc' },
-    { name: 'photoSrc' }
-]), labourController.createRecordUpdate);
-
-// Define the route to update a labour record
-app.put('/labours/updatelabour/:id', upload.fields([
-    { name: 'uploadAadhaarFront' },
-    { name: 'uploadAadhaarBack' },
-    { name: 'uploadIdProof' },
-    { name: 'uploadInductionDoc' },
-    { name: 'photoSrc' }
-]), labourController.updateRecord);
-
-
-app.put('/labours/updatelabourDisableStatus/:id', upload.fields([
-    { name: 'uploadAadhaarFront' },
-    { name: 'uploadAadhaarBack' },
-    { name: 'uploadIdProof' },
-    { name: 'uploadInductionDoc' },
-    { name: 'photoSrc' }
-]), labourController.updateRecordWithDisable);
-
-app.use('/labours', labourRoutes);
 app.use('/users', userRoutes);
-app.use('/api', dataRoutes);
+app.use('/api',(req, res, next)=>{console.log('/api'); next()}, dataRoutes);
 app.use('/insentive', insentiveRoutes);
+app.use('/dashboard', dashBoardRoutes);
 app.use(EmployeeRoute);
 
 app.listen(PORT, () => {
