@@ -50,31 +50,24 @@ async function getNextUniqueID(departmentId) {
     try {
         const pool = await poolPromise;
 
+        const jihDepartments = [336, 337, 338, 339, 340, 341];
         let prefix = 'JC';
         let initialID = 'JC4008';
         const exclusions = `'JCO519', 'VJ3893'`;
 
-        if (departmentId === 334) {
+        if (jihDepartments.includes(departmentId)) {
             prefix = 'JIH';
             initialID = 'JIH0001';
         }
 
-        let lastIDQuery = '';
+        const likeClause = prefix === 'JIH' ? "%JIH%" : "%JC%";
 
-        if (departmentId === 334) {
-            lastIDQuery = `
-                SELECT MAX(LabourID) AS lastID 
-                FROM labourOnboarding 
-                WHERE LabourID NOT IN (${exclusions}) 
-                AND departmentId = ${departmentId} and LabourID like '%JIH%'
-            `;
-        } else {
-            lastIDQuery = `
-                SELECT MAX(LabourID) AS lastID 
-                FROM labourOnboarding 
-                WHERE LabourID NOT IN (${exclusions}) and LabourID like '%JC%'
-            `;
-        }
+        const lastIDQuery = `
+            SELECT MAX(LabourID) AS lastID 
+            FROM labourOnboarding 
+            WHERE LabourID NOT IN (${exclusions}) 
+            AND LabourID LIKE '${likeClause}'
+        `;
 
         const result = await pool.request().query(lastIDQuery);
         const lastID = result.recordset[0].lastID;
@@ -91,6 +84,53 @@ async function getNextUniqueID(departmentId) {
         throw new Error(`Error fetching next unique ID: ${error.message}`);
     }
 }
+
+
+// async function getNextUniqueID(departmentId) {
+//     try {
+//         const pool = await poolPromise;
+
+//         let prefix = 'JC';
+//         let initialID = 'JC4008';
+//         const exclusions = `'JCO519', 'VJ3893'`;
+
+//         if (departmentId === 334) {
+//             prefix = 'JIH';
+//             initialID = 'JIH0001';
+//         }
+
+//         let lastIDQuery = '';
+
+//         if (departmentId === 334) {
+//             lastIDQuery = `
+//                 SELECT MAX(LabourID) AS lastID 
+//                 FROM labourOnboarding 
+//                 WHERE LabourID NOT IN (${exclusions}) 
+//                 AND departmentId = ${departmentId} and LabourID like '%JIH%'
+//             `;
+//         } else {
+//             lastIDQuery = `
+//                 SELECT MAX(LabourID) AS lastID 
+//                 FROM labourOnboarding 
+//                 WHERE LabourID NOT IN (${exclusions}) and LabourID like '%JC%'
+//             `;
+//         }
+
+//         const result = await pool.request().query(lastIDQuery);
+//         const lastID = result.recordset[0].lastID;
+
+//         if (!lastID) {
+//             return initialID;
+//         }
+
+//         const numericPart = parseInt(lastID.slice(prefix.length)) + 1;
+//         const nextID = `${prefix}${numericPart.toString().padStart(4, '0')}`;
+
+//         return nextID;
+//     } catch (error) {
+//         throw new Error(`Error fetching next unique ID: ${error.message}`);
+//     }
+// }
 
 
 async function registerData(labourData) {
