@@ -521,6 +521,34 @@ ORDER BY mdw.wageMonth DESC, WagePayPercentage DESC;
     res.status(500).json({ success: false, message: 'Server error' });
   }
 }
+const getDevices = async (req, res) => {
+  try {
+    const pool = await poolPromise3;
+    const result = await pool.request().query(`
+      SELECT DeviceId, DeviceSName, DeviceLocation, SerialNumber, LastPing
+      FROM Devices
+    `);
+
+    const devicesWithStatus = result.recordset.map(device => {
+      const lastPingTime = new Date(device.LastPing);
+      const now = new Date();
+
+      // Calculate difference in minutes
+      const diffMinutes = (now - lastPingTime) / (1000 * 60);
+
+      return {
+        ...device,
+        Status: diffMinutes <= 10 ? 'Online' : 'Offline'
+      };
+    });
+
+    res.json(devicesWithStatus);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+};
+
 
 
 module.exports = {
@@ -536,5 +564,6 @@ module.exports = {
   getNotificationAttendance,
   getNotificationVariablePay,
   getNotificationWagesApproval,
-  getDepartmentWiseWagesPercentage
+  getDepartmentWiseWagesPercentage,
+  getDevices
 }
