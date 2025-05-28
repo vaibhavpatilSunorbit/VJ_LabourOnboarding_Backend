@@ -3,7 +3,7 @@ const { getAllLaboursCount, getAllWagesCount ,getAllSiteTransferCount, getAllVar
     getAllLastDayPAMCount, getAttendanceByPeriod, getAllActiveWorkers, getAllActiveWorkersPersentage, 
     getAllAdminNotifacation, getNotificationAttendance, getNotificationVariablePay, getNotificationWagesApproval,
     getDepartmentWiseWagesPercentage,
-    getDevices
+   getDevicesWithPing
 } = require('../controllers/dashboardController');
 
 const router = express.Router();
@@ -21,7 +21,7 @@ router.get('/getAllNotification' , getNotificationAttendance);
 router.get('/getNotificationVariablePay', getNotificationVariablePay);
 router.get('/getNotificationWagesApproval', getNotificationWagesApproval);
 router.get('/deptPercentageCount' , getDepartmentWiseWagesPercentage);
-router.get('/getDevices' , getDevices)
+router.get('/getDevices' , getDevicesWithPing)
 // router.get('/getYesterdayAttendanceCount' ,getYesterdayAttendanceCount)
 
 module.exports = router

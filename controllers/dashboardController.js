@@ -521,7 +521,7 @@ ORDER BY mdw.wageMonth DESC, WagePayPercentage DESC;
     res.status(500).json({ success: false, message: 'Server error' });
   }
 }
-const getDevices = async (req, res) => {
+const getDevicesWithPing = async (req, res) => {
   try {
     const pool = await poolPromise3;
     const result = await pool.request().query(`
@@ -565,5 +565,5 @@ module.exports = {
   getNotificationVariablePay,
   getNotificationWagesApproval,
   getDepartmentWiseWagesPercentage,
-  getDevices
+  getDevicesWithPing
 }
