@@ -4121,6 +4121,8 @@ async function getAttendanceByDateRange(projectNameStr, startDate, endDate, depa
     `;
 
     const result = await request.query(query);
+    console.log('reusltd' , result);
+    
     return result.recordset;
 }
 
