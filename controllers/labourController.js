@@ -9,11 +9,14 @@ const multer = require('multer');
 const { upload } = require('../server');
 const xml2js = require('xml2js');
 const labourModel = require('../models/labourModel');
+const  getAttendanceByDateRange = require('../models/labourModel');
 const cron = require('node-cron');
 const logger = require('../logger'); // Assuming logger is defined in logger.js   
 const { createLogger, format, transports } = require('winston');
 const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');
+const moment = require('moment');
+const puppeteer = require('puppeteer');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 const baseUrl = 'http://localhost:4000/uploads/';
@@ -4444,6 +4447,10 @@ const exportAttendance = async (req, res) => {
     }
 };
 
+
+
+
+
 const importAttendance = async (req, res) => {
     try {
         const workbook = xlsx.readFile(req.file.path);
@@ -5120,6 +5127,133 @@ async function updateOTHoursAttendance(req, res) {
     }
 }
 
+const generateAttendancePDF = async (req, res) => {
+  const { labourId } = req.query;
+
+  if (!labourId) {
+    return res.status(400).json({ message: "Missing required query parameter: labourId" });
+  }
+
+  try {
+    // Get the connected pool from poolPromise
+    const pool = await poolPromise;
+
+    // Use the pool to create a request
+    const request = pool.request()
+      .input("LabourId", sql.VarChar, labourId);
+
+    const query = `
+      SELECT 
+        LabourId,
+        [Date],
+        FirstPunch,
+        LastPunch,
+        TotalHours,
+        Overtime,
+        Status,
+        OnboardName,
+        projectName,
+     
+        WorkingHours
+      FROM [dbo].[LabourAttendanceDetails]
+      WHERE LabourId = @LabourId
+      ORDER BY [Date] DESC
+    `;
+
+    const result = await request.query(query);
+    const records = result.recordset;
+
+    if (!records || records.length === 0) {
+      return res.status(404).json({ message: "No attendance records found for the given Labour ID." });
+    }
+
+    const htmlContent = `
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h2 { text-align: center; }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+            }
+            th, td {
+              border: 1px solid #ccc;
+              padding: 8px;
+              text-align: center;
+              font-size: 12px;
+            }
+            th {
+              background-color: #f2f2f2;
+            }
+            .meta-info {
+              margin: 10px 0;
+            }
+          </style>
+        </head>
+        <body>
+          <h2>Attendance Report for Labour ID: ${labourId}</h2>
+          <div class="meta-info">
+            <p><strong>Labour Name:</strong> ${records[0].OnboardName || 'N/A'}</p>
+            <p><strong>Project Name:</strong> ${records[0].projectName || 'N/A'}</p>
+         
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>First Punch</th>
+                <th>Last Punch</th>
+                <th>Total Hours</th>
+                <th>Overtime</th>
+                <th>Status</th>
+                <th>Working Hours</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${records.map(row => `
+                <tr>
+                  <td>${moment(row.Date).format('YYYY-MM-DD')}</td>
+                  <td>${row.FirstPunch || '-'}</td>
+                  <td>${row.LastPunch || '-'}</td>
+                  <td>${row.TotalHours ?? 0}</td>
+                  <td>${row.Overtime ?? 0}</td>
+                  <td>${row.Status || '-'}</td>
+                  <td>${row.WorkingHours ?? 0}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+
+    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
+    await browser.close();
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=Attendance_${labourId}.pdf`,
+      'Content-Length': pdfBuffer.length
+    });
+
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    console.error("Error generating PDF:", error);
+    res.status(500).json({ message: "Failed to generate attendance PDF." });
+  }
+};
+
+
+
+
 
 module.exports = {
     handleCheckAadhaar,
@@ -5191,5 +5325,12 @@ module.exports = {
     searchLaboursFromVariableInput,
     getAttendanceReportAndLabourOnboardingJoincontroller,
     getAllLaboursAttendanceDaily,
-    updateOTHoursAttendance
+    updateOTHoursAttendance,
+   
+     generateAttendancePDF
+
 };
+
+ // Adjust path to your DB pool file
+
+
