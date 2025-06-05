@@ -873,7 +873,7 @@ async function updateRecordWithDisable(req, res) {
             emergencyContact, bankName, branch, accountNumber, ifscCode, projectName,
             labourCategory, department, workingHours, contractorName, contractorNumber,
             designation, title, Marital_Status, companyName, Induction_Date, Inducted_By,
-            OnboardName, expiryDate, departmentId, designationId, isResubmit, hideResubmit , isCompanyTransfer, isSiteTransfer
+            OnboardName, expiryDate, departmentId, designationId, isResubmit, hideResubmit , isCompanyTransfer, isSiteTransfer, Reject_Reason
         } = req.body;
         console.log("req.body-->", req.body)
 
@@ -1101,7 +1101,8 @@ async function updateRecordWithDisable(req, res) {
             isResubmit: parsedIsResubmit,
             hideResubmit: parsedHideResubmit,
             isCompanyTransfer: parsedIsCompanyTransfer,
-            isSiteTransfer: parsedIsSiteTransfer
+            isSiteTransfer: parsedIsSiteTransfer,
+            Reject_Reason
         });
 
         return res.status(201).json({ msg: "User created successfully", data });
