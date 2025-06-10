@@ -167,6 +167,7 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const multer = require('multer');
+const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 const JSZip = require('jszip');
@@ -198,23 +199,167 @@ app.use(bodyParser.json({ limit: '100mb' }));
 app.use(bodyParser.urlencoded({ limit: '100mb', extended: true }));
 
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadDir = path.join(__dirname, 'uploads');
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir);
-        }
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
+  destination: function (req, file, cb) {
+    const uploadPath = 'uploads/';
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
     }
+    cb(null, uploadPath);
+  },
+  filename: function (req, file, cb) {
+    // Use timestamp to avoid conflicts
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'cropped-' + uniqueSuffix + path.extname(file.originalname));
+  }
 });
 
-const upload = multer({
-    storage: storage,
-    limits: { fileSize: 100 * 1024 * 1024 } // 100MB file size limit
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
 });
 
+// Update document endpoint with Sharp processing
+app.post('/update-document', upload.single('croppedImage'), async (req, res) => {
+  try {
+    const { labourId, documentType, cropData } = req.body;
+    
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+
+    if (!labourId || !documentType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Labour ID and document type are required'
+      });
+    }
+
+    // Parse crop data if provided
+    let cropInfo = null;
+    if (cropData) {
+      try {
+        cropInfo = JSON.parse(cropData);
+      } catch (e) {
+        console.log('No valid crop data provided, using original image');
+      }
+    }
+
+    const uploadedFilePath = req.file.path;
+    const processedFileName = `processed-${Date.now()}-${req.file.filename}`;
+    const processedFilePath = path.join('uploads', processedFileName);
+
+    // Process image with Sharp
+    let sharpInstance = sharp(uploadedFilePath);
+
+    // Apply cropping if crop data is provided
+    if (cropInfo && cropInfo.width && cropInfo.height) {
+      sharpInstance = sharpInstance.extract({
+        left: Math.round(cropInfo.x) || 0,
+        top: Math.round(cropInfo.y) || 0,
+        width: Math.round(cropInfo.width),
+        height: Math.round(cropInfo.height)
+      });
+    }
+
+    // Apply rotation if provided
+    if (cropInfo && cropInfo.rotation) {
+      sharpInstance = sharpInstance.rotate(cropInfo.rotation);
+    }
+
+    // Process and save the image
+    await sharpInstance
+      .jpeg({ quality: 90 }) // High quality JPEG
+      .toFile(processedFilePath);
+
+    // Clean up the original uploaded file
+    if (fs.existsSync(uploadedFilePath)) {
+      fs.unlinkSync(uploadedFilePath);
+    }
+
+    // Map document types to database field names
+    const fieldMap = {
+      'induction': 'uploadInductionDoc',
+      'aadhaar_front': 'uploadAadhaarFront',
+      'aadhaar_back': 'uploadAadhaarBack',
+      'id_proof': 'uploadIdProof'
+    };
+
+    const fieldName = fieldMap[documentType];
+    if (!fieldName) {
+      // Clean up processed file
+      if (fs.existsSync(processedFilePath)) {
+        fs.unlinkSync(processedFilePath);
+      }
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid document type'
+      });
+    }
+
+    // Get current labour data to find old image
+    const currentLabour = await getLabourById(labourId);
+    
+    if (currentLabour && currentLabour[fieldName]) {
+      // Delete old file
+      const baseUrl = process.env.BASE_URL || 'https://vjlabour.vjerp.com';
+      const oldImageUrl = currentLabour[fieldName];
+      const oldFileName = oldImageUrl.replace(`${baseUrl}/uploads/`, '');
+      const oldFilePath = path.join('uploads', oldFileName);
+      
+      if (fs.existsSync(oldFilePath)) {
+        fs.unlinkSync(oldFilePath);
+        console.log(`Deleted old file: ${oldFilePath}`);
+      }
+    }
+
+    // Construct new file URL
+    const baseUrl = process.env.BASE_URL || 'https://vjlabour.vjerp.com';
+    const newFileUrl = `${baseUrl}/uploads/${processedFileName}`;
+
+    // Update database
+    const updateData = {
+      [fieldName]: newFileUrl
+    };
+
+    const updatedLabour = await updateLabourDocument(labourId, updateData);
+    
+    console.log(`Updated labour ${labourId} with ${fieldName}: ${newFileUrl}`);
+
+    res.json({
+      success: true,
+      message: 'Document processed and replaced successfully',
+      updatedImageUrl: newFileUrl,
+      filename: processedFileName,
+      updatedLabour: updatedLabour
+    });
+
+  } catch (error) {
+    console.error('Error processing document:', error);
+    
+    // Clean up any uploaded files on error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+});
 app.use('/api/labours', labourRoutes);
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
