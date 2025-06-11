@@ -4363,6 +4363,9 @@ async function approveAttendanceController(req, res) {
     try {
         const result = await labourModel.approveAttendance(AttendanceId);
         res.status(200).json(result);
+
+        console.log('Approval successful',result);
+        
     } catch (error) {
         console.error('Error in approving attendance:', error);
         res.status(error.statusCode || 500).json({ message: error.message });
@@ -5129,112 +5132,100 @@ async function updateOTHoursAttendance(req, res) {
 }
 
 const generateAttendancePDF = async (req, res) => {
-    const { labourId, startDate, endDate, projectId } = req.query;
+  try {
+    const { startDate, endDate, projectName, department } = req.query;
 
-    if (!labourId || !startDate || !endDate || !projectId) {
-        return res.status(400).json({ message: "Missing required query parameters: labourId, startDate, endDate, projectId" });
+    if (!startDate || !endDate || !projectName) {
+      return res.status(400).json({
+        message: 'Missing required parameters: startDate, endDate, or projectName.'
+      });
     }
 
-    try {
-        const pool = await poolPromise;
+    const attendanceData = await labourModel.getAttendanceByDateRange(
+      projectName,
+      startDate,
+      endDate,
+      department
+    );
 
-        const request = pool.request()
-            .input("LabourId", sql.VarChar, labourId)
-            .input("StartDate", sql.Date, new Date(startDate))
-            .input("EndDate", sql.Date, new Date(endDate))
-            .input("ProjectId", sql.VarChar, projectId); // <-- Add this
-
-        const query = `
-      SELECT 
-        lad.LabourId,
-        lad.[Date],
-        lad.FirstPunch,
-        lad.LastPunch,
-        lad.TotalHours,
-        lad.Overtime,
-        lad.Status,
-        lad.OnboardName,
-        lad.projectName,
-        lad.WorkingHours,
-        lo.Name,
-        lo.Id,
-        lo.projectName
-      FROM 
-        [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceDetails] lad
-      INNER JOIN 
-        [LabourOnboardingForm_TEST].[dbo].[labourOnboarding] lo
-        ON lad.LabourId = lo.LabourId
-      WHERE 
-        lad.LabourId = @LabourId
-        AND lad.[Date] BETWEEN @StartDate AND @EndDate
-        AND lo.Id = @ProjectId  -- <-- Filter by project ID
-      ORDER BY 
-        lad.[Date] DESC;
-    `;
-
-        const result = await request.query(query);
-        const records = result.recordset;
-        console.log(result , '', 'records');
-        
-
-        if (!records || records.length === 0) {
-            return res.status(404).json({ message: "No attendance records found for the given Labour ID and date range." });
-        }
-        const htmlContent = `
+    if (!attendanceData || attendanceData.length === 0) {
+      return res.status(404).json({
+        message: 'No attendance data found for the selected criteria.'
+      });
+    }
+    console.log('attandace' , attendanceData);
+    
+    // Build HTML with table columns in specific order
+    const html = `
       <html>
         <head>
           <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
+            body { font-family: Arial, sans-serif; padding: 20px; }
             h2 { text-align: center; }
+            .meta { margin-bottom: 10px; font-size: 14px; }
             table {
               width: 100%;
               border-collapse: collapse;
               margin-top: 20px;
+              font-size: 12px;
             }
             th, td {
               border: 1px solid #ccc;
-              padding: 8px;
+              padding: 6px;
               text-align: center;
-              font-size: 12px;
             }
             th {
               background-color: #f2f2f2;
-            }
-            .meta-info {
-              margin: 10px 0;
+              font-weight: bold;
             }
           </style>
         </head>
         <body>
-          <h2>Attendance Report for Labour ID: ${labourId}</h2>
-          <div class="meta-info">
-            <p><strong>Labour Name:</strong> ${records[0].OnboardName || 'N/A'}</p>
-            <p><strong>Project Name:</strong> ${records[0].projectName || 'N/A'}</p>
-         
+          <h2>Labour Attendance Report</h2>
+          <div class="meta">
+            <p><strong>Project:</strong> ${projectName}</p>
+            <p><strong>Department:</strong> ${department || 'All'}</p>
+            <p><strong>From:</strong> ${moment(startDate).format("YYYY-MM-DD")} <strong>To:</strong> ${moment(endDate).format("YYYY-MM-DD")}</p>
           </div>
 
           <table>
             <thead>
               <tr>
-                <th>Date</th>
-                <th>First Punch</th>
-                <th>Last Punch</th>
-                <th>Total Hours</th>
-                <th>Overtime</th>
-                <th>Status</th>
+                <th>Labour ID</th>
+                <th>Name</th>
+                <th>Business Unit</th>
+                <th>Department</th>
                 <th>Working Hours</th>
+                <th>From Date</th>
+                <th>Selected Month</th>
+                <th>Total Days</th>
+                <th>Present</th>
+                <th>Half Days</th>
+                <th>Absent</th>
+                <th>Miss Punch</th>
+                <th>OT Hours</th>
+                <th>OT (RoundOff)</th>
+                <th>Payroll OT</th>
               </tr>
             </thead>
             <tbody>
-              ${records.map(row => `
+              ${attendanceData.map(row => `
                 <tr>
-                  <td>${moment(row.Date).format('YYYY-MM-DD')}</td>
-                  <td>${row.FirstPunch || '-'}</td>
-                  <td>${row.LastPunch || '-'}</td>
-                  <td>${row.TotalHours ?? 0}</td>
-                  <td>${row.Overtime ?? 0}</td>
-                  <td>${row.Status || '-'}</td>
-                  <td>${row.WorkingHours ?? 0}</td>
+                  <td>${row.LabourID}</td>
+                  <td>${row.name}</td>
+                  <td>${row.businessUnit}</td>
+                  <td>${row.departmentName}</td>
+                  <td>${row.workingHours}</td>
+                  <td>${moment(row.From_Date).format('YYYY-MM-DD')}</td>
+                  <td>${row.SelectedMonth}</td>
+                  <td>${row.TotalDays}</td>
+                  <td>${row.PresentDays}</td>
+                  <td>${row.HalfDays}</td>
+                  <td>${row.AbsentDays}</td>
+                  <td>${row.MissPunchDays}</td>
+                  <td>${row.TotalOvertimeHours}</td>
+                  <td>${row.RoundOffTotalOvertime}</td>
+                  <td>${row.PayrollCalRoundoffTotalOvertime}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -5243,26 +5234,27 @@ const generateAttendancePDF = async (req, res) => {
       </html>
     `;
 
-        const browser = await puppeteer.launch({ headless: true });
-        const page = await browser.newPage();
-        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'networkidle0' });
 
-        const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true });
-        await browser.close();
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
+    });
 
-        res.set({
-            'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename=Attendance_${labourId}.pdf`,
-            'Content-Length': pdfBuffer.length
-        });
+    await browser.close();
 
-        res.send(pdfBuffer);
-
-    } catch (error) {
-        console.error("Error generating PDF:", error);
-        res.status(500).json({ message: "Failed to generate attendance PDF." });
-    }
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=attendance_report_${projectName}.pdf`);
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Error generating attendance PDF:', error);
+    res.status(500).json({ message: 'Error generating attendance PDF.' });
+  }
 };
+
 
 
 
