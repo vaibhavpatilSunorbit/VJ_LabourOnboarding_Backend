@@ -160,7 +160,7 @@ async function createRecord(req, res) {
             labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, labourCategoryId } = req.body;
+            contractorName, contractorNumber, designation, title, Marital_Status, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, labourCategoryId } = req.body;
 
         const finalOnboardName = Array.isArray(OnboardName) ? OnboardName[0] : OnboardName;
 
@@ -280,6 +280,7 @@ const pool = await poolPromise4;
             }
         }
 
+        let companyName = companyNameResult.recordset[0].Company_Name
         // 3. Department Info
         const departmentRequest = pool5.request();
         departmentRequest.input('departmentId', sql.Int, departmentId);
@@ -302,7 +303,7 @@ const pool = await poolPromise4;
             dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining, From_Date: fromDate.toISOString().split('T')[0], Period: period, address, pincode, taluka,
             district, village, state, emergencyContact, photoSrc: photoSrcUrl, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours, location, SalaryBu: salaryBu, businessUnit,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName: finalOnboardName, expiryDate, ValidTill: validTillDate.toISOString().split('T')[0],
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName: companyName, Induction_Date, Inducted_By, OnboardName: finalOnboardName, expiryDate, ValidTill: validTillDate.toISOString().split('T')[0],
             retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location, CreationDate: creationDate.toISOString(), departmentId, departmentName, designationId, labourCategoryId
         });
         //console.log('Inserted OnboardName:', finalOnboardName);
@@ -1382,6 +1383,19 @@ async function searchLabours(req, res) {
     }
 }
 
+
+
+async function searchLaboursForAttendance(req, res) {
+    const { q } = req.query;
+
+    try {
+        const results = await labourModel.searchForAttendance(q);
+        return res.json(results);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+}
 
 
 async function getAllLabours(req, res) {
@@ -5192,5 +5206,6 @@ module.exports = {
     searchLaboursFromVariableInput,
     getAttendanceReportAndLabourOnboardingJoincontroller,
     getAllLaboursAttendanceDaily,
-    updateOTHoursAttendance
+    updateOTHoursAttendance,
+    searchLaboursForAttendance
 };

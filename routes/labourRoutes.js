@@ -87,6 +87,8 @@ router.post('/sendWagesForApproval', labourController.markWagesForApprovalContro
 router.put('/admin/approveWages', labourController.approveWagesControllerAdmin);
 router.put('/admin/rejectWages', labourController.rejectWagesControllerAdmin);
 
+router.get('/searchForAttendance', labourController.searchLaboursForAttendance);
+
 router.get('/exportMonthlyWagesExcel', labourController.exportMonthlyWagesExcel);
 router.get('/exportFixedWagesExcel', labourController.exportFixedWagesExcel);
  
