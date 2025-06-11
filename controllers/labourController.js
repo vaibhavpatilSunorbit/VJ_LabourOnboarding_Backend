@@ -5140,14 +5140,12 @@ const generateAttendancePDF = async (req, res) => {
         message: 'Missing required parameters: startDate, endDate, or projectName.'
       });
     }
-
     const attendanceData = await labourModel.getAttendanceByDateRange(
       projectName,
       startDate,
       endDate,
       department
     );
-
     if (!attendanceData || attendanceData.length === 0) {
       return res.status(404).json({
         message: 'No attendance data found for the selected criteria.'
@@ -5233,19 +5231,15 @@ const generateAttendancePDF = async (req, res) => {
         </body>
       </html>
     `;
-
     const browser = await puppeteer.launch({ headless: true });
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'networkidle0' });
-
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
     });
-
     await browser.close();
-
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=attendance_report_${projectName}.pdf`);
     res.send(pdfBuffer);
