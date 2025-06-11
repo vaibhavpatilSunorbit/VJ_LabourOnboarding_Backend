@@ -174,7 +174,7 @@ async function registerData(labourData) {
             }
         });
 
-        //console.log('Inserting data into database for OnboardName:', labourData.OnboardName);
+        console.log('Inserting data into database for OnboardName:', labourData.OnboardName);
         const result = await request.query(`
       INSERT INTO labourOnboarding (
         LabourID, labourOwnership, uploadAadhaarFront, uploadAadhaarBack, uploadIdProof, name, aadhaarNumber,
@@ -189,7 +189,7 @@ async function registerData(labourData) {
         @labourCategory, @department, @workingHours, @contractorName, @contractorNumber, @designation,
         'Pending', 0, @title, @Marital_Status, @companyName, @Induction_Date, @Inducted_By, @uploadInductionDoc, @OnboardName,  @ValidTill, @location, @ConfirmDate, @retirementDate, @SalaryBu, @WorkingBu, @CreationDate, @businessUnit, @departmentId, @designationId, @labourCategoryId, @departmentName)
       `);
-        //console.log('Data successfully inserted for OnboardName:', labourData.OnboardName);
+        console.log('Data successfully inserted for OnboardName:', labourData.OnboardName);
         return result.recordset;
     } catch (error) {
         throw error;
@@ -996,6 +996,54 @@ async function search(query) {
     } catch (error) {
         throw error;
     }
+}
+
+async function searchForAttendance(query) {
+    const pool       = await poolPromise;
+    const likeQuery  = `%${query}%`;
+
+    // --- 1️⃣ Primary hit on 'Approved'
+    let { recordset } = await pool.request()
+        .input('query',  sql.NVarChar, likeQuery)
+        .query(`
+            SELECT *
+            FROM   labourOnboarding
+            WHERE  status = 'Approved'
+              AND ( name           LIKE @query
+                 OR aadhaarNumber  LIKE @query
+                 OR LabourID       LIKE @query
+                 OR OnboardName    LIKE @query
+                 OR workingHours   LIKE @query
+                 OR businessUnit   LIKE @query
+                 OR designation    LIKE @query
+                 OR location       LIKE @query
+                 OR departmentName LIKE @query )
+        `);
+
+       if (recordset.length > 0) {
+        console.log(`[AttendanceSearch] Status cohort: Approved | rows: ${recordset.length}`);
+        return recordset;          // exit early on success
+    }
+
+    // --- 2️⃣ Fallback on 'Disable'
+    ({ recordset } = await pool.request()
+        .input('query', sql.NVarChar, likeQuery)
+        .query(`
+            SELECT *
+            FROM   labourOnboarding
+            WHERE  status = 'Disable'
+              AND ( name           LIKE @query
+                 OR aadhaarNumber  LIKE @query
+                 OR LabourID       LIKE @query
+                 OR OnboardName    LIKE @query
+                 OR workingHours   LIKE @query
+                 OR businessUnit   LIKE @query
+                 OR designation    LIKE @query
+                 OR location       LIKE @query
+                 OR departmentName LIKE @query )
+        `));
+ console.log(`[AttendanceSearch] Status cohort: Disable | rows: ${recordset.length}`);
+    return recordset;                             // may be [] if nothing disables either
 }
 
 async function getAllLabours() {
@@ -5966,6 +6014,7 @@ module.exports = {
     getVariablePayAndLabourOnboardingJoin,
     getHolidayDates,
     searchAttendance,
+    searchForAttendance,
     searchLaboursFromSiteTransfer,
     updateTotalOvertimeHours,
     searchFromVariableInput,
