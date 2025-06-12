@@ -16,9 +16,9 @@ const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
-const baseUrl = 'http://localhost:4000/uploads/';
+// const baseUrl = 'http://localhost:4000/uploads/';
 // const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
-// const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
+const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
 
@@ -27,28 +27,26 @@ const baseUrl = 'http://localhost:4000/uploads/';
 //     //console.log('Request Body: AadhaarNumber:', aadhaarNumber);
 
 //     try {
-//         const labourRecords = await labourModel.checkAadhaarExists(aadhaarNumber);
+//         const labourRecord = await labourModel.checkAadhaarExists(aadhaarNumber);
 
-//         if (labourRecords && labourRecords.length > 0) {
-//             // Check if any record matches specific conditions
-//             const resubmittedRecord = labourRecords.find(record => 
-//                 (record.status === 'Resubmitted' && record.isApproved === 3) ||
-//                 (record.status === 'Disable' && record.isApproved === 4)
-//             );
-
-//             if (resubmittedRecord) {
-//                 //console.log("Returning skipCheck for Resubmitted or Disable with specific isApproved values");
-//                 return res.status(200).json({ exists: false, skipCheck: true, LabourID: resubmittedRecord.LabourID });
+//         if (labourRecord) {
+//             // Condition 1: Check for 'Resubmitted' and 'isApproved' === 3
+//             if (labourRecord.status === 'Resubmitted' && labourRecord.isApproved === 3) {
+//                 //console.log("Returning skipCheck for Resubmitted and isApproved 3");
+//                 return res.status(200).json({ exists: false, skipCheck: true, LabourID: labourRecord.LabourID });
 //             }
 
-//             // Extract all LabourIDs
-//             const labourIDs = labourRecords.map(record => record.LabourID);
+//             // Condition 2: If LabourID exists, return LabourID
+//             if (labourRecord.LabourID) {
+//                 //console.log(`LabourID found: ${labourRecord.LabourID}`);
+//                 return res.status(200).json({
+//                     exists: true,
+//                     LabourID: labourRecord.LabourID
+//                 });
+//             }
 
-//             //console.log(`LabourIDs found: ${labourIDs}`);
-//             return res.status(200).json({
-//                 exists: true,
-//                 LabourIDs: labourIDs // Return all LabourIDs as an array
-//             });
+//             //console.log("Returning exists true for regular record");
+//             return res.status(200).json({ exists: true });
 //         } else {
 //             //console.log("Returning exists false");
 //             return res.status(200).json({ exists: false });
@@ -120,17 +118,6 @@ async function getNextUniqueID(req, res) {
 // };
 
 
-// async function getNextUniqueID(req, res) {
-//     try {
-//         const nextID = await labourModel.getNextUniqueID();
-//         res.json({ nextID });
-//     } catch (error) {
-//         console.error('Error in getNextUniqueID:', error.message);
-//         res.status(500).json({ message: 'Internal server error' });
-//     };
-// };
-
-
 async function getCommandStatus(req, res) {
     const commandId = req.params.commandId;
 
@@ -160,7 +147,7 @@ async function createRecord(req, res) {
             labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours,
-            contractorName, contractorNumber, designation, title, Marital_Status, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, labourCategoryId } = req.body;
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId, labourCategoryId } = req.body;
 
         const finalOnboardName = Array.isArray(OnboardName) ? OnboardName[0] : OnboardName;
 
@@ -280,7 +267,6 @@ const pool = await poolPromise4;
             }
         }
 
-        let companyName = companyNameResult.recordset[0].Company_Name
         // 3. Department Info
         const departmentRequest = pool5.request();
         departmentRequest.input('departmentId', sql.Int, departmentId);
@@ -303,7 +289,7 @@ const pool = await poolPromise4;
             dateOfBirth, contactNumber, gender, dateOfJoining, Group_Join_Date: dateOfJoining, ConfirmDate: dateOfJoining, From_Date: fromDate.toISOString().split('T')[0], Period: period, address, pincode, taluka,
             district, village, state, emergencyContact, photoSrc: photoSrcUrl, bankName, branch,
             accountNumber, ifscCode, projectName, labourCategory, department, workingHours, location, SalaryBu: salaryBu, businessUnit,
-            contractorName, contractorNumber, designation, title, Marital_Status, companyName: companyName, Induction_Date, Inducted_By, OnboardName: finalOnboardName, expiryDate, ValidTill: validTillDate.toISOString().split('T')[0],
+            contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName: finalOnboardName, expiryDate, ValidTill: validTillDate.toISOString().split('T')[0],
             retirementDate: retirementDate.toISOString().split('T')[0], WorkingBu: location, CreationDate: creationDate.toISOString(), departmentId, departmentName, designationId, labourCategoryId
         });
         //console.log('Inserted OnboardName:', finalOnboardName);
@@ -876,7 +862,7 @@ async function updateRecordWithDisable(req, res) {
             designation, title, Marital_Status, companyName, Induction_Date, Inducted_By,
             OnboardName, expiryDate, departmentId, designationId, isResubmit, hideResubmit , isCompanyTransfer, isSiteTransfer, Reject_Reason
         } = req.body;
-        console.log("req.body-->", req.body)
+        // console.log("req.body-->", req.body)
 
         const parseBitField = (val) => {
             if (val === null || val === undefined || val === '' || val === 'null') return null;
@@ -1385,19 +1371,6 @@ async function searchLabours(req, res) {
 
 
 
-async function searchLaboursForAttendance(req, res) {
-    const { q } = req.query;
-
-    try {
-        const results = await labourModel.searchForAttendance(q);
-        return res.json(results);
-    } catch (error) {
-        console.error(error);
-        return res.status(500).json({ error: 'Internal server error' });
-    }
-}
-
-
 async function getAllLabours(req, res) {
     try {
         const labours = await labourModel.getAllLabours();
@@ -1428,38 +1401,7 @@ async function approveLabour(req, res) {
     }
 }
 
-
-// async function approveLabour(req, res) {
-//     const id = parseInt(req.params.id, 10);
-//     // //console.log(`Received id: ${req.params.id}, Parsed id: ${id}`);
-
-//     if (isNaN(id)) {
-//         return res.status(400).json({ message: 'Invalid labour ID' });
-//     }
-
-//     try {
-//         const nextID = await labourModel.getNextUniqueID(); // Generate next unique LabourID
-//         // const onboardName = req.body.OnboardName;
-
-//         //console.log('Approving labour ID:', id);
-//         //console.log('Generated nextID:', nextID);
-//         // //console.log('OnboardName:', onboardName);
-
-//         const success = await labourModel.approveLabour(id, nextID);
-//         if (success) {
-//             res.json({ success: true, message: 'Labour approved successfully.', data: success });
-//         } else {
-//             res.status(404).json({ message: 'Labour not found or already approved.' });
-//         }
-//     } catch (error) {
-//         console.error('Error in approveLabour:', error.message);
-//         res.status(500).json({ message: 'Internal server error' });
-//     }
-// }
-
 // --------------------------------  changes disabel approve 14-11-2024 --------------
-
-
 async function approveDisableLabour(req, res) {
     const id = parseInt(req.params.id, 10);
     const { labourID } = req.body;
@@ -1996,7 +1938,7 @@ function roundOvertime(overtimeHours) {
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
     console.log("yesterday", yesterday)
-    yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 12); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
     console.log("formattedYesterday",formattedYesterday)
 
@@ -3504,7 +3446,7 @@ async function getCachedAttendance(req, res) {
 // });
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('20 12 * * *', async () => {
+cron.schedule('55 10 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
@@ -5206,6 +5148,5 @@ module.exports = {
     searchLaboursFromVariableInput,
     getAttendanceReportAndLabourOnboardingJoincontroller,
     getAllLaboursAttendanceDaily,
-    updateOTHoursAttendance,
-    searchLaboursForAttendance
+    updateOTHoursAttendance
 };
