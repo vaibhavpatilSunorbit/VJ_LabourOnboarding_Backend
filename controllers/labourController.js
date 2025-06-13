@@ -16,7 +16,7 @@ const { createLogger, format, transports } = require('winston');
 const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');
 const moment = require('moment');
-const puppeteer = require('puppeteer');
+const pdf = require('html-pdf');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 const baseUrl = 'http://localhost:4000/uploads/';
@@ -5287,25 +5287,30 @@ const generateAttendancePDF = async (req, res) => {
       </html>
     `;
 
-    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
-    const page = await browser.newPage();
-    await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
-
-    const pdfBuffer = await page.pdf({
+    // Generate PDF using html-pdf
+    pdf.create(fullHtml, {
       format: 'A4',
-      landscape: false,
-      printBackground: true,
-      margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
+      orientation: 'portrait',
+      border: {
+        top: '10mm',
+        right: '10mm',
+        bottom: '10mm',
+        left: '10mm'
+      }
+    }).toBuffer((err, buffer) => {
+      if (err) {
+        console.error('PDF generation error:', err);
+        return res.status(500).json({ message: 'Failed to generate PDF' });
+      }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename=attendance_report_${moment().format('YYYYMMDD')}.pdf`
+      );
+      res.end(buffer);
     });
 
-    await browser.close();
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename=attendance_report_${moment().format('YYYYMMDD')}.pdf`
-    );
-    res.end(pdfBuffer);
   } catch (error) {
     console.error('Error generating attendance PDF:', error);
     if (!res.headersSent) {
@@ -5313,7 +5318,6 @@ const generateAttendancePDF = async (req, res) => {
     }
   }
 };
-
 
 
 
