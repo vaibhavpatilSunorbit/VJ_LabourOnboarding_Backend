@@ -4231,6 +4231,7 @@ async function updateTotalOvertimeHours(labourId, selectedMonth) {
 
         const totalOvertime = overtimeResult.recordset[0].TotalOvertime || 0;
 
+        
         // Update LabourAttendanceSummary with the computed overtime total
         await pool
             .request()
