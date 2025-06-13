@@ -14,6 +14,9 @@ const logger = require('../logger'); // Assuming logger is defined in logger.js
 const { createLogger, format, transports } = require('winston');
 const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');
+const moment = require('moment');
+const puppeteer = require('puppeteer');
+
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 const baseUrl = 'http://localhost:4000/uploads/';
@@ -5136,6 +5139,189 @@ async function updateOTHoursAttendance(req, res) {
 }
 
 
+const generateAttendancePDF = async (req, res) => {
+  try {
+    const { startDate, endDate, projectName, department } = {
+      ...req.body,
+      ...req.query,
+      ...req.params
+    };
+
+    if (!startDate || !endDate || !projectName) {
+      return res.status(400).json({
+        message: 'Missing required parameters: startDate, endDate, or projectName.'
+      });
+    }
+
+    const projectNameStr = Array.isArray(projectName) ? projectName.join(',') : projectName;
+    const departmentStr = department
+      ? (Array.isArray(department) ? department.join(',') : department)
+      : '';
+
+    const attendanceData = await labourModel.getAttendanceByDateRange(
+      projectNameStr,
+      startDate,
+      endDate,
+      departmentStr
+    );
+
+    if (!attendanceData || attendanceData.length === 0) {
+      return res.status(404).json({
+        message: 'No attendance data found for the selected criteria.'
+      });
+    }
+
+    const labourGrouped = {};
+    attendanceData.forEach(entry => {
+      const labourId = entry.LabourId;
+      const date = new Date(entry.Date).toISOString().split('T')[0];
+
+      if (!labourGrouped[labourId]) {
+        labourGrouped[labourId] = {
+          name: entry.name,
+          department: entry.departmentName,
+          project: entry.ProjectName,
+          businessUnit: entry.BusinessUnit,
+          dates: {}
+        };
+      }
+
+      labourGrouped[labourId].dates[date] = {
+        status: entry.Status || '-',
+        inTime: entry.FirstPunchManually || '',
+        outTime: entry.LastPunchManually || '',
+        ot: entry.OvertimeManually || '',
+        remark: entry.RemarkManually || ''
+      };
+    });
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const dateList = [];
+    while (start <= end) {
+      dateList.push(new Date(start).toISOString().split('T')[0]);
+      start.setDate(start.getDate() + 1);
+    }
+
+    let labourSections = '';
+    const labourEntries = Object.entries(labourGrouped);
+    for (let i = 0; i < labourEntries.length; i++) {
+      const [labourId, data] = labourEntries[i];
+
+      const statusRow = dateList.map(date => `<td>${data.dates[date]?.status || '-'}</td>`).join('');
+      const inTimeRow = dateList.map(date => `<td>${data.dates[date]?.inTime || ''}</td>`).join('');
+      const outTimeRow = dateList.map(date => `<td>${data.dates[date]?.outTime || ''}</td>`).join('');
+      const otRow = dateList.map(date => `<td>${data.dates[date]?.ot || ''}</td>`).join('');
+      const remarkRow = dateList.map(date => `<td>${data.dates[date]?.remark || ''}</td>`).join('');
+
+      const formattedDates = dateList.map(d => {
+        const [year, month, day] = d.split('-');
+        return `${day}-${month}-${year}`;
+      });
+
+      labourSections += `
+        <div class="labour-card ${i % 3 === 2 ? 'page-break' : ''}">
+          <h4>${labourId} - ${data.name}</h4>
+          <p><strong>Dept:</strong> ${data.department}<br><strong>Proj:</strong> ${data.project}<br><strong>Unit:</strong> ${data.businessUnit}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Details</th>
+                ${formattedDates.map(d => `<th>${d}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Status</td>${statusRow}</tr>
+              <tr><td>In Time</td>${inTimeRow}</tr>
+              <tr><td>Out Time</td>${outTimeRow}</tr>
+              <tr><td>OT</td>${otRow}</tr>
+              <tr><td>Remark</td>${remarkRow}</tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    const fullHtml = `
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h2 { text-align: center; color: #d32f2f; }
+            h4 { margin: 5px 0; color: #1976d2; }
+
+            .labour-card {
+              border: 1px solid #ccc;
+              padding: 10px;
+              margin-bottom: 20px;
+              font-size: 10px;
+              page-break-inside: avoid;
+            }
+
+            .page-break {
+              page-break-after: always;
+            }
+
+            table {
+              border-collapse: collapse;
+              width: 100%;
+              font-size: 9px;
+              table-layout: fixed;
+            }
+
+            th, td {
+              border: 1px solid #999;
+              padding: 2px;
+              text-align: center;
+              word-wrap: break-word;
+              vertical-align: top;
+            }
+
+            th {
+              background-color: #f2f2f2;
+            }
+
+            tr:nth-child(even) td {
+              background: #f9f9f9;
+            }
+          </style>
+        </head>
+        <body>
+          <h2>Labour Attendance Report</h2>
+          <p style="text-align:center;"><strong>From:</strong> ${startDate} &nbsp;&nbsp; <strong>To:</strong> ${endDate}</p>
+          ${labourSections}
+        </body>
+      </html>
+    `;
+
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+    const page = await browser.newPage();
+    await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      landscape: false,
+      printBackground: true,
+      margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
+    });
+
+    await browser.close();
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=attendance_report_${moment().format('YYYYMMDD')}.pdf`
+    );
+    res.end(pdfBuffer);
+  } catch (error) {
+    console.error('Error generating attendance PDF:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Error generating attendance PDF.' });
+    }
+  }
+};
+
+
 module.exports = {
     handleCheckAadhaar,
     getNextUniqueID,
@@ -5207,5 +5393,6 @@ module.exports = {
     getAttendanceReportAndLabourOnboardingJoincontroller,
     getAllLaboursAttendanceDaily,
     updateOTHoursAttendance,
-    searchLaboursForAttendance
+    searchLaboursForAttendance,
+    generateAttendancePDF
 };
