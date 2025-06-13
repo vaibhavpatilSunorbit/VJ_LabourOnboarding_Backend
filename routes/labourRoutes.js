@@ -64,6 +64,7 @@ router.get('/showAttendanceCalenderSingleLabour/:id', labourController.getAttend
 router.post('/updateOTHoursAttendance', labourController.updateOTHoursAttendance);
 
 router.get('/export', labourController.exportAttendance);
+router.get('/exportAttendanceExcel', labourController.generateAttendancePDF);
 router.post('/import', upload.single('file'), labourController.importAttendance);
 
 
