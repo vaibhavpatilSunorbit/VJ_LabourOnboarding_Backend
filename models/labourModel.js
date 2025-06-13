@@ -4058,6 +4058,8 @@ async function rejectAttendance(id, rejectReason) {
 //         );
 //     return result.recordset;
 // };
+
+
 async function getAttendanceByDateRange(projectNameStr, startDate, endDate, departmentStr ) {
     const pool = await poolPromise;
 

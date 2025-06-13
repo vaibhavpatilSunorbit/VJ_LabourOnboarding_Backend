@@ -876,7 +876,7 @@ async function updateRecordWithDisable(req, res) {
             emergencyContact, bankName, branch, accountNumber, ifscCode, projectName,
             labourCategory, department, workingHours, contractorName, contractorNumber,
             designation, title, Marital_Status, companyName, Induction_Date, Inducted_By,
-            OnboardName, expiryDate, departmentId, designationId, isResubmit, hideResubmit , isCompanyTransfer, isSiteTransfer, Reject_Reason
+            OnboardName, expiryDate, departmentId, designationId, isResubmit, hideResubmit, isCompanyTransfer, isSiteTransfer, Reject_Reason
         } = req.body;
         console.log("req.body-->", req.body)
 
@@ -4364,8 +4364,8 @@ async function approveAttendanceController(req, res) {
         const result = await labourModel.approveAttendance(AttendanceId);
         res.status(200).json(result);
 
-        console.log('Approval successful',result);
-        
+        console.log('Approval successful', result);
+
     } catch (error) {
         console.error('Error in approving attendance:', error);
         res.status(error.statusCode || 500).json({ message: error.message });
@@ -5131,88 +5131,100 @@ async function updateOTHoursAttendance(req, res) {
     }
 }
 
+function formatTime(timeStr) {
+    return timeStr && timeStr.includes(':') ? timeStr.slice(0, 5) : timeStr;
+}
 
 const generateAttendancePDF = async (req, res) => {
-  try {
-    const { startDate, endDate, projectName, department } = {
-      ...req.body,
-      ...req.query,
-      ...req.params
-    };
-
-    if (!startDate || !endDate || !projectName) {
-      return res.status(400).json({
-        message: 'Missing required parameters: startDate, endDate, or projectName.'
-      });
-    }
-
-    const projectNameStr = Array.isArray(projectName) ? projectName.join(',') : projectName;
-    const departmentStr = department
-      ? (Array.isArray(department) ? department.join(',') : department)
-      : '';
-
-    const attendanceData = await labourModel.getAttendanceByDateRange(
-      projectNameStr,
-      startDate,
-      endDate,
-      departmentStr
-    );
-
-    if (!attendanceData || attendanceData.length === 0) {
-      return res.status(404).json({
-        message: 'No attendance data found for the selected criteria.'
-      });
-    }
-
-    const labourGrouped = {};
-    attendanceData.forEach(entry => {
-      const labourId = entry.LabourId;
-      const date = new Date(entry.Date).toISOString().split('T')[0];
-
-      if (!labourGrouped[labourId]) {
-        labourGrouped[labourId] = {
-          name: entry.name,
-          department: entry.departmentName,
-          project: entry.ProjectName,
-          businessUnit: entry.BusinessUnit,
-          dates: {}
+    try {
+        const { startDate, endDate, projectName, department } = {
+            ...req.body,
+            ...req.query,
+            ...req.params
         };
-      }
 
-      labourGrouped[labourId].dates[date] = {
-        status: entry.Status || '-',
-        inTime: entry.FirstPunchManually || '',
-        outTime: entry.LastPunchManually || '',
-        ot: entry.OvertimeManually || '',
-        remark: entry.RemarkManually || ''
-      };
-    });
+        if (!startDate || !endDate || !projectName) {
+            return res.status(400).json({
+                message: 'Missing required parameters: startDate, endDate, or projectName.'
+            });
+        }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const dateList = [];
-    while (start <= end) {
-      dateList.push(new Date(start).toISOString().split('T')[0]);
-      start.setDate(start.getDate() + 1);
-    }
+        const projectNameStr = Array.isArray(projectName) ? projectName.join(',') : projectName;
+        const departmentStr = department
+            ? (Array.isArray(department) ? department.join(',') : department)
+            : '';
 
-    let labourSections = '';
-    const labourEntries = Object.entries(labourGrouped);
-    for (let i = 0; i < labourEntries.length; i++) {
-      const [labourId, data] = labourEntries[i];
+        const attendanceData = await labourModel.getAttendanceByDateRange(
+            projectNameStr,
+            startDate,
+            endDate,
+            departmentStr
+        );
 
-      const statusRow = dateList.map(date => `<td>${data.dates[date]?.status || '-'}</td>`).join('');
-      const inTimeRow = dateList.map(date => `<td>${data.dates[date]?.inTime || ''}</td>`).join('');
-      const outTimeRow = dateList.map(date => `<td>${data.dates[date]?.outTime || ''}</td>`).join('');
-      const otRow = dateList.map(date => `<td>${data.dates[date]?.ot || ''}</td>`).join('');
-      const remarkRow = dateList.map(date => `<td>${data.dates[date]?.remark || ''}</td>`).join('');
+        if (!attendanceData || attendanceData.length === 0) {
+            return res.status(404).json({
+                message: 'No attendance data found for the selected criteria.'
+            });
+        }
 
-      const formattedDates = dateList.map(d => {
-        const [year, month, day] = d.split('-');
-        return `${day}-${month}-${year}`;
-      });
+        const labourGrouped = {};
+        attendanceData.forEach(entry => {
+            const labourId = entry.LabourId;
+            const date = new Date(entry.Date).toISOString().split('T')[0];
 
-      labourSections += `
+            if (!labourGrouped[labourId]) {
+                labourGrouped[labourId] = {
+                    name: entry.name,
+                    department: entry.departmentName,
+                    project: entry.ProjectName,
+                    businessUnit: entry.BusinessUnit,
+                    dates: {}
+                };
+            }
+
+            labourGrouped[labourId].dates[date] = {
+                status: entry.Status || '-',
+                inTime: entry.FirstPunchManually || '',
+                outTime: entry.LastPunchManually || '',
+                ot: entry.OvertimeManually || '',
+                remark: entry.RemarkManually || ''
+            };
+        });
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const dateList = [];
+        while (start <= end) {
+            dateList.push(new Date(start).toISOString().split('T')[0]);
+            start.setDate(start.getDate() + 1);
+        }
+
+        let labourSections = '';
+        const labourEntries = Object.entries(labourGrouped);
+        for (let i = 0; i < labourEntries.length; i++) {
+            const [labourId, data] = labourEntries[i];
+
+            const statusRow = dateList.map(date => `<td>${data.dates[date]?.status || '-'}</td>`).join('');
+            const inTimeRow = dateList.map(date => {
+                const time = formatTime(data.dates[date]?.inTime || '');
+                return `<td>${time}</td>`;
+            }).join('');
+
+            const outTimeRow = dateList.map(date => {
+                const time = formatTime(data.dates[date]?.outTime || '');
+                return `<td>${time}</td>`;
+            }).join('');
+            //   const inTimeRow = dateList.map(date => `<td>${data.dates[date]?.inTime || ''}</td>`).join('');
+            //   const outTimeRow = dateList.map(date => `<td>${data.dates[date]?.outTime || ''}</td>`).join('');
+            const otRow = dateList.map(date => `<td>${data.dates[date]?.ot || ''}</td>`).join('');
+            const remarkRow = dateList.map(date => `<td>${data.dates[date]?.remark || ''}</td>`).join('');
+
+            const formattedDates = dateList.map(d => {
+                const [year, month, day] = d.split('-');
+                return `${day}-${month}-${year}`;
+            });
+
+            labourSections += `
         <div class="labour-card ${i % 3 === 2 ? 'page-break' : ''}">
           <h4>${labourId} - ${data.name}</h4>
           <p><strong>Dept:</strong> ${data.department}<br><strong>Proj:</strong> ${data.project}<br><strong>Unit:</strong> ${data.businessUnit}</p>
@@ -5233,9 +5245,9 @@ const generateAttendancePDF = async (req, res) => {
           </table>
         </div>
       `;
-    }
+        }
 
-    const fullHtml = `
+        const fullHtml = `
       <html>
         <head>
           <style>
@@ -5287,31 +5299,31 @@ const generateAttendancePDF = async (req, res) => {
       </html>
     `;
 
-    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
-    const page = await browser.newPage();
-    await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+        const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+        const page = await browser.newPage();
+        await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
 
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      landscape: false,
-      printBackground: true,
-      margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
-    });
+        const pdfBuffer = await page.pdf({
+            format: 'A4',
+            landscape: false,
+            printBackground: true,
+            margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
+        });
 
-    await browser.close();
+        await browser.close();
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename=attendance_report_${moment().format('YYYYMMDD')}.pdf`
-    );
-    res.end(pdfBuffer);
-  } catch (error) {
-    console.error('Error generating attendance PDF:', error);
-    if (!res.headersSent) {
-      res.status(500).json({ message: 'Error generating attendance PDF.' });
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader(
+            'Content-Disposition',
+            `attachment; filename=attendance_report_${moment().format('YYYYMMDD')}.pdf`
+        );
+        res.end(pdfBuffer);
+    } catch (error) {
+        console.error('Error generating attendance PDF:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ message: 'Error generating attendance PDF.' });
+        }
     }
-  }
 };
 
 
