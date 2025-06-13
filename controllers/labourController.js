@@ -9,11 +9,14 @@ const multer = require('multer');
 const { upload } = require('../server');
 const xml2js = require('xml2js');
 const labourModel = require('../models/labourModel');
+const getAttendanceByDateRange = require('../models/labourModel');
 const cron = require('node-cron');
 const logger = require('../logger'); // Assuming logger is defined in logger.js   
 const { createLogger, format, transports } = require('winston');
 const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');
+const moment = require('moment');
+const puppeteer = require('puppeteer');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 const baseUrl = 'http://localhost:4000/uploads/';
@@ -199,7 +202,7 @@ async function createRecord(req, res) {
 
         // **********************************  NEW  ********************
         // Primary check on Framework.BusinessUnit (Server 1)
-const pool = await poolPromise4;
+        const pool = await poolPromise4;
         const isNumeric = !isNaN(projectName);
         const projectRequest = pool.request();
         projectRequest.input('projectName', isNumeric ? sql.Int : sql.VarChar, projectName);
@@ -942,7 +945,7 @@ async function updateRecordWithDisable(req, res) {
             }
             return null; // No data available
         };
-   
+
 
         const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
         const backImageUrl = processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
@@ -1065,14 +1068,14 @@ async function updateRecordWithDisable(req, res) {
             return res.status(404).send('Department not found');
         }
 
-      
-        
-        
+
+
+
 
         const departmentName = departmentResult.recordset[0].Description;
         const creationDate = new Date();
 
-       
+
 
         const data = await labourModel.registerDataUpdateDisable({
             LabourID, labourOwnership,
@@ -1116,17 +1119,17 @@ async function updateRecordWithDisable(req, res) {
 
 const sanitizeInt = v =>
     (v !== undefined && v !== null && v !== '' && v !== 'null') ? parseInt(v, 10) : null;
-  
-  // converts various truthy / falsy strings → boolean / null
-  const parseBit = v => {
+
+// converts various truthy / falsy strings → boolean / null
+const parseBit = v => {
     if (v === null || v === undefined || v === '' || v === 'null') return null;
     if (typeof v === 'boolean') return v;
     const s = String(v).trim().toLowerCase();
     if (s === 'true' || s === '1') return true;
     if (s === 'false' || s === '0') return false;
     return null;
-  };
-  
+};
+
 
 // async function updateRecordWithDisable(req, res) {
 //     try {
@@ -1142,13 +1145,13 @@ const sanitizeInt = v =>
 //   console.log("req.body updateRecordDisable--->", req.body)
 //       /* ---------- basic validation ---------- */
 //       if (!LabourID) return res.status(400).json({ msg: 'LabourID is required.' });
-  
+
 //       const onboardArray = Array.isArray(OnboardName)
 //         ? OnboardName.filter(n => n && n.trim())
 //         : [OnboardName];
 //       const finalOnboardName = (onboardArray.pop() || '').toUpperCase();
 //       if (!finalOnboardName) return res.status(400).json({ msg: 'OnboardName is required.' });
-  
+
 //       /* ---------- numeric & enum sanitising ---------- */
 //       const rawDeptId    = sanitizeInt(departmentId);
 //       const rawDeptCode  = sanitizeInt(department);           // fallback if id missing
@@ -1156,24 +1159,24 @@ const sanitizeInt = v =>
 //       const safeDesignationId  = sanitizeInt(designationId);
 //       const labourCatMap = { 'SKILLED': 1, 'UN-SKILLED': 2, 'SEMI-SKILLED': 3 };
 //       const safeLabourCategoryId = labourCatMap[labourCategory] ?? null;
-  
+
 //       if (!projectName || !safeDepartmentId || !safeDesignationId) {
 //         return res.status(400).json({ msg: 'Missing projectName / departmentId / designationId' });
 //       }
-  
+
 //       /* ---------- file url helpers ---------- */
 //       const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files || {};
 //       const url = (bodyField, fileField) =>
 //         fileField ? baseUrl + path.basename(fileField[0].path) :
 //         (typeof bodyField === 'string' && bodyField.startsWith('http') ? bodyField : null);
-  
+
 //       /* ---------- dates ---------- */
 //       const joinDate  = new Date(dateOfJoining);
 //       const fromDate  = joinDate.toISOString().split('T')[0];
 //       const period    = joinDate.toLocaleString('default', { month:'long', year:'numeric' }).replace(' ','-');
 //       const validTill = new Date(joinDate); validTill.setFullYear(validTill.getFullYear()+1);
 //       const retireDt  = new Date(dateOfBirth); retireDt.setFullYear(retireDt.getFullYear()+60);
-  
+
 //       /* ---------- resolve project ---------- */
 //       const pool = await poolPromise4;
 //       const projReq = pool.request().input('projectName', !isNaN(projectName) ? sql.Int : sql.VarChar, projectName);
@@ -1181,7 +1184,7 @@ const sanitizeInt = v =>
 //         ? `SELECT Id,Description,ParentId FROM Framework.BusinessUnit WHERE Type='B' AND IsDeleted=0 AND Id=@projectName`
 //         : `SELECT a.Id,a.Description,a.ParentId FROM Framework.BusinessUnit a LEFT JOIN Framework.BusinessUnitSegment b ON b.Id=a.SegmentId
 //            WHERE a.Description=@projectName AND a.IsDeleted=0 AND b.Id=3`;
-  
+
 //       let { recordset } = await projReq.query(primaryQ);
 //       console.log("object----> projectname", recordset)
 //       if (!recordset.length) {
@@ -1192,18 +1195,18 @@ const sanitizeInt = v =>
 //         if (!recordset.length) return res.status(400).json({ msg:'Invalid project name' });
 //       }
 //       const { Description: location, Id: projectId, ParentId: parentId } = recordset[0];
-  
+
 //       /* ---------- company name & department ---------- */
 //       const poolG = await poolPromise;
 //       const compRs = await poolG.request().query(`SELECT Description FROM CompanyNameByBuId WHERE ParentId=${parentId}`);
 //       const salaryBu = compRs.recordset[0]?.Description === 'SANKALP CONTRACTS PRIVATE LIMITED'
 //         ? 'SANKALP CONTRACTS PRIVATE LIMITED - HO'
 //         : location;
-  
+
 //       const deptRs = await poolG.request().input('departmentId', sql.Int, safeDepartmentId)
 //         .query('SELECT farvision_description FROM Departments WHERE farvision_id=@departmentId');
 //       if (!deptRs.recordset.length) return res.status(404).json({ msg:'Department not found' });
-  
+
 //       /* ---------- bit fields parsed ---------- */
 //       const bits = {
 //         isResubmit:        parseBit(isResubmit),
@@ -1211,7 +1214,7 @@ const sanitizeInt = v =>
 //         isCompanyTransfer: parseBit(isCompanyTransfer),
 //         isSiteTransfer:    parseBit(isSiteTransfer)
 //       };
-  
+
 //       /* ---------- save ---------- */
 //       const data = await labourModel.registerDataUpdateDisable({
 //         LabourID, labourOwnership,
@@ -1236,7 +1239,7 @@ const sanitizeInt = v =>
 //         designationId: safeDesignationId, labourCategoryId: safeLabourCategoryId,
 //         ...bits
 //       });
-  
+
 //       return res.status(201).json({ msg:'User created successfully', data });
 //     } catch (err) {
 //       console.error('updateRecordWithDisable error:', err);
@@ -1984,7 +1987,7 @@ async function runDailyAttendanceCron() {
     console.log("yesterday", yesterday)
     yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
-    console.log("formattedYesterday",formattedYesterday)
+    console.log("formattedYesterday", formattedYesterday)
 
     console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
     console.log(`Processing Attendance for Date: ${formattedYesterday}`);
@@ -2027,29 +2030,29 @@ async function getAllLaboursAttendanceDaily(attendanceDate) {
     const target = new Date(attendanceDate);
     if (isNaN(target)) throw new Error(`Invalid attendanceDate supplied → ${attendanceDate}`);
 
-    const parsedYear  = target.getFullYear();           // e.g. 2025
-    const parsedMonth = target.getMonth() + 1;      
+    const parsedYear = target.getFullYear();           // e.g. 2025
+    const parsedMonth = target.getMonth() + 1;
     const processedDay = target.getDate();    // 1-based month index
     const daysInMonth = new Date(parsedYear, parsedMonth, 0).getDate();
-    console.log("daysInMonth=--->",daysInMonth)
+    console.log("daysInMonth=--->", daysInMonth)
 
     /* ---------- labour cohort ---------- */
     const approvedLabours =
         // await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
         await labourModel.getAllApprovedOrMonthlyDisabledLabours();
-        // await labourModel.getAllApprovedLabours();
+    // await labourModel.getAllApprovedLabours();
 
 
     if (!approvedLabours?.length) {
         console.info(`[ATTENDANCE] No approved labours for ${parsedYear}-${parsedMonth}.`);
         return;
     }
-console.log("approvedLabours?.length",approvedLabours?.length)
+    console.log("approvedLabours?.length", approvedLabours?.length)
     /* ---------- per-labour daily crunch ---------- */
     for (const labour of approvedLabours) {
 
         const { labourId, workingHours } = labour;
-        const shiftHours   = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+        const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
         const halfDayHours = shiftHours === 9 ? 4.5 : 4;
 
         let present = 0, half = 0, miss = 0, absent = 0;
@@ -2065,55 +2068,55 @@ console.log("approvedLabours?.length",approvedLabours?.length)
         const punchesForDay = punches.filter(p =>
             new Date(p.punch_date).toISOString().startsWith(attendanceDate));
 
-            const { status, firstPunch, lastPunch, totalHours } =
-                determineStatus(punchesForDay, shiftHours, halfDayHours, workingHours);
+        const { status, firstPunch, lastPunch, totalHours } =
+            determineStatus(punchesForDay, shiftHours, halfDayHours, workingHours);
 
-            /* ----- overtime funnel ----- */
-            let OT = 0;
-            if (status === 'P' && totalHours > shiftHours) OT = totalHours - shiftHours;
-            const OTrounded  = roundOvertime(OT);            // company rounding convention
-            const OTmanual   = Math.min(OTrounded, 4);       // manual capping rule (<=4 h)
+        /* ----- overtime funnel ----- */
+        let OT = 0;
+        if (status === 'P' && totalHours > shiftHours) OT = totalHours - shiftHours;
+        const OTrounded = roundOvertime(OT);            // company rounding convention
+        const OTmanual = Math.min(OTrounded, 4);       // manual capping rule (<=4 h)
 
-            /* ----- status KPIs ----- */
-            switch (status) {
-                case 'P':  present++; break;
-                case 'HD': half++;   break;
-                case 'MP': miss++;   break;
-                default:   absent++;
-            }
-            rawOT       += OT;
-            roundedOT   += OTrounded;
-            payrollOT   += OTrounded;
-            manualOT    += OTmanual;
+        /* ----- status KPIs ----- */
+        switch (status) {
+            case 'P': present++; break;
+            case 'HD': half++; break;
+            case 'MP': miss++; break;
+            default: absent++;
+        }
+        rawOT += OT;
+        roundedOT += OTrounded;
+        payrollOT += OTrounded;
+        manualOT += OTmanual;
 
-            /* ----- device / project refs ----- */
-            const fDev   = firstPunch?.Device_id ?? null;
-            const lDev   = lastPunch?.Device_id  ?? null;
-            const projFP = fDev ? await labourModel.getProjectIdByDeviceId(fDev) : null;
-            const projLP = lDev ? await labourModel.getProjectIdByDeviceId(lDev) : null;
-            const dateISO = attendanceDate;
+        /* ----- device / project refs ----- */
+        const fDev = firstPunch?.Device_id ?? null;
+        const lDev = lastPunch?.Device_id ?? null;
+        const projFP = fDev ? await labourModel.getProjectIdByDeviceId(fDev) : null;
+        const projLP = lDev ? await labourModel.getProjectIdByDeviceId(lDev) : null;
+        const dateISO = attendanceDate;
 
-            /* ----- persistable detail row ----- */
-            monthRows.push({
-                labourId,
-                projectName: parseInt(labour.projectName, 10),
-                date: dateISO,
-                firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
-                firstPunchAttendanceId: firstPunch?.attendance_id ?? null,
-                firstPunchDeviceId: fDev,
-                lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
-                lastPunchAttendanceId: lastPunch?.attendance_id ?? null,
-                lastPunchDeviceId: lDev,
-                totalHours: Number(totalHours || 0).toFixed(2),
-                overtime: OT.toFixed(2),
-                PayrollCalRoundOffOvertime: OTrounded.toFixed(2),
-                OvertimeManually: OTmanual.toFixed(2),
-                status,
-                creationDate: new Date(),
-                projectIdFromDevicefirstPunch: projFP,
-                projectIdFromDeviceLastPunch:  projLP
-            });
-        
+        /* ----- persistable detail row ----- */
+        monthRows.push({
+            labourId,
+            projectName: parseInt(labour.projectName, 10),
+            date: dateISO,
+            firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
+            firstPunchAttendanceId: firstPunch?.attendance_id ?? null,
+            firstPunchDeviceId: fDev,
+            lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
+            lastPunchAttendanceId: lastPunch?.attendance_id ?? null,
+            lastPunchDeviceId: lDev,
+            totalHours: Number(totalHours || 0).toFixed(2),
+            overtime: OT.toFixed(2),
+            PayrollCalRoundOffOvertime: OTrounded.toFixed(2),
+            OvertimeManually: OTmanual.toFixed(2),
+            status,
+            creationDate: new Date(),
+            projectIdFromDevicefirstPunch: projFP,
+            projectIdFromDeviceLastPunch: projLP
+        });
+
 
         /* ---------- monthly summary ---------- */
         const summary = {
@@ -2121,16 +2124,16 @@ console.log("approvedLabours?.length",approvedLabours?.length)
             projectName: parseInt(labour.projectName, 10),
             totalDays: processedDay,
             presentDays: present,
-            halfDays:    half,
+            halfDays: half,
             missPunchDays: miss,
-            absentDays:  absent,
+            absentDays: absent,
             totalOvertimeHours: Number(rawOT.toFixed(2)),
             PayrollCalRoundoffTotalOvertime: Number(payrollOT.toFixed(2)),
             RoundOffTotalOvertime: Number(roundedOT.toFixed(2)),
             TotalOvertimeHoursManually: Number(manualOT.toFixed(2)),
             shift: workingHours,
             creationDate: new Date(),
-            selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2,'0')}`
+            selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`
         };
 
         /* ---------- persistence ---------- */
@@ -2145,7 +2148,7 @@ console.log("approvedLabours?.length",approvedLabours?.length)
         await labourModel.insertOrUpdateLabourAttendanceSummary(labourId, attendanceDate);
     }
 
-    console.info(`[ATTENDANCE] Completed processing for ${parsedYear}-${String(parsedMonth).padStart(2,'0')}`);
+    console.info(`[ATTENDANCE] Completed processing for ${parsedYear}-${String(parsedMonth).padStart(2, '0')}`);
     console.info(`[ATTENDANCE] Summary updates completed for ${attendanceDate}`);
 }
 
@@ -3200,7 +3203,7 @@ async function getAllLaboursAttendance(req, res) {
 async function processLaboursAttendance(date) {
     try {
         const attendanceDate = new Date(date);
-        console.log("attendanceDate--->",attendanceDate)
+        console.log("attendanceDate--->", attendanceDate)
         if (isNaN(attendanceDate.getTime())) throw new Error('Invalid date format');
 
         const approvedLabours = await labourModel.getAllApprovedLabours();
@@ -4254,7 +4257,7 @@ async function upsertAttendance(req, res) {
         updatedFields,
     } = req.body;
     // Validate input
-console.log("req.body for attendance--->", req.body)
+    console.log("req.body for attendance--->", req.body)
 
     if (!labourId || !date) {
         return res.status(400).json({
@@ -4360,6 +4363,9 @@ async function approveAttendanceController(req, res) {
     try {
         const result = await labourModel.approveAttendance(AttendanceId);
         res.status(200).json(result);
+
+        console.log('Approval successful',result);
+        
     } catch (error) {
         console.error('Error in approving attendance:', error);
         res.status(error.statusCode || 500).json({ message: error.message });
@@ -4444,6 +4450,10 @@ const exportAttendance = async (req, res) => {
         res.status(500).json({ message: 'Error exporting attendance data.' });
     }
 };
+
+
+
+
 
 const importAttendance = async (req, res) => {
     try {
@@ -5122,6 +5132,193 @@ async function updateOTHoursAttendance(req, res) {
 }
 
 
+const generateAttendancePDF = async (req, res) => {
+  try {
+    const { startDate, endDate, projectName, department } = {
+      ...req.body,
+      ...req.query,
+      ...req.params
+    };
+
+    if (!startDate || !endDate || !projectName) {
+      return res.status(400).json({
+        message: 'Missing required parameters: startDate, endDate, or projectName.'
+      });
+    }
+
+    const projectNameStr = Array.isArray(projectName) ? projectName.join(',') : projectName;
+    const departmentStr = department
+      ? (Array.isArray(department) ? department.join(',') : department)
+      : '';
+
+    const attendanceData = await labourModel.getAttendanceByDateRange(
+      projectNameStr,
+      startDate,
+      endDate,
+      departmentStr
+    );
+
+    if (!attendanceData || attendanceData.length === 0) {
+      return res.status(404).json({
+        message: 'No attendance data found for the selected criteria.'
+      });
+    }
+
+    const labourGrouped = {};
+    attendanceData.forEach(entry => {
+      const labourId = entry.LabourId;
+      const date = new Date(entry.Date).toISOString().split('T')[0];
+
+      if (!labourGrouped[labourId]) {
+        labourGrouped[labourId] = {
+          name: entry.name,
+          department: entry.departmentName,
+          project: entry.ProjectName,
+          businessUnit: entry.BusinessUnit,
+          dates: {}
+        };
+      }
+
+      labourGrouped[labourId].dates[date] = {
+        status: entry.Status || '-',
+        inTime: entry.FirstPunchManually || '',
+        outTime: entry.LastPunchManually || '',
+        ot: entry.OvertimeManually || '',
+        remark: entry.RemarkManually || ''
+      };
+    });
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const dateList = [];
+    while (start <= end) {
+      dateList.push(new Date(start).toISOString().split('T')[0]);
+      start.setDate(start.getDate() + 1);
+    }
+
+    let labourSections = '';
+    const labourEntries = Object.entries(labourGrouped);
+    for (let i = 0; i < labourEntries.length; i++) {
+      const [labourId, data] = labourEntries[i];
+
+      const statusRow = dateList.map(date => `<td>${data.dates[date]?.status || '-'}</td>`).join('');
+      const inTimeRow = dateList.map(date => `<td>${data.dates[date]?.inTime || ''}</td>`).join('');
+      const outTimeRow = dateList.map(date => `<td>${data.dates[date]?.outTime || ''}</td>`).join('');
+      const otRow = dateList.map(date => `<td>${data.dates[date]?.ot || ''}</td>`).join('');
+      const remarkRow = dateList.map(date => `<td>${data.dates[date]?.remark || ''}</td>`).join('');
+
+      const formattedDates = dateList.map(d => {
+        const [year, month, day] = d.split('-');
+        return `${day}-${month}-${year}`;
+      });
+
+      labourSections += `
+        <div class="labour-card ${i % 3 === 2 ? 'page-break' : ''}">
+          <h4>${labourId} - ${data.name}</h4>
+          <p><strong>Dept:</strong> ${data.department}<br><strong>Proj:</strong> ${data.project}<br><strong>Unit:</strong> ${data.businessUnit}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Details</th>
+                ${formattedDates.map(d => `<th>${d}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Status</td>${statusRow}</tr>
+              <tr><td>In Time</td>${inTimeRow}</tr>
+              <tr><td>Out Time</td>${outTimeRow}</tr>
+              <tr><td>OT</td>${otRow}</tr>
+              <tr><td>Remark</td>${remarkRow}</tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    const fullHtml = `
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h2 { text-align: center; color: #d32f2f; }
+            h4 { margin: 5px 0; color: #1976d2; }
+
+            .labour-card {
+              border: 1px solid #ccc;
+              padding: 10px;
+              margin-bottom: 20px;
+              font-size: 10px;
+              page-break-inside: avoid;
+            }
+
+            .page-break {
+              page-break-after: always;
+            }
+
+            table {
+              border-collapse: collapse;
+              width: 100%;
+              font-size: 9px;
+              table-layout: fixed;
+            }
+
+            th, td {
+              border: 1px solid #999;
+              padding: 2px;
+              text-align: center;
+              word-wrap: break-word;
+              vertical-align: top;
+            }
+
+            th {
+              background-color: #f2f2f2;
+            }
+
+            tr:nth-child(even) td {
+              background: #f9f9f9;
+            }
+          </style>
+        </head>
+        <body>
+          <h2>Labour Attendance Report</h2>
+          <p style="text-align:center;"><strong>From:</strong> ${startDate} &nbsp;&nbsp; <strong>To:</strong> ${endDate}</p>
+          ${labourSections}
+        </body>
+      </html>
+    `;
+
+    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
+    const page = await browser.newPage();
+    await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      landscape: false,
+      printBackground: true,
+      margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
+    });
+
+    await browser.close();
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=attendance_report_${moment().format('YYYYMMDD')}.pdf`
+    );
+    res.end(pdfBuffer);
+  } catch (error) {
+    console.error('Error generating attendance PDF:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Error generating attendance PDF.' });
+    }
+  }
+};
+
+
+
+
+
+
 module.exports = {
     handleCheckAadhaar,
     getNextUniqueID,
@@ -5192,5 +5389,12 @@ module.exports = {
     searchLaboursFromVariableInput,
     getAttendanceReportAndLabourOnboardingJoincontroller,
     getAllLaboursAttendanceDaily,
-    updateOTHoursAttendance
+    updateOTHoursAttendance,
+
+    generateAttendancePDF
+
 };
+
+// Adjust path to your DB pool file
+
+

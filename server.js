@@ -178,6 +178,7 @@ const EmployeeRoute = require('./routes/dataRoutes');
 const labourController = require('./controllers/labourController');
 const userRoutes = require('./routes/UserRoutes');
 const dataRoutes = require('./routes/dataRoutes');
+const documentRoutes = require('./routes/documentRoutes');
 const { poolPromise2 } = require('./config/dbConfig2');
 const { poolPromise } = require('./config/dbConfig');
 const insentiveRoutes = require('./routes/insentiveRoutes');
@@ -301,6 +302,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
 app.use('/users', userRoutes);
+app.use('/api/Doc', documentRoutes)
 app.use('/api',(req, res, next)=>{console.log('/api'); next()}, dataRoutes);
 app.use('/insentive', insentiveRoutes);
 // app.use('/dashboard', dashBoardRoutes);
