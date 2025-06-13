@@ -15,7 +15,7 @@ const { createLogger, format, transports } = require('winston');
 const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');
 const moment = require('moment');
-const puppeteer = require('puppeteer');
+const pdf = require('html-pdf');
 
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
@@ -5208,11 +5208,11 @@ const generateAttendancePDF = async (req, res) => {
     for (let i = 0; i < labourEntries.length; i++) {
       const [labourId, data] = labourEntries[i];
 
-      const statusRow = dateList.map(date => `<td>${data.dates[date]?.status || '-'}</td>`).join('');
-      const inTimeRow = dateList.map(date => `<td>${data.dates[date]?.inTime || ''}</td>`).join('');
-      const outTimeRow = dateList.map(date => `<td>${data.dates[date]?.outTime || ''}</td>`).join('');
-      const otRow = dateList.map(date => `<td>${data.dates[date]?.ot || ''}</td>`).join('');
-      const remarkRow = dateList.map(date => `<td>${data.dates[date]?.remark || ''}</td>`).join('');
+      const statusRow = dateList.map(date => <td>${data.dates[date]?.status || '-'}</td>).join('');
+      const inTimeRow = dateList.map(date => <td>${data.dates[date]?.inTime || ''}</td>).join('');
+      const outTimeRow = dateList.map(date => <td>${data.dates[date]?.outTime || ''}</td>).join('');
+      const otRow = dateList.map(date => <td>${data.dates[date]?.ot || ''}</td>).join('');
+      const remarkRow = dateList.map(date => <td>${data.dates[date]?.remark || ''}</td>).join('');
 
       const formattedDates = dateList.map(d => {
         const [year, month, day] = d.split('-');
@@ -5227,7 +5227,7 @@ const generateAttendancePDF = async (req, res) => {
             <thead>
               <tr>
                 <th>Details</th>
-                ${formattedDates.map(d => `<th>${d}</th>`).join('')}
+                ${formattedDates.map(d => <th>${d}</th>).join('')}
               </tr>
             </thead>
             <tbody>
@@ -5288,31 +5288,36 @@ const generateAttendancePDF = async (req, res) => {
         </head>
         <body>
           <h2>Labour Attendance Report</h2>
-          <p style="text-align:center;"><strong>From:</strong> ${startDate} &nbsp;&nbsp; <strong>To:</strong> ${endDate}</p>
+          <p style="text-align:center;"><strong>From:</strong> ${startDate}    <strong>To:</strong> ${endDate}</p>
           ${labourSections}
         </body>
       </html>
     `;
 
-    const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox'] });
-    const page = await browser.newPage();
-    await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
-
-    const pdfBuffer = await page.pdf({
+    // Generate PDF using html-pdf
+    pdf.create(fullHtml, {
       format: 'A4',
-      landscape: false,
-      printBackground: true,
-      margin: { top: '20px', bottom: '20px', left: '20px', right: '20px' }
+      orientation: 'portrait',
+      border: {
+        top: '10mm',
+        right: '10mm',
+        bottom: '10mm',
+        left: '10mm'
+      }
+    }).toBuffer((err, buffer) => {
+      if (err) {
+        console.error('PDF generation error:', err);
+        return res.status(500).json({ message: 'Failed to generate PDF' });
+      }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename=attendance_report_${moment().format('YYYYMMDD')}.pdf`
+      );
+      res.end(buffer);
     });
 
-    await browser.close();
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename=attendance_report_${moment().format('YYYYMMDD')}.pdf`
-    );
-    res.end(pdfBuffer);
   } catch (error) {
     console.error('Error generating attendance PDF:', error);
     if (!res.headersSent) {
