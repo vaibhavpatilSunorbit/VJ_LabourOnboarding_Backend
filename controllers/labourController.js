@@ -135,25 +135,29 @@ async function getNextUniqueID(req, res) {
 
 
 async function getCommandStatus(req, res) {
-    const commandId = req.params.commandId;
+  const commandId = parseInt(req.params.commandId, 10);
 
-    try {
-        const pool = await poolPromise3;
-        const result = await pool.request()
-            .input('CommandId', sql.Int, commandId)
-            .query('SELECT status FROM DeviceCommands WHERE DeviceCommandId = @CommandId');
+  if (isNaN(commandId)) {
+    return res.status(400).json({ message: 'Invalid command ID.' });
+  }
 
-        if (result.recordset.length > 0) {
-            const status = result.recordset[0].status;
-            return res.json({ status });
-        } else {
-            return res.status(404).json({ message: 'Command ID not found.' });
-        }
-    } catch (error) {
-        console.error('Error fetching command status:', error.message);
-        res.status(500).json({ message: 'Internal server error' });
+  try {
+    const pool = await poolPromise3;
+    const result = await pool.request()
+      .input('CommandId', sql.Int, commandId)
+      .query('SELECT status FROM DeviceCommands WHERE DeviceCommandId = @CommandId');
+
+    if (result.recordset.length > 0) {
+      const status = result.recordset[0].status;
+      return res.json({ status });
+    } else {
+      return res.status(404).json({ message: 'Command ID not found.' });
     }
-};
+  } catch (error) {
+    console.error('Error fetching command status:', error.message);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+}
 
 // This is running code comment in 29-07-2024
 
@@ -5146,6 +5150,9 @@ async function updateOTHoursAttendance(req, res) {
 }
 
 
+
+
+
 const generateAttendancePDF = async (req, res) => {
   try {
     const { startDate, endDate, projectName, department } = {
@@ -5301,6 +5308,9 @@ const generateAttendancePDF = async (req, res) => {
       </html>
     `;
 
+    // Use the system-installed wkhtmltopdf for best compatibility/performance
+    const wkhtmltopdfPath = '/opt/homebrew/bin/wkhtmltopdf'; // Use `which wkhtmltopdf` to confirm path
+
     pdf.create(fullHtml, {
       format: 'A4',
       orientation: 'portrait',
@@ -5309,7 +5319,8 @@ const generateAttendancePDF = async (req, res) => {
         right: '10mm',
         bottom: '10mm',
         left: '10mm'
-      }
+      },
+      phantomPath: wkhtmltopdfPath
     }).toBuffer((err, buffer) => {
       if (err) {
         console.error('PDF generation error:', err);
@@ -5319,7 +5330,7 @@ const generateAttendancePDF = async (req, res) => {
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename=attendance_report_${moment().format('YYYYMMDD')}.pdf`
+        `attachment; filename=attendance_report_${require('moment')().format('YYYYMMDD')}.pdf`
       );
       res.end(buffer);
     });
@@ -5331,6 +5342,7 @@ const generateAttendancePDF = async (req, res) => {
     }
   }
 };
+// ...existing code...
 
 
 module.exports = {
