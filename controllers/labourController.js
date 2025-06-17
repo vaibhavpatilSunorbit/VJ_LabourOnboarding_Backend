@@ -15,7 +15,7 @@ const { createLogger, format, transports } = require('winston');
 const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');
 const moment = require('moment');
-const pdf = require('html-pdf-node');
+const pdf = require('html-pdf');
 
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
@@ -5288,36 +5288,35 @@ const generateAttendancePDF = async (req, res) => {
         </head>
         <body>
           <h2>Labour Attendance Report</h2>
-          <p style="text-align:center;"><strong>From:</strong> ${startDate}    <strong>To:</strong> ${endDate}</p>
+          <p style="text-align:center;"><strong>From:</strong> ${startDate} <strong>To:</strong> ${endDate}</p>
           ${labourSections}
         </body>
       </html>
     `;
 
-    const file = { content: fullHtml };
+    const options = {
+      format: 'A4',
+      orientation: 'landscape',
+      border: {
+        top: '10mm',
+        bottom: '10mm',
+        left: '10mm',
+        right: '10mm'
+      }
+    };
 
-   const options = {
-  format: 'A4',
-  landscape: true, // <- Important line to make PDF landscape
-  printBackground: true,
-  margin: {
-    top: '10mm',
-    bottom: '10mm',
-    left: '10mm',
-    right: '10mm'
-  }
-};
+    pdf.create(fullHtml, options).toBuffer((err, buffer) => {
+      if (err) {
+        console.error('PDF generation error:', err);
+        return res.status(500).json({ message: 'Failed to generate PDF.' });
+      }
 
-    pdf.generatePdf(file, options).then(pdfBuffer => {
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename=attendance_report_${require('moment')().format('YYYYMMDD')}.pdf`
+        `attachment; filename=attendance_report_${moment().format('YYYYMMDD')}.pdf`
       );
-      res.end(pdfBuffer);
-    }).catch(err => {
-      console.error('PDF generation error:', err);
-      res.status(500).json({ message: 'Failed to generate PDF.' });
+      res.end(buffer);
     });
 
   } catch (error) {
@@ -5327,7 +5326,6 @@ const generateAttendancePDF = async (req, res) => {
     }
   }
 };
-
 
 module.exports = {
     handleCheckAadhaar,
