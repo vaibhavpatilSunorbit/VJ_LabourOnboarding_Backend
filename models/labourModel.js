@@ -1010,31 +1010,42 @@ async function getAllLabours() {
 };
 
 
-async function approveLabour(id, nextID) {
+async function approveLabour(id, nextID, approvedBy) {
     try {
         const pool = await poolPromise;
         const now = new Date();
-        const result = await pool.request()
+
+        console.log("Approving Labour:", { id, nextID, approvedBy });
+
+    const result = await pool.request()
+        .input('id', sql.Int, id)
+        .input('LabourID', sql.VarChar, nextID)
+        .input('ApproveLabourDate', sql.DateTime, now)
+        .input('ApprovedBy', sql.VarChar, approvedBy || '') // Ensure value passed
+        .query(`
+            UPDATE labourOnboarding
+            SET status = 'Approved',
+                isApproved = 1,
+                LabourID = @LabourID,
+                ApproveLabourDate = @ApproveLabourDate,
+                ApprovedBy = @ApprovedBy
+            WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')
+        `);
+
+    if (result.rowsAffected[0] > 0) {
+        const approvedResult = await pool.request()
             .input('id', sql.Int, id)
-            .input('LabourID', sql.VarChar, nextID)
-            .input('ApproveLabourDate', sql.DateTime, now)
-            .query("UPDATE labourOnboarding SET status = 'Approved', isApproved = 1, LabourID = @LabourID, ApproveLabourDate = @ApproveLabourDate WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')");
+            .query("SELECT * FROM labourOnboarding WHERE id = @id AND status = 'Approved'");
 
-        if (result.rowsAffected[0] > 0) {
-            const approvedResult = await pool.request()
-                .input('id', sql.Int, id)
-                .query("SELECT * FROM labourOnboarding WHERE id = @id AND status = 'Approved'");
-
-            return approvedResult.recordset[0];
-        } else {
-            return null;
-        }
-    } catch (error) {
-        console.error("Error in approveLabour:", error);
-        throw error;
+        return approvedResult.recordset[0];
+    } else {
+        return null;
     }
+} catch (error) {
+    console.error("Error in approveLabour:", error);
+    throw error;
 }
-
+};
 // ------------------------------------  approve Disable labour changes 14-11-2024 -------------
 
 async function approveDisableLabours(id, labourID) {

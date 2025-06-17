@@ -1398,14 +1398,14 @@ async function getAllLabours(req, res) {
 
 async function approveLabour(req, res) {
     const id = parseInt(req.params.id, 10);
-    const { labourID } = req.body;
+    const { labourID, ApprovedBy } = req.body;
 
     if (isNaN(id)) {
         return res.status(400).json({ message: 'Invalid labour ID' });
     }
 
     try {
-        const success = await labourModel.approveLabour(id, labourID);
+        const success = await labourModel.approveLabour(id, labourID, ApprovedBy);
         if (success) {
             res.json({ success: true, message: 'Labour approved successfully.', data: success });
         } else {
