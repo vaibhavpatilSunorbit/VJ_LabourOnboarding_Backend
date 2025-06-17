@@ -17,6 +17,7 @@ const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');
 const moment = require('moment');
 const pdf = require('html-pdf');
+const phantomPath = require('phantomjs-prebuilt').path;
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 const baseUrl = 'http://localhost:4000/uploads/';
@@ -1495,13 +1496,13 @@ async function approveDisableLabour(req, res) {
 async function rejectLabour(req, res) {
     // //console.log('Fetching rejected labours...');
     const id = parseInt(req.params.id, 10);
-    const { Reject_Reason } = req.body;
+    const { Reject_Reason , RejectedBy } = req.body;
     if (isNaN(id)) {
         return res.status(400).json({ message: 'Invalid labour ID' });
     }
     try {
         // const success = await labourModel.rejectLabour(id);
-        const success = await labourModel.rejectLabour(id, Reject_Reason);
+        const success = await labourModel.rejectLabour(id, Reject_Reason ,RejectedBy );
         if (success) {
             res.json({ success: true, message: 'Labour rejected successfully.' });
         } else {
@@ -5308,10 +5309,7 @@ const generateAttendancePDF = async (req, res) => {
       </html>
     `;
 
-    // Use the system-installed wkhtmltopdf for best compatibility/performance
-    const wkhtmltopdfPath = '/opt/homebrew/bin/wkhtmltopdf'; // Use `which wkhtmltopdf` to confirm path
-
-    pdf.create(fullHtml, {
+    const pdfOptions = {
       format: 'A4',
       orientation: 'portrait',
       border: {
@@ -5320,17 +5318,19 @@ const generateAttendancePDF = async (req, res) => {
         bottom: '10mm',
         left: '10mm'
       },
-      phantomPath: wkhtmltopdfPath
-    }).toBuffer((err, buffer) => {
+      phantomPath: phantomPath // Ensure this is the correct path
+    };
+
+    pdf.create(fullHtml, pdfOptions).toBuffer((err, buffer) => {
       if (err) {
-        console.error('PDF generation error:', err);
+        console.error('PDF generation error:', err); // ✅ Log actual error
         return res.status(500).json({ message: 'Failed to generate PDF' });
       }
 
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename=attendance_report_${require('moment')().format('YYYYMMDD')}.pdf`
+        `attachment; filename=attendance_report_${moment().format('YYYYMMDD')}.pdf`
       );
       res.end(buffer);
     });
@@ -5342,7 +5342,7 @@ const generateAttendancePDF = async (req, res) => {
     }
   }
 };
-// ...existing code...
+
 
 
 module.exports = {

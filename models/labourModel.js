@@ -1145,7 +1145,8 @@ async function approveDisableLabours(id, labourID) {
 
 
 
-async function rejectLabour(id, rejectReason) {
+// ...existing code...
+async function rejectLabour(id, rejectReason, rejectedBy) {
     try {
         const pool = await poolPromise;
         const now = new Date();
@@ -1164,7 +1165,8 @@ async function rejectLabour(id, rejectReason) {
             .input('id', sql.Int, id)
             .input('Reject_Reason', sql.VarChar, rejectReason)
             .input('RejectLabourDate', sql.DateTime, now)
-            .query('UPDATE labourOnboarding SET status = \'Rejected\', isApproved = 2, Reject_Reason = @Reject_Reason, RejectLabourDate = @RejectLabourDate WHERE id = @id AND (status = \'Pending\' OR status = \'Approved\')');
+            .input('RejectedBy', sql.VarChar, rejectedBy) // <-- Use the parameter here
+            .query('UPDATE labourOnboarding SET status = \'Rejected\', isApproved = 2, Reject_Reason = @Reject_Reason, RejectedBy = @RejectedBy, RejectLabourDate = @RejectLabourDate WHERE id = @id AND (status = \'Pending\' OR status = \'Approved\')');
 
         // Insert into RejectLabours table
         await pool.request()
@@ -1183,6 +1185,7 @@ async function rejectLabour(id, rejectReason) {
         throw error;
     }
 };
+// ...existing code...
 
 
 
