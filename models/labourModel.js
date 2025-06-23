@@ -4166,6 +4166,7 @@ async function getAttendanceByDateRange(projectNameStr, startDate, endDate, depa
             lad.ProjectName, 
             lo.name,
             lo.BusinessUnit,
+            lo.name,
             lo.departmentName,
             lad.Status,
             lad.FirstPunchManually, 

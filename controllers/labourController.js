@@ -20,9 +20,9 @@ const pdf = require('html-pdf');
 const phantomPath = require('phantomjs-prebuilt').path;
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
-const baseUrl = 'http://localhost:4000/uploads/';
+// const baseUrl = 'http://localhost:4000/uploads/';
 // const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
-// const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
+const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
 
@@ -5303,28 +5303,27 @@ const generateAttendancePDF = async (req, res) => {
         </head>
         <body>
           <h2>Labour Attendance Report</h2>
-          <p style="text-align:center;"><strong>From:</strong> ${startDate} &nbsp;&nbsp; <strong>To:</strong> ${endDate}</p>
+          <p style="text-align:center;"><strong>From:</strong> ${startDate} <strong>To:</strong> ${endDate}</p>
           ${labourSections}
         </body>
       </html>
     `;
 
-    const pdfOptions = {
+    const options = {
       format: 'A4',
-      orientation: 'portrait',
+      orientation: 'landscape',
       border: {
         top: '10mm',
-        right: '10mm',
         bottom: '10mm',
-        left: '10mm'
-      },
-      phantomPath: phantomPath // Ensure this is the correct path
+        left: '10mm',
+        right: '10mm'
+      }
     };
 
-    pdf.create(fullHtml, pdfOptions).toBuffer((err, buffer) => {
+    pdf.create(fullHtml, options).toBuffer((err, buffer) => {
       if (err) {
-        console.error('PDF generation error:', err); // ✅ Log actual error
-        return res.status(500).json({ message: 'Failed to generate PDF' });
+        console.error('PDF generation error:', err);
+        return res.status(500).json({ message: 'Failed to generate PDF.' });
       }
 
       res.setHeader('Content-Type', 'application/pdf');
@@ -5342,8 +5341,6 @@ const generateAttendancePDF = async (req, res) => {
     }
   }
 };
-
-
 
 module.exports = {
     handleCheckAadhaar,
