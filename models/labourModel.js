@@ -698,8 +698,8 @@ async function registerDataUpdateDisable(labourData) {
                     val === true || val === 'true' || val === '1'
                         ? true
                         : val === false || val === 'false' || val === '0'
-                        ? false
-                        : null;
+                            ? false
+                            : null;
 
                 request.input(key, sql.Bit, boolValue);
             } else {
@@ -999,12 +999,12 @@ async function search(query) {
 }
 
 async function searchForAttendance(query) {
-    const pool       = await poolPromise;
-    const likeQuery  = `%${query}%`;
+    const pool = await poolPromise;
+    const likeQuery = `%${query}%`;
 
     // --- 1️⃣ Primary hit on 'Approved'
     let { recordset } = await pool.request()
-        .input('query',  sql.NVarChar, likeQuery)
+        .input('query', sql.NVarChar, likeQuery)
         .query(`
             SELECT *
             FROM   labourOnboarding
@@ -1020,7 +1020,7 @@ async function searchForAttendance(query) {
                  OR departmentName LIKE @query )
         `);
 
-       if (recordset.length > 0) {
+    if (recordset.length > 0) {
         console.log(`[AttendanceSearch] Status cohort: Approved | rows: ${recordset.length}`);
         return recordset;          // exit early on success
     }
@@ -1042,7 +1042,7 @@ async function searchForAttendance(query) {
                  OR location       LIKE @query
                  OR departmentName LIKE @query )
         `));
- console.log(`[AttendanceSearch] Status cohort: Disable | rows: ${recordset.length}`);
+    console.log(`[AttendanceSearch] Status cohort: Disable | rows: ${recordset.length}`);
     return recordset;                             // may be [] if nothing disables either
 }
 
@@ -1065,12 +1065,12 @@ async function approveLabour(id, nextID, approvedBy) {
 
         console.log("Approving Labour:", { id, nextID, approvedBy });
 
-    const result = await pool.request()
-        .input('id', sql.Int, id)
-        .input('LabourID', sql.VarChar, nextID)
-        .input('ApproveLabourDate', sql.DateTime, now)
-        .input('ApprovedBy', sql.VarChar, approvedBy || '') // Ensure value passed
-        .query(`
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .input('LabourID', sql.VarChar, nextID)
+            .input('ApproveLabourDate', sql.DateTime, now)
+            .input('ApprovedBy', sql.VarChar, approvedBy || '') // Ensure value passed
+            .query(`
             UPDATE labourOnboarding
             SET status = 'Approved',
                 isApproved = 1,
@@ -1080,19 +1080,19 @@ async function approveLabour(id, nextID, approvedBy) {
             WHERE id = @id AND (status = 'Pending' OR status = 'Rejected')
         `);
 
-    if (result.rowsAffected[0] > 0) {
-        const approvedResult = await pool.request()
-            .input('id', sql.Int, id)
-            .query("SELECT * FROM labourOnboarding WHERE id = @id AND status = 'Approved'");
+        if (result.rowsAffected[0] > 0) {
+            const approvedResult = await pool.request()
+                .input('id', sql.Int, id)
+                .query("SELECT * FROM labourOnboarding WHERE id = @id AND status = 'Approved'");
 
-        return approvedResult.recordset[0];
-    } else {
-        return null;
+            return approvedResult.recordset[0];
+        } else {
+            return null;
+        }
+    } catch (error) {
+        console.error("Error in approveLabour:", error);
+        throw error;
     }
-} catch (error) {
-    console.error("Error in approveLabour:", error);
-    throw error;
-}
 };
 // ------------------------------------  approve Disable labour changes 14-11-2024 -------------
 
@@ -2779,14 +2779,14 @@ async function markAttendanceForApproval(
         request.input('UpdatedFields', sql.NVarChar, JSON.stringify(updatedFields) || null);
 
         const result = await pool.request()
-        .input('LabourID', sql.NVarChar, labourId)
-        .query(`
+            .input('LabourID', sql.NVarChar, labourId)
+            .query(`
             SELECT name
             FROM [dbo].[labourOnboarding]
             WHERE LabourID = @LabourID
         `);
 
-    const name = result.recordset.length > 0 ? result.recordset[0].name : null;
+        const name = result.recordset.length > 0 ? result.recordset[0].name : null;
         // Perform the UPDATE query
         await request.query(`
             UPDATE [LabourAttendanceDetails]
@@ -3443,7 +3443,7 @@ async function upsertAttendance({
     markWeeklyOff,
     AttendanceStatus
 }) {
-console.log("updasertAttendnace",labourId,date,firstPunchManually,lastPunchManually,overtimeManually,remarkManually,workingHours,onboardName,markWeeklyOff,AttendanceStatus)
+    console.log("updasertAttendnace", labourId, date, firstPunchManually, lastPunchManually, overtimeManually, remarkManually, workingHours, onboardName, markWeeklyOff, AttendanceStatus)
 
     let totalHours = 0;
     let status = 'A';
@@ -4025,7 +4025,7 @@ FROM [LabourAttendanceApproval] L order by L.LastUpdatedDate desc;
         // return result.recordset;
         const parsedRecordset = result.recordset.map(record => {
             let updatedFields = [];
-    
+
             try {
                 if (record.UpdatedFields) {
                     updatedFields = JSON.parse(record.UpdatedFields);
@@ -4033,13 +4033,13 @@ FROM [LabourAttendanceApproval] L order by L.LastUpdatedDate desc;
             } catch (err) {
                 console.warn('Failed to parse UpdatedFields for record:', record.LabourId, err);
             }
-    
+
             return {
                 ...record,
                 UpdatedFields: updatedFields,
             };
         });
-    
+
         return parsedRecordset;
     } catch (error) {
         console.error('Error fetching attendance Approval:', error);
@@ -4120,7 +4120,7 @@ async function rejectAttendance(id, rejectReason) {
 //         );
 //     return result.recordset;
 // };
-async function getAttendanceByDateRange(projectNameStr, startDate, endDate, departmentStr ) {
+async function getAttendanceByDateRange(projectNameStr, startDate, endDate, departmentStr) {
     const pool = await poolPromise;
 
     if (!projectNameStr || !startDate || !endDate) {
@@ -4184,8 +4184,8 @@ async function getAttendanceByDateRange(projectNameStr, startDate, endDate, depa
     `;
 
     const result = await request.query(query);
-    console.log('reusltd' , result);
-    
+    console.log('reusltd', result);
+
     return result.recordset;
 }
 
@@ -4293,7 +4293,7 @@ async function updateTotalOvertimeHours(labourId, selectedMonth) {
 
         const totalOvertime = overtimeResult.recordset[0].TotalOvertime || 0;
 
-        
+
         // Update LabourAttendanceSummary with the computed overtime total
         await pool
             .request()
@@ -4456,7 +4456,7 @@ const parseDDMMYYYYtoDate = (dateStr) => {
 const upsertLabourMonthlyWages = async (wage) => {
     try {
         const pool = await poolPromise;
-console.log("object wages--->", wage);    
+        console.log("object wages--->", wage);
         // Check if LabourID exists in LabourMonthlyWages
         const checkExistingWage = await pool.request()
             .input('LabourID', sql.NVarChar, wage.labourId || '')
@@ -4589,15 +4589,15 @@ async function markWagesForApproval(
     try {
         const pool = await poolPromise;
         const getNameResult = await pool
-        .request()
-        .input('LabourID', sql.NVarChar(50), labourId)
-        .query(`
+            .request()
+            .input('LabourID', sql.NVarChar(50), labourId)
+            .query(`
             SELECT name
             FROM [dbo].[labourOnboarding]
             WHERE LabourID = @LabourID
         `);
 
-    const labourName = getNameResult.recordset.length > 0 ? getNameResult.recordset[0].name : null;
+        const labourName = getNameResult.recordset.length > 0 ? getNameResult.recordset[0].name : null;
         const request = pool.request();
 
         const perHourWages = dailyWages ? dailyWages / 8 : 0;
@@ -5419,8 +5419,8 @@ const getWagesAndLabourOnboardingJoin = async (filters = {}) => {
     const request = pool.request();
 
     // Build OUTER APPLY filter for PayStructure if it exists
-    const payStructureFilter = filters.PayStructure 
-        ? 'AND R.PayStructure = @PayStructure' 
+    const payStructureFilter = filters.PayStructure
+        ? 'AND R.PayStructure = @PayStructure'
         : '';
 
     let query = `
@@ -5642,8 +5642,8 @@ const getAttendanceReportAAndLabourOnboardingJoin = async (filters = {}) => {
         WHERE onboarding.status IN ('Approved', 'Disable')
     `;
 
-     // 🔍 Filter by ProjectID
-     if (filters.ProjectID) {
+    // 🔍 Filter by ProjectID
+    if (filters.ProjectID) {
         const projectIDs = filters.ProjectID.split(',').map(id => parseInt(id.trim())).filter(Boolean);
         const projectParams = projectIDs.map((val, idx) => {
             const param = `projectID${idx}`;
