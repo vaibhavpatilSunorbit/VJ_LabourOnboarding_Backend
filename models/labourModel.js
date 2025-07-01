@@ -1695,6 +1695,42 @@ async function getAllApprovedLabours() {
 //     }
 // }
 
+
+// async function getAllApprovedOrMonthlyDisabledLabours() {
+//     try {
+//         const pool = await poolPromise;
+
+//         // Define the LabourID array you want to filter by
+//         const labourIds = [
+//             'JC6057', 'JC5306'
+//         ];
+
+//         const result = await pool
+//             .request()
+//             .query(`
+//                     SELECT DISTINCT lo.LabourID AS labourId, lo.workingHours, lo.projectName, lo.status
+//                     FROM [labourOnboarding] lo
+//                     WHERE lo.status IN ('Approved', 'Disable')
+//                     AND lo.LabourID IN ('${labourIds.join("', '")}')
+                    
+//                     UNION
+
+//                     SELECT DISTINCT lo.LabourID AS labourId, lo.workingHours, lo.projectName, lo.status
+//                     FROM [labourOnboarding] lo
+//                     JOIN [LabourOnboardingForm].[dbo].[LabourAttendanceLogs] lal
+//                         ON lal.LabourID = lo.LabourID
+//                     WHERE lal.attendanceStatus = 'Disable'
+//                     AND lo.LabourID IN ('${labourIds.join("', '")}')
+//             `);
+// console.log("result.recordset for attendance ",result.recordset)
+//         return result.recordset;
+//     } catch (err) {
+//         console.error('SQL error fetching labours', err);
+//         throw new Error('Error fetching approved or monthly disabled labours');
+//     }
+// }
+
+
 async function getAllApprovedOrMonthlyDisabledLabours() {
     try {
         const pool = await poolPromise;
@@ -5903,27 +5939,57 @@ async function searchAttendance(query) {
 
 
 
+// async function searchLaboursFromSiteTransfer(query) {
+//     try {
+//         const pool = await poolPromise;
+//         const result = await pool.request()
+//             .input('query', sql.NVarChar, `%${query}%`)
+//             .query(`
+//                 SELECT id, aadhaarNumber, name, projectName, labourCategory, department as departmentId,
+//                        LabourID, companyName, OnboardName, workingHours, businessUnit, designation, location
+//                 FROM labourOnboarding
+//                 WHERE status IN ('Approved', 'Disable')
+//                   AND (name LIKE @query 
+//                        OR companyName LIKE @query 
+//                        OR LabourID LIKE @query 
+//                        OR departmentName LIKE @query 
+//                        OR location LIKE @query)
+//             `);
+//         return result.recordset;
+//     } catch (error) {
+//         throw error;
+//     }
+// };
+
 async function searchLaboursFromSiteTransfer(query) {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
             .query(`
-                SELECT id, aadhaarNumber, name, projectName, labourCategory, department as departmentId,
-                       LabourID, companyName, OnboardName, workingHours, businessUnit, designation, location
-                FROM labourOnboarding
-                WHERE status IN ('Approved', 'Disable')
-                  AND (name LIKE @query 
-                       OR companyName LIKE @query 
-                       OR LabourID LIKE @query 
-                       OR departmentName LIKE @query 
-                       OR location LIKE @query)
+                WITH LabourFiltered AS (
+                    SELECT id, aadhaarNumber, name, projectName, labourCategory, department as departmentId,
+                           LabourID, companyName, OnboardName, workingHours, businessUnit, designation, location,
+                           ROW_NUMBER() OVER (PARTITION BY LabourID ORDER BY CASE WHEN status = 'Approved' THEN 1 ELSE 2 END) AS row_num
+                    FROM labourOnboarding
+                    WHERE status IN ('Approved', 'Disable')
+                    AND (name LIKE @query 
+                         OR companyName LIKE @query 
+                         OR LabourID LIKE @query 
+                         OR departmentName LIKE @query 
+                         OR location LIKE @query)
+                )
+                SELECT id, aadhaarNumber, name, projectName, labourCategory, departmentId, LabourID, companyName, 
+                       OnboardName, workingHours, businessUnit, designation, location
+                FROM LabourFiltered
+                WHERE row_num = 1;
             `);
         return result.recordset;
     } catch (error) {
         throw error;
     }
-};
+}
+
 
 // .query('SELECT * FROM LabourMonthlyWages WHERE name LIKE @query OR companyName LIKE @query OR LabourID LIKE @query OR DailyWages LIKE @query OR departmentName LIKE @query OR WagesEditedBy LIKE @query OR PayStructure LIKE @query');
 
