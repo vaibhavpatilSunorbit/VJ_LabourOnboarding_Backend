@@ -3497,6 +3497,31 @@ cron.schedule('10 12 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
+
+// ==============================================================================================================
+
+// cron.schedule('20 12 * * *', async () => {
+//   cronLogger.info('Running Daily Attendance Cron for Yesterday');
+//   const yesterday = new Date();
+//   yesterday.setDate(yesterday.getDate() - 1);
+//   const formatted = yesterday.toISOString().split('T')[0];
+//   await getAllLaboursAttendanceDaily(formatted);
+// });
+
+
+cron.schedule('30 01 */4 * *', async () => {
+  cronLogger.info('Running Backfill Cron for Current Month');
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1;
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    await getAllLaboursAttendanceDaily(date);
+  }
+});
+
 // cron.schedule('28 14 * * *', async () => {
 //     cronLogger.info('Scheduled cron triggered...');
 //     if (currentProcessingMonth) {
@@ -3506,6 +3531,7 @@ cron.schedule('10 12 * * *', async () => {
 //         cronLogger.info('No further months to process. Cron execution skipped.');
 //     }
 // });
+
 
 
 // --------------------------------------------------------------------------------

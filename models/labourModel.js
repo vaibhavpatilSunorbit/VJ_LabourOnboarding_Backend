@@ -2090,71 +2090,167 @@ async function insertIntoLabourAttendanceSummary(summary) {
 //     }
 // }
 
+// ====================================================       CHANGES ARE 08-07-2025  ==================================================
 
 async function insertIntoLabourAttendanceDetails(details) {
-    try {
-        const pool = await poolPromise;
-        // console.log("details", details)
-        // We add the new columns (PayrollCalRoundOffOvertime, OvertimeManually, etc.)
-        // so the monthly re-calc can also save them if that row doesn't exist yet.
-        const query = `
-            IF NOT EXISTS (
-                SELECT 1
-                FROM [dbo].[LabourAttendanceDetails]
-                WHERE LabourId = @LabourId AND Date = @Date
-            )
-            BEGIN
-                INSERT INTO [dbo].[LabourAttendanceDetails] (
-                    [LabourId], [Date],
-                    [FirstPunch], [FirstPunchAttendanceId], [FirstPunchDeviceId],
-                    [LastPunch], [LastPunchAttendanceId], [LastPunchDeviceId],
-                    [TotalHours], [Overtime], [PayrollCalRoundOffOvertime], [Status],
-                    [CreationDate], [projectName],
-                    [FirstPunchManually], [LastPunchManually],
-                    [OvertimeManually], [RemarkManually], [projectIdFromDevicefirstPunch], [projectIdFromDeviceLastPunch] 
-                )
-                VALUES (
-                    @LabourId, @Date,
-                    @FirstPunch, @FirstPunchAttendanceId, @FirstPunchDeviceId,
-                    @LastPunch, @LastPunchAttendanceId, @LastPunchDeviceId,
-                    @TotalHours, @Overtime, @PayrollCalRoundOffOvertime, @Status,
-                    @CreationDate, @projectName,
-                    @FirstPunchManually, @LastPunchManually,
-                    @OvertimeManually, @RemarkManually, @projectIdFromDevicefirstPunch, @projectIdFromDeviceLastPunch 
-                )
-            END
-        `;
+  try {
+    const pool = await poolPromise;
 
-        await pool
-            .request()
-            .input('LabourId', sql.NVarChar, details.labourId)
-            .input('projectName', sql.Int, details.projectName)
-            .input('Date', sql.Date, details.date)
-            .input('FirstPunch', sql.NVarChar, details.firstPunch)
-            .input('FirstPunchAttendanceId', sql.Int, details.firstPunchAttendanceId || null)
-            .input('FirstPunchDeviceId', sql.NVarChar, details.firstPunchDeviceId || null)
-            .input('LastPunch', sql.NVarChar, details.lastPunch)
-            .input('LastPunchAttendanceId', sql.Int, details.lastPunchAttendanceId || null)
-            .input('LastPunchDeviceId', sql.NVarChar, details.lastPunchDeviceId || null)
-            .input('TotalHours', sql.Float, parseFloat(details.totalHours) || 0)
-            .input('Overtime', sql.Float, parseFloat(details.overtime) || 0)
-            .input('PayrollCalRoundOffOvertime', sql.Float, parseFloat(details.PayrollCalRoundOffOvertime) || 0)
-            .input('Status', sql.NVarChar, details.status)
-            .input('CreationDate', sql.DateTime, details.creationDate)
-            .input('FirstPunchManually', sql.NVarChar, details.firstPunch)
-            .input('LastPunchManually', sql.NVarChar, details.lastPunch)
-            .input('OvertimeManually', sql.Float, parseFloat(details.OvertimeManually) || 0)
-            .input('RemarkManually', sql.NVarChar, details.remarkManually || null)
-            .input('projectIdFromDevicefirstPunch', sql.Int, parseInt(details.projectIdFromDevicefirstPunch) || 0)
-            .input('projectIdFromDeviceLastPunch', sql.Int, parseInt(details.projectIdFromDeviceLastPunch) || 0)
-            .query(query);
+    const query = `
+      IF EXISTS (
+        SELECT 1 FROM LabourAttendanceDetails 
+        WHERE LabourId = @LabourId AND Date = @Date
+      )
+      BEGIN
+        -- Only update if FirstPunch is NULL
+        IF EXISTS (
+          SELECT 1 FROM LabourAttendanceDetails 
+          WHERE LabourId = @LabourId AND Date = @Date AND FirstPunch IS NULL
+        )
+        BEGIN
+          UPDATE LabourAttendanceDetails
+          SET 
+            FirstPunch = @FirstPunch,
+            FirstPunchAttendanceId = @FirstPunchAttendanceId,
+            FirstPunchDeviceId = @FirstPunchDeviceId,
+            LastPunch = @LastPunch,
+            LastPunchAttendanceId = @LastPunchAttendanceId,
+            LastPunchDeviceId = @LastPunchDeviceId,
+            TotalHours = @TotalHours,
+            Overtime = @Overtime,
+            PayrollCalRoundOffOvertime = @PayrollCalRoundOffOvertime,
+            Status = @Status,
+            CreationDate = @CreationDate,
+            projectName = @projectName,
+            FirstPunchManually = @FirstPunchManually,
+            LastPunchManually = @LastPunchManually,
+            OvertimeManually = @OvertimeManually,
+            RemarkManually = @RemarkManually,
+            projectIdFromDevicefirstPunch = @projectIdFromDevicefirstPunch,
+            projectIdFromDeviceLastPunch = @projectIdFromDeviceLastPunch
+          WHERE LabourId = @LabourId AND Date = @Date
+        END
+      END
+      ELSE
+      BEGIN
+        INSERT INTO LabourAttendanceDetails (
+          LabourId, Date,
+          FirstPunch, FirstPunchAttendanceId, FirstPunchDeviceId,
+          LastPunch, LastPunchAttendanceId, LastPunchDeviceId,
+          TotalHours, Overtime, PayrollCalRoundOffOvertime, Status,
+          CreationDate, projectName,
+          FirstPunchManually, LastPunchManually,
+          OvertimeManually, RemarkManually,
+          projectIdFromDevicefirstPunch, projectIdFromDeviceLastPunch
+        )
+        VALUES (
+          @LabourId, @Date,
+          @FirstPunch, @FirstPunchAttendanceId, @FirstPunchDeviceId,
+          @LastPunch, @LastPunchAttendanceId, @LastPunchDeviceId,
+          @TotalHours, @Overtime, @PayrollCalRoundOffOvertime, @Status,
+          @CreationDate, @projectName,
+          @FirstPunchManually, @LastPunchManually,
+          @OvertimeManually, @RemarkManually,
+          @projectIdFromDevicefirstPunch, @projectIdFromDeviceLastPunch
+        )
+      END
+    `;
 
-    } catch (err) {
-        console.error('Error inserting into LabourAttendanceDetails:', err);
-        throw err;
-    }
+    await pool.request()
+      .input('LabourId', sql.NVarChar, details.labourId)
+      .input('projectName', sql.Int, details.projectName)
+      .input('Date', sql.Date, details.date)
+      .input('FirstPunch', sql.NVarChar, details.firstPunch)
+      .input('FirstPunchAttendanceId', sql.Int, details.firstPunchAttendanceId || null)
+      .input('FirstPunchDeviceId', sql.NVarChar, details.firstPunchDeviceId || null)
+      .input('LastPunch', sql.NVarChar, details.lastPunch)
+      .input('LastPunchAttendanceId', sql.Int, details.lastPunchAttendanceId || null)
+      .input('LastPunchDeviceId', sql.NVarChar, details.lastPunchDeviceId || null)
+      .input('TotalHours', sql.Float, parseFloat(details.totalHours) || 0)
+      .input('Overtime', sql.Float, parseFloat(details.overtime) || 0)
+      .input('PayrollCalRoundOffOvertime', sql.Float, parseFloat(details.PayrollCalRoundOffOvertime) || 0)
+      .input('Status', sql.NVarChar, details.status)
+      .input('CreationDate', sql.DateTime, details.creationDate)
+      .input('FirstPunchManually', sql.NVarChar, details.firstPunch)
+      .input('LastPunchManually', sql.NVarChar, details.lastPunch)
+      .input('OvertimeManually', sql.Float, parseFloat(details.OvertimeManually) || 0)
+      .input('RemarkManually', sql.NVarChar, details.remarkManually || null)
+      .input('projectIdFromDevicefirstPunch', sql.Int, parseInt(details.projectIdFromDevicefirstPunch) || 0)
+      .input('projectIdFromDeviceLastPunch', sql.Int, parseInt(details.projectIdFromDeviceLastPunch) || 0)
+      .query(query);
+
+  } catch (err) {
+    console.error('Error inserting/updating LabourAttendanceDetails:', err);
+    throw err;
+  }
 }
 
+
+// async function insertIntoLabourAttendanceDetails(details) {
+//     try {
+//         const pool = await poolPromise;
+//         // console.log("details", details)
+//         // We add the new columns (PayrollCalRoundOffOvertime, OvertimeManually, etc.)
+//         // so the monthly re-calc can also save them if that row doesn't exist yet.
+//         const query = `
+//             IF NOT EXISTS (
+//                 SELECT 1
+//                 FROM [dbo].[LabourAttendanceDetails]
+//                 WHERE LabourId = @LabourId AND Date = @Date
+//             )
+//             BEGIN
+//                 INSERT INTO [dbo].[LabourAttendanceDetails] (
+//                     [LabourId], [Date],
+//                     [FirstPunch], [FirstPunchAttendanceId], [FirstPunchDeviceId],
+//                     [LastPunch], [LastPunchAttendanceId], [LastPunchDeviceId],
+//                     [TotalHours], [Overtime], [PayrollCalRoundOffOvertime], [Status],
+//                     [CreationDate], [projectName],
+//                     [FirstPunchManually], [LastPunchManually],
+//                     [OvertimeManually], [RemarkManually], [projectIdFromDevicefirstPunch], [projectIdFromDeviceLastPunch] 
+//                 )
+//                 VALUES (
+//                     @LabourId, @Date,
+//                     @FirstPunch, @FirstPunchAttendanceId, @FirstPunchDeviceId,
+//                     @LastPunch, @LastPunchAttendanceId, @LastPunchDeviceId,
+//                     @TotalHours, @Overtime, @PayrollCalRoundOffOvertime, @Status,
+//                     @CreationDate, @projectName,
+//                     @FirstPunchManually, @LastPunchManually,
+//                     @OvertimeManually, @RemarkManually, @projectIdFromDevicefirstPunch, @projectIdFromDeviceLastPunch 
+//                 )
+//             END
+//         `;
+
+//         await pool
+//             .request()
+//             .input('LabourId', sql.NVarChar, details.labourId)
+//             .input('projectName', sql.Int, details.projectName)
+//             .input('Date', sql.Date, details.date)
+//             .input('FirstPunch', sql.NVarChar, details.firstPunch)
+//             .input('FirstPunchAttendanceId', sql.Int, details.firstPunchAttendanceId || null)
+//             .input('FirstPunchDeviceId', sql.NVarChar, details.firstPunchDeviceId || null)
+//             .input('LastPunch', sql.NVarChar, details.lastPunch)
+//             .input('LastPunchAttendanceId', sql.Int, details.lastPunchAttendanceId || null)
+//             .input('LastPunchDeviceId', sql.NVarChar, details.lastPunchDeviceId || null)
+//             .input('TotalHours', sql.Float, parseFloat(details.totalHours) || 0)
+//             .input('Overtime', sql.Float, parseFloat(details.overtime) || 0)
+//             .input('PayrollCalRoundOffOvertime', sql.Float, parseFloat(details.PayrollCalRoundOffOvertime) || 0)
+//             .input('Status', sql.NVarChar, details.status)
+//             .input('CreationDate', sql.DateTime, details.creationDate)
+//             .input('FirstPunchManually', sql.NVarChar, details.firstPunch)
+//             .input('LastPunchManually', sql.NVarChar, details.lastPunch)
+//             .input('OvertimeManually', sql.Float, parseFloat(details.OvertimeManually) || 0)
+//             .input('RemarkManually', sql.NVarChar, details.remarkManually || null)
+//             .input('projectIdFromDevicefirstPunch', sql.Int, parseInt(details.projectIdFromDevicefirstPunch) || 0)
+//             .input('projectIdFromDeviceLastPunch', sql.Int, parseInt(details.projectIdFromDeviceLastPunch) || 0)
+//             .query(query);
+
+//     } catch (err) {
+//         console.error('Error inserting into LabourAttendanceDetails:', err);
+//         throw err;
+//     }
+// }
+
+// ===========================================================    CHANGES END HERE 08-07-2025  ======================================
 
 // async function insertIntoLabourAttendanceDetails(details) {
 //     try {
