@@ -50,7 +50,7 @@ async function getNextUniqueID(departmentId) {
     try {
         const pool = await poolPromise;
 
-        const jihDepartments = [336, 337, 338, 339, 340, 341];
+        const jihDepartments = [336, 337, 338, 339, 340, 341, 342];
         let prefix = 'JC';
         let initialID = 'JC4008';
         const exclusions = `'JCO519', 'VJ3893'`;
