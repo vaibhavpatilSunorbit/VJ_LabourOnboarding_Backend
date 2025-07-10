@@ -5905,37 +5905,74 @@ async function searchFromVariableInput(query) {
 
 
 
-
-
-
 async function searchAttendance(query) {
-    try {
+   try {
         const pool = await poolPromise;
         const result = await pool.request()
             .input('query', sql.NVarChar, `%${query}%`)
             .query(`
-                SELECT lo.id, lo.aadhaarNumber, lo.name, lo.projectName AS ProjectID, 
-                       lo.labourCategory, lo.department AS DepartmentID, lo.LabourID, 
-                       lo.companyName, lo.OnboardName, lo.workingHours, lo.businessUnit, 
-                       lo.designation, lo.location As projectName, lo.departmentName As department,
-                       fs.netPay, fs.basicSalary
-                FROM labourOnboarding lo
-                LEFT JOIN FinalizedSalaryPay fs ON lo.LabourID = fs.LabourID
-                WHERE lo.status IN ('Approved', 'Disable')
-                  AND (lo.name LIKE @query 
-                       OR lo.aadhaarNumber LIKE @query 
-                       OR lo.LabourID LIKE @query 
-                       OR lo.OnboardName LIKE @query 
-                       OR lo.workingHours LIKE @query 
-                       OR lo.businessUnit LIKE @query 
-                       OR lo.designation LIKE @query 
-                       OR lo.location LIKE @query)
+                WITH RankedLabours AS (
+                    SELECT *,
+                        COUNT(*) OVER (PARTITION BY LabourID) AS LabourCount,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY LabourID 
+                            ORDER BY 
+                                CASE 
+                                    WHEN status = 'Approved' THEN 1 
+                                    ELSE 2 
+                                END
+                        ) AS rn
+                    FROM labourOnboarding
+                    WHERE 
+                        name LIKE @query OR 
+                        aadhaarNumber LIKE @query OR 
+                        LabourID LIKE @query OR 
+                        OnboardName LIKE @query OR 
+                        workingHours LIKE @query OR 
+                        businessUnit LIKE @query OR 
+                        designation LIKE @query OR 
+                        location LIKE @query OR 
+                        departmentName LIKE @query
+                )
+                SELECT * 
+                FROM RankedLabours
+                WHERE rn = 1
             `);
         return result.recordset;
     } catch (error) {
         throw error;
     }
 };
+
+
+// async function searchAttendance(query) {
+//     try {
+//         const pool = await poolPromise;
+//         const result = await pool.request()
+//             .input('query', sql.NVarChar, `%${query}%`)
+//             .query(`
+//                 SELECT lo.id, lo.aadhaarNumber, lo.name, lo.projectName AS ProjectID, 
+//                        lo.labourCategory, lo.department AS DepartmentID, lo.LabourID, 
+//                        lo.companyName, lo.OnboardName, lo.workingHours, lo.businessUnit, 
+//                        lo.designation, lo.location As projectName, lo.departmentName As department,
+//                        fs.netPay, fs.basicSalary
+//                 FROM labourOnboarding lo
+//                 LEFT JOIN FinalizedSalaryPay fs ON lo.LabourID = fs.LabourID
+//                 WHERE lo.status IN ('Approved', 'Disable')
+//                   AND (lo.name LIKE @query 
+//                        OR lo.aadhaarNumber LIKE @query 
+//                        OR lo.LabourID LIKE @query 
+//                        OR lo.OnboardName LIKE @query 
+//                        OR lo.workingHours LIKE @query 
+//                        OR lo.businessUnit LIKE @query 
+//                        OR lo.designation LIKE @query 
+//                        OR lo.location LIKE @query)
+//             `);
+//         return result.recordset;
+//     } catch (error) {
+//         throw error;
+//     }
+// };
 
 
 
