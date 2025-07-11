@@ -4269,6 +4269,7 @@ async function upsertAttendance(req, res) {
         AttendanceStatus,
         markWeeklyOff,
         updatedFields,
+        userType,
     } = req.body;
     // Validate input
 console.log("req.body for attendance--->", req.body)
@@ -4292,6 +4293,22 @@ console.log("req.body for attendance--->", req.body)
     if (checkAdminApproval.recordset.length > 0) {
         return res.status(400).json({
             message: 'Attendance is Already Pending with Admin Approval.',
+        });
+    }
+
+      const checkUserApproval = await pool.request()
+        .input('labourId', sql.NVarChar, labourId)
+        .input('AttendanceId', sql.Int, AttendanceId)
+        .input('userType', sql.NVarChar, userType)
+        .query(`
+        SELECT *
+        FROM [LabourAttendanceApproval]
+        WHERE LabourID = @labourId AND AttendanceId = @AttendanceId AND ApprovalStatus = 'Pending' AND userType = @userType
+    `);
+
+    if (checkUserApproval.recordset.length > 0) {
+        return res.status(400).json({
+            message: 'Attendance is Already Pending with User Approval.',
         });
     }
 
@@ -4337,12 +4354,12 @@ console.log("req.body for attendance--->", req.body)
         }
 
         if (AttendanceStatus !== "MP") {
-            await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff, updatedFields);
+            await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff, updatedFields, userType);
             return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
         };
 
         if (AttendanceStatus === "MP" && timesUpdated >= 3) {
-            await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff, updatedFields);
+            await labourModel.markAttendanceForApproval(AttendanceId, labourId, date, overtimeManually, firstPunchManually, lastPunchManually, remarkManually, finalOnboardName, markWeeklyOff, updatedFields, userType);
             return res.status(200).json({ message: 'Attendance sent To ADMIN APPROVAL.' });
         };
 
@@ -5090,6 +5107,7 @@ async function updateOTHoursAttendance(req, res) {
             AttendanceStatus,
             markWeeklyOff,
             updatedFields,
+            userType,
         } = req.body;
 
 
@@ -5108,6 +5126,7 @@ async function updateOTHoursAttendance(req, res) {
         }
 
         const finalOnboardName = onboardName || 'System';
+        const finalUserType = userType || 'System';
 
         // ✅ Build only relevant fields based on updatedFields
         const updatePayload = {
@@ -5116,6 +5135,7 @@ async function updateOTHoursAttendance(req, res) {
             AttendanceId,
             onboardName: finalOnboardName,
             editUserName: finalOnboardName,
+            userType: finalUserType,
         };
 
         if (updatedFields.includes('overtimemanually') && overtimeManually !== undefined) {
