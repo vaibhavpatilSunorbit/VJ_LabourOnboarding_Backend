@@ -2811,7 +2811,8 @@ async function markAttendanceForApproval(
     remarkManually,
     finalOnboardName,
     markWeeklyOff,
-    updatedFields
+    updatedFields,
+    userType
 ) {
     try {
         if (AttendanceId === undefined || AttendanceId === null || isNaN(AttendanceId)) {
@@ -2832,6 +2833,7 @@ async function markAttendanceForApproval(
         request.input('lastPunchManually', sql.VarChar, lastPunchManually || null);
         request.input('markWeeklyOff', sql.Bit, markWeeklyOff === true ? 1 : 0 || null);
         request.input('UpdatedFields', sql.NVarChar, JSON.stringify(updatedFields) || null);
+         request.input('userType', sql.NVarChar, userType || null);
 
         const result = await pool.request()
         .input('LabourID', sql.NVarChar, labourId)
@@ -2857,10 +2859,10 @@ async function markAttendanceForApproval(
         // Perform the INSERT query
         await request.query(`
             INSERT INTO LabourAttendanceApproval (
-              AttendanceId, LabourId, Date, OvertimeManually, RemarkManually, OnboardName, FirstPunchManually, LastPunchManually, markWeeklyOff, name, UpdatedFields
+              AttendanceId, LabourId, Date, OvertimeManually, RemarkManually, OnboardName, FirstPunchManually, LastPunchManually, markWeeklyOff, name, UpdatedFields, userType
             )
             VALUES (
-              @AttendanceId, @labourId, @date, @overtimeManually, @remarkManually, @finalOnboardName, @firstPunchManually, @lastPunchManually, @markWeeklyOff, @name, @UpdatedFields
+              @AttendanceId, @labourId, @date, @overtimeManually, @remarkManually, @finalOnboardName, @firstPunchManually, @lastPunchManually, @markWeeklyOff, @name, @UpdatedFields, @userType
             )
         `);
 
@@ -4094,7 +4096,7 @@ FROM [LabourAttendanceApproval] L order by L.LastUpdatedDate desc;
                 UpdatedFields: updatedFields,
             };
         });
-    
+    console.log("parsedRecordset===>",parsedRecordset)
         return parsedRecordset;
     } catch (error) {
         console.error('Error fetching attendance Approval:', error);
