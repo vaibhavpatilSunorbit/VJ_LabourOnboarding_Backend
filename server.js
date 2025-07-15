@@ -182,7 +182,7 @@ const { poolPromise2 } = require('./config/dbConfig2');
 const { poolPromise } = require('./config/dbConfig');
 const insentiveRoutes = require('./routes/insentiveRoutes');
 const dashBoardRoutes = require('./routes/dashBoardRoutes');
-
+const attandanceRoutes = require('./routes/attandanceRoutes');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -216,7 +216,7 @@ const upload = multer({
 });
 
 app.use('/api/labours', labourRoutes);
-
+app.use('/api/attandance', attandanceRoutes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Add the route to download the Excel file
