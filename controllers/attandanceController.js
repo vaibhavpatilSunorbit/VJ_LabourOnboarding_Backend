@@ -10,7 +10,11 @@ const getLabourIdsWithNullFirstPunch = async () => {
       AND [Date] >= DATEADD(DAY, -10, CAST(GETDATE() AS DATE))
   `);
   return result.recordset.map(row => row.LabourId);
+    
+
+  
 };
+ 
 
 // Helper 2: Labour IDs with punch_time NOT NULL in last 10 days
 const getLabourIdsWithValidPunchTime = async () => {
@@ -30,11 +34,15 @@ const getValidPunches = async (req, res) => {
     const [nullFirstPunchIds, validPunchTimeIds] = await Promise.all([
       getLabourIdsWithNullFirstPunch(),
       getLabourIdsWithValidPunchTime(),
+
     ]);
+    console.log('Null First Punch IDs:', nullFirstPunchIds);
+    
 
     const validSet = new Set(validPunchTimeIds);
     const matchedIds = nullFirstPunchIds.filter(id => validSet.has(id));
-
+    // console.log('Matched IDs:', matchedIds);x
+    
     res.status(200).json({
       success: true,
       message: 'Comparison successful',
