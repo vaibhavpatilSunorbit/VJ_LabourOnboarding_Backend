@@ -2959,7 +2959,7 @@ async function approveAttendance(AttendanceId) {
         throw new Error('Error approving attendance.');
     }
 };
-
+ 
 
 async function rejectAttendanceAdmin(AttendanceId, rejectReason) {
     try {

@@ -2175,6 +2175,8 @@ async function getVariablePayForLabour(labourId, month, year) {
 //   }
 
 async function getWageInfoForLabour(labourId, month, year) {
+     const timer = `getWageInfoForLabour-${labourId}`;
+  console.time(timer);
     try {
         const pool = await poolPromise;
 
@@ -2303,7 +2305,9 @@ async function getWageInfoForLabour(labourId, month, year) {
     } catch (error) {
         console.error('Error in getWageInfoForLabour:', error);
         throw error;
-    }
+    }finally {
+    console.timeEnd(timer);
+  }
 }
 
 /**
@@ -2772,74 +2776,95 @@ async function calculateTotalOvertime(labourId, month, year) {
     }
 }
 
-async function withTimeout(promise, ms = 20000, label = 'Operation') {
+const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+
+// ---------------------------------------------------------------------------
+// Generic timeout helper – now takes a fallbackValue to ensure a result.
+// ---------------------------------------------------------------------------
+function withTimeout(promise, ms = DEFAULT_TIMEOUT_MS, label = 'Operation', fallbackValue = null) {
     return Promise.race([
-        promise,
-        new Promise((_, reject) =>
+        promise.catch(err => {
+            console.error(`[ERROR] ${label} failed:`, err);
+            throw err;
+        }),
+        new Promise(resolve => {
             setTimeout(() => {
-                console.error(`[TIMEOUT] ${label} timed out after ${ms}ms`);
-                reject(new Error(`${label} timed out`));
-            }, ms)
-        )
+                const msg = `[TIMEOUT] ${label} exceeded ${ms} ms`;
+                console.error(msg);
+                resolve(fallbackValue); // return safe fallback instead of rejecting
+            }, ms);
+        })
     ]);
 }
 
 
 
-async function calculateSalaryForLabour(labourId, month, year) {
-    try {
-        console.log(`\n[START] Salary calculation for Labour ID: ${labourId}, Month: ${month}, Year: ${year}`);
-       const wagesInfo = await withTimeout(
-           getWageInfoForLabour(labourId, month, year),
-           60000, // increased to 30s
-           'getWageInfoForLabour'
-       );
-        if (!wagesInfo) {
-                   return {
-                       labourId,
-                       month,
-                       year,
-                       message: `No approved wages found for labour ID: ${labourId}`
-                   };
-               }
-        const { wageBreakdown = [], workingHours } = wagesInfo;
-               const forSundaylatestWage = wageBreakdown[wageBreakdown.length - 1];
-               const forSundaydailyWageRate = forSundaylatestWage?.dailyWages || 0;
-       
-      
-       
-        let attendance;
-              if(forSundaydailyWageRate) {
-                  
-                   attendance = await withTimeout(
-                      getAttendanceSummaryForLabour(labourId, month, year, workingHours, forSundaydailyWageRate),
-                      100000,
-                      'getAttendanceSummaryForLabour'
-                   );
-                   
-               }else{
-                   attendance = await withTimeout(
-                      getAttendanceSummaryForLabourMonthly(labourId, month, year),
-                      60000,
-                      'getAttendanceSummaryForLabourMonthly'
-                   );
-               }
-              
-       
-       
-       const variablePay = await withTimeout(
-           getVariablePayForLabour(labourId, month, year),
-        32000,
-           'getVariablePayForLabour'
-       );
-       
-       const cappedOvertime = await withTimeout(
-           calculateTotalOvertime(labourId, month, year),
-           30000,
-           'calculateTotalOvertime'
-       );
 
-         if (!wagesInfo || !wagesInfo.wageBreakdown?.length) {
+
+async function calculateSalaryForLabour(labourId, month, year) {
+    const salaryTimer = `Salary-${labourId}`;
+    console.time(salaryTimer);
+    try {
+        // console.log(`\n[START] Salary calculation for Labour ID: ${labourId}, Month: ${month}, Year: ${year}`);
+        console.time('getWageInfoForLabour');
+        const wagesInfo = await withTimeout(getWageInfoForLabour(labourId, month, year), DEFAULT_TIMEOUT_MS, // increased to 30s
+            `getWageInfoForLabour-${labourId}`
+        );
+        console.timeEnd('getWageInfoForLabour');
+        if (!wagesInfo) {
+            return {
+                labourId,
+                month,
+                year,
+                message: `No approved wages found for labour ID: ${labourId}`
+            };
+        }
+        const { wageBreakdown = [], workingHours } = wagesInfo;
+        const forSundaylatestWage = wageBreakdown[wageBreakdown.length - 1];
+        const forSundaydailyWageRate = forSundaylatestWage?.dailyWages || 0;
+
+
+        console.time('getAttendanceSummary');
+        let attendance;
+        if (forSundaydailyWageRate) {
+
+            attendance = await withTimeout(
+                getAttendanceSummaryForLabour(labourId, month, year, workingHours, forSundaydailyWageRate),
+                DEFAULT_TIMEOUT_MS,
+                `getAttendanceSummaryForLabour-${labourId}`
+            );
+
+        } else {
+            attendance = await withTimeout(
+                getAttendanceSummaryForLabourMonthly(labourId, month, year),
+                DEFAULT_TIMEOUT_MS,
+                `getAttendanceSummaryForLabourMonthly-${labourId}`
+            );
+        }
+        console.timeEnd('getAttendanceSummary');
+
+        console.time('getVariablePayForLabour');
+        const variablePay = await withTimeout(
+            getVariablePayForLabour(labourId, month, year),
+            DEFAULT_TIMEOUT_MS,
+            `getVariablePayForLabour-${labourId}`
+        );
+        console.timeEnd('getVariablePayForLabour');
+        console.time('calculateTotalOvertime');
+        let cappedOvertime = 0;
+
+        try {
+            cappedOvertime = await withTimeout(
+                calculateTotalOvertime(labourId, month, year),
+                DEFAULT_TIMEOUT_MS,
+                `calculateTotalOvertime-${labourId}`
+            );
+        } finally {
+            console.timeEnd('calculateTotalOvertime');
+        }
+
+
+        if (!wagesInfo || !wagesInfo.wageBreakdown?.length) {
             console.warn("[WARN] No valid wages found.");
             return {
                 labourId,
@@ -2866,11 +2891,11 @@ async function calculateSalaryForLabour(labourId, month, year) {
             weeklyOffDay: weeklyOffDays = 0
         } = attendance;
 
-        console.log("[INFO] Attendance Parsed Values", {
-            presentDays, absentDays, halfDays, missPunchDays,
-            normalOvertimeCount, totalHolidaysInMonth, weeklyOffDays,
-            totalHoursForMonth, holidayOvertimeHours, holidayOvertimeWages
-        });
+        // console.log("[INFO] Attendance Parsed Values", {
+        //     presentDays, absentDays, halfDays, missPunchDays,
+        //     normalOvertimeCount, totalHolidaysInMonth, weeklyOffDays,
+        //     totalHoursForMonth, holidayOvertimeHours, holidayOvertimeWages
+        // });
 
         // Destructure variable pay
         const {
@@ -2881,13 +2906,13 @@ async function calculateSalaryForLabour(labourId, month, year) {
 
         // const latestWage = wagesInfo.wageBreakdown[wagesInfo.wageBreakdown.length - 1];
         let latestWage = wageBreakdown[wageBreakdown.length - 1];
-for (let i = wageBreakdown.length - 1; i >= 0; i--) {
-    const wage = wageBreakdown[i];
-    if (wage.fixedMonthlyWages > 0 || wage.monthlyWages > 0) {
-        latestWage = wage;
-        break;
-    }
-}
+        for (let i = wageBreakdown.length - 1; i >= 0; i--) {
+            const wage = wageBreakdown[i];
+            if (wage.fixedMonthlyWages > 0 || wage.monthlyWages > 0) {
+                latestWage = wage;
+                break;
+            }
+        }   
         const wageType = (latestWage?.payStructure || "").toUpperCase();
         const dailyWageRate = latestWage?.dailyWages || 0;
         const monthlySalary = latestWage?.monthlyWages || 0;
@@ -3041,8 +3066,17 @@ for (let i = wageBreakdown.length - 1; i >= 0; i--) {
             isNegativeSalary
         };
     } catch (error) {
+        const isTimeout = error.message.toLowerCase().includes('timed out');
         console.error(`[ERROR] Failed to process payroll for labourId: ${labourId}`, error);
-        throw error;
+        return {
+            labourId,
+            month,
+            year,
+            error: isTimeout ? 'Request timed out while calculating salary.' : error.message,
+            message: 'Error fetching salary generation data.'
+        };
+    } finally {
+        console.timeEnd(salaryTimer);
     }
 }
 
