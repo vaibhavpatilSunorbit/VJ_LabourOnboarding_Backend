@@ -1,7 +1,7 @@
 
 const express = require('express');
 const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, getDesignations, getCompanyNamesByProjectId, getDevices, getAttendanceLogs, approveLabour, getProjectDeviceStatus, updateProjectDeviceStatus, deleteProjectDeviceStatus, getProjectDeviceStatusSS, fetchDynamicData, fetchOrgDynamicData, addFvEmpId, updateEmployeeMaster, saveApiResponsePayload, getLaboursWithOldAttendance, fetchCachedLabours, saveTransferData, getAllLaboursWithTransferDetails, employeeMasterPayloadUpdatepost, organizationMasterPayloadUpdatepost, siteTransferRequestforAdmin, approveSiteTransfer, rejectSiteTransfer, editSiteTransfer, getAdminSiteTransferApproval, getWagesforInsentiveAdd
-    , getAdminCompanyTransferApproval, companyTransferRequestforAdmin, approveCompanyTransfer, rejectCompanyTransfer, editCompanyTransfer, getSuperAdminProjectNames, getLabourAttendanceCheck,
+    , getAdminCompanyTransferApproval, companyTransferRequestforAdmin, approveCompanyTransfer, rejectCompanyTransfer, editCompanyTransfer, getSuperAdminProjectNames, getLabourAttendanceCheck, addDevicesToProject, getDevicesByProject,
 
      getAllLaboursCount, getAllWagesCount ,getAllSiteTransferCount, getAllVariablePayCount, 
     getAllLastDayPAMCount, getAttendanceByPeriod, getAllActiveWorkers, getAllActiveWorkersPersentage, 
