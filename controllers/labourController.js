@@ -18,6 +18,7 @@ const xlsx = require('xlsx');
 const moment = require('moment');
 const pdf = require('html-pdf');
 
+
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 // const baseUrl = 'http://localhost:4000/uploads/';
@@ -3511,6 +3512,9 @@ async function getCachedAttendance(req, res) {
 cron.schedule('20 5 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
+
+    
+
 });
 
 // ==============================================================================================================
