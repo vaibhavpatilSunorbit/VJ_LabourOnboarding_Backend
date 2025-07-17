@@ -2787,7 +2787,7 @@ async function getAllLaboursAttendance(req, res) {
                 let firstPunchAttendanceId = null, firstPunchDeviceId = null;
                 let lastPunchAttendanceId = null, lastPunchDeviceId = null;
                 let projectIdFromDevicefirstPunch = null;
-                let projectIdFromDeviceLastPunch = null;
+                let projectIdFromDeviceLastPunch = null; 
 
                 if (firstPunch) {
                     firstPunchAttendanceId = firstPunch.attendance_id;
