@@ -2912,7 +2912,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
                 latestWage = wage;
                 break;
             }
-        }   
+        }
         const wageType = (latestWage?.payStructure || "").toUpperCase();
         const dailyWageRate = latestWage?.dailyWages || 0;
         const monthlySalary = latestWage?.monthlyWages || 0;
@@ -3079,7 +3079,6 @@ async function calculateSalaryForLabour(labourId, month, year) {
         console.timeEnd(salaryTimer);
     }
 }
-
 
 
 // async function calculateSalaryForLabour(labourId, month, year) {
