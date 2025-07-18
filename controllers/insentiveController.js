@@ -937,96 +937,177 @@ async function getOvertimeMonthlyAPI(req, res) {
 /**
  * Fetch salary generation data for all eligible labours
  */
-const CONCURRENCY   = 5;  // tweak to match SQL-Server capacity
-const MAX_RETRIES   = 3;
 
+const CONCURRENCY = 4;  // adjust to SQL capacity
+const MAX_RETRIES = 1;
+
+/* ─────────────────────────────────────────────────────────────── */
+/*  GET /insentive/payroll/salaryGenerationDataAllLabours          */
+/* ─────────────────────────────────────────────────────────────── */
 async function getSalaryGenerationDataAPIAllLabours(req, res) {
- try {
-    const { month, year, labourIds } = req.query;
-          const pLimit = (await import('p-limit')).default;
-
-    // ────────────────────────── validation ──────────────────────────
-    if (!month || !year) {
+  try {
+    const pLimit = (await import('p-limit')).default;
+    /* ---------- validation ---------- */
+    const month = +req.query.month;
+    const year  = +req.query.year;
+    if (!month || !year)
       return res.status(400).json({ message: 'Month and year are required.' });
+
+    const idsArray = req.query.labourIds
+      ? req.query.labourIds.split(',').map((id) => id.trim())
+      : undefined;
+
+    /* ---------- data to process ---------- */
+    const eligible = await labourModel.getEligibleLabours(month, year, idsArray);
+    if (!eligible.length) return res.json([]); // nothing to do
+
+    /* ---------- split into TWO roughly equal chunks ---------- */
+    const mid  = Math.ceil(eligible.length / 2);
+    const jobs = [eligible.slice(0, mid), eligible.slice(mid)];
+
+    /* keep the HTTP socket alive for a long job */
+    res.setTimeout(0);
+
+    /* ---------- run both phases serially ---------- */
+    const combinedRows = [];
+    for (let phase = 0; phase < jobs.length; phase++) {
+      const chunk   = jobs[phase];
+      const limiter = pLimit(CONCURRENCY);
+
+      /* process this chunk with controlled parallelism */
+      const rows = await Promise.all(
+        chunk.map((lab) =>
+          limiter(() => _withRetry(lab, month, year)),
+        ),
+      );
+
+      combinedRows.push(...rows.filter(Boolean)); // drop nulls
+      console.log(`Phase ${phase + 1}/${jobs.length} done → ${combinedRows.length} rows`);
     }
-    const monthNum = Number(month);
-    const yearNum  = Number(year);
-    if (Number.isNaN(monthNum) || Number.isNaN(yearNum)) {
-      return res.status(400).json({ message: 'Month and year must be numbers.' });
-    }
 
-    // ────────────────────────── inputs ──────────────────────────────
-    const idsArray =
-      labourIds && labourIds.length
-        ? labourIds.split(',').map((id) => id.trim())
-        : undefined;
-
-    const eligibleLabours = await labourModel.getEligibleLabours(
-      monthNum,
-      yearNum,
-      idsArray
-    );
-
-    // ────────────────────────── controlled parallelism ──────────────
-    const limiter = pLimit(CONCURRENCY);
-
-    const rows = await Promise.all(
-      eligibleLabours.map((labour) =>
-        limiter(async () => {
-          const { labourId } = labour;
-
-          let salaryDetails = null;
-
-          for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-            try {
-              const result = await labourModel.calculateSalaryForLabour(
-                labourId,
-                monthNum,
-                yearNum
-              );
-
-              // handle “no data” sentinel (your model returns { message } on miss)
-              if (result && !result.message) {
-                salaryDetails = result;
-                break; // success!
-              }
-              console.warn(
-                `Attempt ${attempt} → no data for labour ${labourId}.`
-              );
-            } catch (err) {
-              console.error(
-                `Attempt ${attempt} errored for labour ${labourId}:`,
-                err.message
-              );
-            }
-          }
-
-          if (!salaryDetails) {
-            console.warn(
-              `Giving up on labour ${labourId} after ${MAX_RETRIES} attempts.`
-            );
-            return null; // filtered out later
-          }
-
-          return {
-            ...labour,
-            month: monthNum,
-            year : yearNum,
-            ...salaryDetails,
-          };
-        })
-      )
-    );
-
-    const successfulRows = rows.filter(Boolean); // drop nulls
-    return res.status(200).json(successfulRows);
-  } catch (error) {
-    console.error('Error fetching salary generation data:', error);
-    return res
-      .status(500)
-      .json({ message: 'Error fetching salary generation data.', error: error.message });
+    return res.json(combinedRows);
+  } catch (err) {
+    console.error('Error fetching salary generation data:', err);
+    res.status(500).json({
+      message: 'Error fetching salary generation data.',
+      error  : err.message,
+    });
   }
-};
+}
+
+/* ───── helper: per-labour retry wrapper ───── */
+async function _withRetry(labour, month, year) {
+  const { labourId } = labour;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const result = await labourModel.calculateSalaryForLabour(labourId, month, year);
+      if (result && !result.message) {
+        return { ...labour, month, year, ...result };
+      }
+      console.warn(`Attempt ${attempt}: no data for labour ${labourId}`);
+    } catch (err) {
+      console.error(`Attempt ${attempt} failed for ${labourId}:`, err.message);
+    }
+  }
+  console.warn(`Giving up on labour ${labourId}`);
+  return null;
+}
+
+
+/**
+ * Fetch salary generation data for all eligible labours
+ */
+// const CONCURRENCY   = 5;  // tweak to match SQL-Server capacity
+// const MAX_RETRIES   = 2;
+
+// async function getSalaryGenerationDataAPIAllLabours(req, res) {
+//  try {
+//     const { month, year, labourIds } = req.query;
+//           const pLimit = (await import('p-limit')).default;
+
+//     // ────────────────────────── validation ──────────────────────────
+//     if (!month || !year) {
+//       return res.status(400).json({ message: 'Month and year are required.' });
+//     }
+//     const monthNum = Number(month);
+//     const yearNum  = Number(year);
+//     if (Number.isNaN(monthNum) || Number.isNaN(yearNum)) {
+//       return res.status(400).json({ message: 'Month and year must be numbers.' });
+//     }
+
+//     // ────────────────────────── inputs ──────────────────────────────
+//     const idsArray =
+//       labourIds && labourIds.length
+//         ? labourIds.split(',').map((id) => id.trim())
+//         : undefined;
+
+//     const eligibleLabours = await labourModel.getEligibleLabours(
+//       monthNum,
+//       yearNum,
+//       idsArray
+//     );
+
+//     // ────────────────────────── controlled parallelism ──────────────
+//     const limiter = pLimit(CONCURRENCY);
+
+//     const rows = await Promise.all(
+//       eligibleLabours.map((labour) =>
+//         limiter(async () => {
+//           const { labourId } = labour;
+
+//           let salaryDetails = null;
+
+//           for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+//             try {
+//               const result = await labourModel.calculateSalaryForLabour(
+//                 labourId,
+//                 monthNum,
+//                 yearNum
+//               );
+
+//               // handle “no data” sentinel (your model returns { message } on miss)
+//               if (result && !result.message) {
+//                 salaryDetails = result;
+//                 break; // success!
+//               }
+//               console.warn(
+//                 `Attempt ${attempt} → no data for labour ${labourId}.`
+//               );
+//             } catch (err) {
+//               console.error(
+//                 `Attempt ${attempt} errored for labour ${labourId}:`,
+//                 err.message
+//               );
+//             }
+//           }
+
+//           if (!salaryDetails) {
+//             console.warn(
+//               `Giving up on labour ${labourId} after ${MAX_RETRIES} attempts.`
+//             );
+//             return null; // filtered out later
+//           }
+
+//           return {
+//             ...labour,
+//             month: monthNum,
+//             year : yearNum,
+//             ...salaryDetails,
+//           };
+//         })
+//       )
+//     );
+
+//     const successfulRows = rows.filter(Boolean); // drop nulls
+//     return res.status(200).json(successfulRows);
+//   } catch (error) {
+//     console.error('Error fetching salary generation data:', error);
+//     return res
+//       .status(500)
+//       .json({ message: 'Error fetching salary generation data.', error: error.message });
+//   }
+// };
 
 
 
