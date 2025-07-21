@@ -185,6 +185,8 @@ const { poolPromise } = require('./config/dbConfig');
 const insentiveRoutes = require('./routes/insentiveRoutes');
 const dashBoardRoutes = require('./routes/dashBoardRoutes');
 
+require('./sheduler/attandanceShedular'); // Import the scheduler to start it
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 
