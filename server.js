@@ -183,7 +183,7 @@ const { poolPromise2 } = require('./config/dbConfig2');
 const { poolPromise } = require('./config/dbConfig');
 const insentiveRoutes = require('./routes/insentiveRoutes');
 // const dashBoardRoutes = require('./routes/dashBoardRoutes');
-
+require('./sheduler/attandanceShedular')
 const dashBoardRoutes = require('./routes/dashBoardRoutes');
 const app = express();
 const PORT = process.env.PORT || 4000;

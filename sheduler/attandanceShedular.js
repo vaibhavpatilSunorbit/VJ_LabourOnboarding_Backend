@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { compareAndUpdateLabourPunches } = require('../your-function-path/compareAndUpdateLabourPunches'); // Replace path
+const { compareAndUpdateLabourPunches } = require('../controllers/attandanceController'); // Replace path
 const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
