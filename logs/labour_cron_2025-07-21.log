@@ -1,3 +1,11 @@
 [2025-07-21 12:41:03] [INFO] ⏰ Labour Cron Jobs Scheduled Successfully
 [2025-07-21 12:41:57] [INFO] ⏰ Labour Cron Jobs Scheduled Successfully
 [2025-07-21 12:42:00] [INFO]  Shift 1 (08:00 AM) - Job Started
+[2025-07-21 16:27:38] [INFO] ⏰ Labour Cron Jobs Scheduled Successfully
+[2025-07-21 16:51:51] [INFO] ⏰ Labour Cron Jobs Scheduled Successfully
+[2025-07-21 16:55:21] [INFO] ⏰ Labour Cron Jobs Scheduled Successfully
+[2025-07-21 16:56:00] [INFO]  Shift 1 (08:00 AM) - Job Started
+[2025-07-21 17:26:09] [INFO]  Shift 1 (08:00 AM) - Success: {"success":false,"message":"Error comparing labour punch data","error":"Connection lost - read ECONNRESET"}
+[2025-07-21 17:27:29] [INFO] ⏰ Labour Cron Jobs Scheduled Successfully
+[2025-07-21 17:28:00] [INFO]  Shift 1 (08:00 AM) - Job Started
+[2025-07-21 17:29:01] [INFO]  Shift 1 (08:00 AM) - Success: {"success":false,"message":"Error comparing labour punch data","error":"Transaction (Process ID 71) was deadlocked on lock | communication buffer resources with another process and has been chosen as the deadlock victim. Rerun the transaction."}

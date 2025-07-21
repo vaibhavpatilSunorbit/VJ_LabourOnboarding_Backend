@@ -39,7 +39,7 @@ async function runScheduledJob(shiftLabel) {
 }
 
 // === Cron Jobs ===
-cron.schedule('0 8 * * *', () => runScheduledJob('Shift 1 (08:00 AM)'));
+cron.schedule('28 17 * * *', () => runScheduledJob('Shift 1 (08:00 AM)'));
 cron.schedule('0 11 * * *', () => runScheduledJob('Shift 2 (11:00 AM)'));
 cron.schedule('0 14 * * *', () => runScheduledJob('Shift 3 (02:00 PM)'));
 
