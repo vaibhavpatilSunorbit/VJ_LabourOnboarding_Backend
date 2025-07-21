@@ -1,16 +1,16 @@
 const cron = require('node-cron');
-const { compareAndUpdateLabourPunches } = require('../controllers/attandanceController'); // Replace path
+const { compareAndUpdateLabourPunches } = require('../controllers/attandanceController');
 const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
 
-// === Logger Setup (Winston) ===
+// === Logger Setup ===
 const logDir = path.join(__dirname, '../logs');
 if (!fs.existsSync(logDir)) {
   fs.mkdirSync(logDir);
 }
 
-const date = new Date().toISOString().split('T')[0]; // e.g. 2025-07-17
+const date = new Date().toISOString().split('T')[0];
 const logFile = path.join(logDir, `labour_cron_${date}.log`);
 
 const logger = winston.createLogger({
@@ -30,17 +30,27 @@ const logger = winston.createLogger({
 // === Job Runner ===
 async function runScheduledJob(shiftLabel) {
   try {
-    logger.info(` ${shiftLabel} - Job Started`);
+    logger.info(`${shiftLabel} - Job Started`);
     const result = await compareAndUpdateLabourPunches();
-    logger.info(` ${shiftLabel} - Success: ${JSON.stringify(result)}`);
+    logger.info(`${shiftLabel} - Success: ${JSON.stringify(result)}`);
   } catch (error) {
-    logger.error(` ${shiftLabel} - Failed: ${error.message}`);
+    logger.error(`${shiftLabel} - Failed: ${error.message}`);
   }
 }
 
-// === Cron Jobs ===
-cron.schedule('28 17 * * *', () => runScheduledJob('Shift 1 (08:00 AM)'));
-cron.schedule('0 11 * * *', () => runScheduledJob('Shift 2 (11:00 AM)'));
-cron.schedule('0 14 * * *', () => runScheduledJob('Shift 3 (02:00 PM)'));
+// === Run Jobs Sequentially ===
+async function runAllJobsSequentially() {
+  await runScheduledJob('Shift 1 (08:00 AM)');
+  await runScheduledJob('Shift 2 (11:00 AM)');
+  await runScheduledJob('Shift 3 (02:00 PM)');
+  logger.info('✅ All shift jobs completed sequentially.');
+}
 
-logger.info('⏰ Labour Cron Jobs Scheduled Successfully');
+// === Schedule One Cron to Run All Sequentially ===
+// Example: Runs at 12:30 PM daily
+cron.schedule('10 17 * * *', () => {
+  logger.info('⏰ Running all shift jobs sequentially...');
+  runAllJobsSequentially();
+});
+
+logger.info('⏰ Labour Sequential Cron Scheduled Successfully');
