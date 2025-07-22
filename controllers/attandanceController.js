@@ -182,7 +182,7 @@ const compareAndUpdateLabourPunches = async () => {
       const pool = await poolPromise;
       const result = await pool.request().query(`
         SELECT DISTINCT LabourId
-        FROM [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceDetails]
+        FROM [LabourAttendanceDetails]
         WHERE FirstPunch IS NULL
           AND [Date] >= DATEADD(DAY, -10, CAST(GETDATE() AS DATE))
       `);
@@ -365,6 +365,41 @@ const compareAndUpdateLabourPunches = async () => {
   }
   }
 
+
+  const getMatchedLabourIdsWithValidPunch = async () => {
+  try {
+    const pool1 = await poolPromise;
+    const pool2 = await poolPromise3;
+
+    // Fetch LabourIds with NULL FirstPunch in last 10 days
+    const result1 = await pool1.request().query(`
+      SELECT DISTINCT LabourId
+      FROM [LabourAttendanceDetails]
+      WHERE FirstPunch IS NULL
+        AND [Date] >= DATEADD(DAY, -10, CAST(GETDATE() AS DATE))
+    `);
+
+    // Fetch user_ids with valid punch_time in last 10 days
+    const result2 = await pool2.request().query(`
+      SELECT DISTINCT user_id
+      FROM Attendance
+      WHERE punch_time IS NOT NULL
+        AND punch_date >= DATEADD(DAY, -10, CAST(GETDATE() AS DATE))
+    `);
+
+    const nullFirstPunchIds = result1.recordset.map(row => row.LabourId);
+    const validPunchTimeIds = new Set(result2.recordset.map(row => row.user_id));
+
+    // Filter only those LabourIds which have valid punch
+    const matchedIds = nullFirstPunchIds.filter(id => validPunchTimeIds.has(id));
+
+    return matchedIds; // <- final response
+  } catch (err) {
+    console.error("Error in getMatchedLabourIdsWithValidPunch:", err);
+    throw err;
+  }
+};
+
 // compareAndUpdateLabourPunches()
 
-module.exports = { compareAndUpdateLabourPunches };
+module.exports = { compareAndUpdateLabourPunches, getMatchedLabourIdsWithValidPunch };
