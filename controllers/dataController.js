@@ -422,7 +422,7 @@ const approveLabour = async (req, res) => {
     }
 
     // ---------- 1️⃣  PROJECT LOOK-UP (with fallback) -----------------
-    const poolBU   = await poolPromise4;             // Framework.BusinessUnit
+    const poolBU = await poolPromise4;             // Framework.BusinessUnit
     const poolComp = await poolPromise;              // CompanyNameByBuId
 
     const isNumeric = !isNaN(projectId);
@@ -443,8 +443,8 @@ const approveLabour = async (req, res) => {
            AND (a.IsDeleted       IS NULL OR a.IsDeleted       = 0)
            AND b.Id = 3`;
 
-    let projectReq   = poolBU.request().input('input', isNumeric ? sql.Int : sql.VarChar, projectId);
-    let projectRes   = await projectReq.query(primaryQuery);
+    let projectReq = poolBU.request().input('input', isNumeric ? sql.Int : sql.VarChar, projectId);
+    let projectRes = await projectReq.query(primaryQuery);
 
     let projectRecord;
     if (projectRes.recordset.length > 0) {
@@ -456,7 +456,7 @@ const approveLabour = async (req, res) => {
 
       const match = allCompanies.recordset.find(r =>
         isNumeric ? r.Id === parseInt(projectId)
-                  : r.Description.trim().toLowerCase() === projectId.trim().toLowerCase()
+          : r.Description.trim().toLowerCase() === projectId.trim().toLowerCase()
       );
 
       if (!match) return res.status(400).send('Invalid ProjectID / Name');
@@ -464,12 +464,12 @@ const approveLabour = async (req, res) => {
       projectRecord = match;
     }
 
-    const resolvedProjectId   = projectRecord.Id;
+    const resolvedProjectId = projectRecord.Id;
     const resolvedProjectName = projectRecord.Description;
 
     // ---------- 2️⃣  DEVICE LOOK-UP ----------------------------------
     const poolDevices = await poolPromise3;
-    const deviceRes   = await poolDevices.request()
+    const deviceRes = await poolDevices.request()
       .input('DeviceID', sql.Int, deviceId)
       .query(`SELECT DeviceSName, DeviceLocation, SerialNumber
               FROM dbo.Devices WHERE DeviceID = @DeviceID`);
@@ -482,13 +482,13 @@ const approveLabour = async (req, res) => {
     // ---------- 3️⃣  INSERT LINK-ROW ---------------------------------
     const poolStatus = await poolPromise;
     await poolStatus.request()
-      .input('ProjectID',     sql.Int,    resolvedProjectId)
-      .input('DeviceID',      sql.Int,    deviceId)
-      .input('BusinessUnit',  sql.VarChar, resolvedProjectName)
-      .input('DeviceSName',   sql.VarChar, DeviceSName)
-      .input('DeviceLocation',sql.VarChar, DeviceLocation)
-      .input('SerialNumber',  sql.VarChar, SerialNumber)
-      .input('Status',        sql.VarChar, 'Active')
+      .input('ProjectID', sql.Int, resolvedProjectId)
+      .input('DeviceID', sql.Int, deviceId)
+      .input('BusinessUnit', sql.VarChar, resolvedProjectName)
+      .input('DeviceSName', sql.VarChar, DeviceSName)
+      .input('DeviceLocation', sql.VarChar, DeviceLocation)
+      .input('SerialNumber', sql.VarChar, SerialNumber)
+      .input('Status', sql.VarChar, 'Active')
       .query(`
         INSERT INTO ProjectDeviceStatus
               (ProjectID, DeviceID, BusinessUnit, DeviceSName, DeviceLocation, SerialNumber, Status)
@@ -2873,7 +2873,7 @@ const getSuperAdminProjectNames = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
-  } 
+  }
 };
 
 // ------------------------------------------------------------------------------    COMPANY TRANSFER FUNCTION END -------------------------------------------------
@@ -2934,7 +2934,7 @@ const addDevicesToProject = async (req, res) => {
     const { Description: BusinessUnit } = project.recordset[0];
 
     // 2️⃣  Get device meta for every id in one go
-    const poolDev   = await poolPromise3;
+    const poolDev = await poolPromise3;
     const deviceRes = await poolDev.request()
       .query(`SELECT DeviceID, DeviceSName, DeviceLocation, SerialNumber
               FROM dbo.Devices 
@@ -2942,23 +2942,23 @@ const addDevicesToProject = async (req, res) => {
 
     // Simple check that all requested devices exist
     const foundIds = deviceRes.recordset.map(r => r.DeviceID);
-    const missing  = deviceIds.filter(id => !foundIds.includes(id));
+    const missing = deviceIds.filter(id => !foundIds.includes(id));
     if (missing.length)
       return res.status(400).json({ success: false, message: `Invalid DeviceID(s): ${missing.join(',')}` });
 
     // 3️⃣  Insert rows in one transaction
     const poolLink = await poolPromise;
-    const tx       = new sql.Transaction(poolLink);
+    const tx = new sql.Transaction(poolLink);
     await tx.begin();
     try {
       const ps = new sql.PreparedStatement(tx);
-      ps.input('ProjectID',     sql.Int);
-      ps.input('DeviceID',      sql.Int);
-      ps.input('BusinessUnit',  sql.NVarChar);
-      ps.input('DeviceSName',   sql.NVarChar);
-      ps.input('DeviceLocation',sql.NVarChar);
-      ps.input('SerialNumber',  sql.NVarChar);
-      ps.input('Status',        sql.NVarChar);
+      ps.input('ProjectID', sql.Int);
+      ps.input('DeviceID', sql.Int);
+      ps.input('BusinessUnit', sql.NVarChar);
+      ps.input('DeviceSName', sql.NVarChar);
+      ps.input('DeviceLocation', sql.NVarChar);
+      ps.input('SerialNumber', sql.NVarChar);
+      ps.input('Status', sql.NVarChar);
 
       await ps.prepare(`
         INSERT INTO ProjectDeviceStatus
@@ -2968,13 +2968,13 @@ const addDevicesToProject = async (req, res) => {
 
       for (const d of deviceRes.recordset) {
         await ps.execute({
-          ProjectID     : projectId,
-          DeviceID      : d.DeviceID,
-          BusinessUnit  ,
-          DeviceSName   : d.DeviceSName,
+          ProjectID: projectId,
+          DeviceID: d.DeviceID,
+          BusinessUnit,
+          DeviceSName: d.DeviceSName,
           DeviceLocation: d.DeviceLocation,
-          SerialNumber  : d.SerialNumber,
-          Status        : 'Active'
+          SerialNumber: d.SerialNumber,
+          Status: 'Active'
         });
       }
       await ps.unprepare();
@@ -3507,11 +3507,11 @@ JOIN MonthlyTotal mt ON mdw.wageMonth = mt.wageMonth
 ORDER BY mdw.wageMonth DESC, WagePayPercentage DESC;
 
           `)
-          res.status(200).json({
-            success: true,
-            message: 'Department-wise wage pay percentage calculated successfully.',
-            data: result.recordset
-          });
+    res.status(200).json({
+      success: true,
+      message: 'Department-wise wage pay percentage calculated successfully.',
+      data: result.recordset
+    });
   } catch (error) {
     console.error('Error fetching admin site transfer notifications:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -3545,6 +3545,128 @@ const getDevicesWithPing = async (req, res) => {
   }
 };
 
+// __________________--------------  get Add to Multiple Devices into the Singlr Projectjs _______________________________________________________________
+
+const addMultipleDevices = async (req, res) => {
+  try {
+    const { projectId, deviceIds } = req.body;
+
+    if (!projectId || !Array.isArray(deviceIds) || deviceIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'projectId & deviceIds[] required' });
+    }
+
+    // 1️⃣ Validate project
+    const poolBU = await poolPromise4;
+    const projectResult = await poolBU.request()
+      .input('pid', sql.Int, projectId)
+      .query(`SELECT Id, Description FROM Framework.BusinessUnit WHERE Id = @pid`);
+    
+    if (!projectResult.recordset[0]) {
+      return res.status(400).json({ success: false, message: 'Invalid projectId' });
+    }
+
+    const { Description: BusinessUnit } = projectResult.recordset[0];
+
+    // 2️⃣ Get device meta for deviceIds (safely parameterized)
+    const poolDev = await poolPromise3;
+    const devReq = poolDev.request();
+    const deviceParams = deviceIds.map((_, i) => `@id${i}`).join(',');
+    deviceIds.forEach((id, i) => {
+      devReq.input(`id${i}`, sql.Int, id);
+    });
+
+    const deviceQuery = `
+      SELECT DeviceID, DeviceSName, DeviceLocation, SerialNumber
+      FROM dbo.Devices 
+      WHERE DeviceID IN (${deviceParams})
+    `;
+    const deviceRes = await devReq.query(deviceQuery);
+
+    const foundDevices = deviceRes.recordset;
+    const foundIds = foundDevices.map(d => d.DeviceID);
+    const missing = deviceIds.filter(id => !foundIds.includes(id));
+    if (missing.length) {
+      return res.status(400).json({ success: false, message: `Invalid DeviceID(s): ${missing.join(',')}` });
+    }
+
+    // 3️⃣ Filter out devices already linked to the project
+    const poolLink = await poolPromise;
+    const existingReq = poolLink.request();
+    existingReq.input('pid', sql.Int, projectId);
+    deviceIds.forEach((id, i) => {
+      existingReq.input(`id${i}`, sql.Int, id);
+    });
+
+    const existingQuery = `
+      SELECT DeviceID 
+      FROM ProjectDeviceStatus 
+      WHERE ProjectID = @pid AND DeviceID IN (${deviceParams})
+    `;
+    const existingRes = await existingReq.query(existingQuery);
+    const existingIds = existingRes.recordset.map(r => r.DeviceID);
+    const newDevices = foundDevices.filter(d => !existingIds.includes(d.DeviceID));
+
+    if (newDevices.length === 0) {
+      return res.status(200).json({ success: false, message: 'All devices already linked to this project.' });
+    }
+
+    // 4️⃣ Insert new device links using a transaction
+    const tx = new sql.Transaction(poolLink);
+    await tx.begin();
+
+    try {
+      const ps = new sql.PreparedStatement(tx);
+      ps.input('ProjectID', sql.Int);
+      ps.input('DeviceID', sql.Int);
+      ps.input('BusinessUnit', sql.NVarChar);
+      ps.input('DeviceSName', sql.NVarChar);
+      ps.input('DeviceLocation', sql.NVarChar);
+      ps.input('SerialNumber', sql.NVarChar);
+      ps.input('Status', sql.NVarChar);
+
+      await ps.prepare(`
+        INSERT INTO ProjectDeviceStatus
+          (ProjectID, DeviceID, BusinessUnit, DeviceSName, DeviceLocation, SerialNumber, Status)
+        VALUES
+          (@ProjectID, @DeviceID, @BusinessUnit, @DeviceSName, @DeviceLocation, @SerialNumber, @Status)
+      `);
+
+      for (const d of newDevices) {
+        await ps.execute({
+          ProjectID: projectId,
+          DeviceID: d.DeviceID,
+          BusinessUnit,
+          DeviceSName: d.DeviceSName,
+          DeviceLocation: d.DeviceLocation,
+          SerialNumber: d.SerialNumber,
+          Status: 'Active'
+        });
+      }
+
+      await ps.unprepare();
+      await tx.commit();
+
+      return res.status(200).json({
+        success: true,
+        message: `${newDevices.length} device(s) added to project.`,
+        insertedDevices: newDevices.map(d => ({
+          DeviceID: d.DeviceID,
+          DeviceSName: d.DeviceSName,
+          SerialNumber: d.SerialNumber
+        }))
+      });
+
+    } catch (err) {
+      console.error('Insert error:', err);
+      await tx.rollback();
+      return res.status(500).json({ success: false, message: 'Failed to insert devices' });
+    }
+
+  } catch (err) {
+    console.error('Server error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
 
 module.exports = {
   getProjectNames,
@@ -3595,7 +3717,7 @@ module.exports = {
 
   //  dashboard Controllers.js :
 
-   getAllLaboursCount,
+  getAllLaboursCount,
   getAllWagesCount,
   getAllSiteTransferCount,
   getAllVariablePayCount,
@@ -3608,7 +3730,8 @@ module.exports = {
   getNotificationVariablePay,
   getNotificationWagesApproval,
   getDepartmentWiseWagesPercentage,
-  getDevicesWithPing
+  getDevicesWithPing,
+  addMultipleDevices
 };
 
 

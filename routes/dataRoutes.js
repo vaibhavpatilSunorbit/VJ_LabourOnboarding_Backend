@@ -7,7 +7,9 @@ const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, g
     getAllLastDayPAMCount, getAttendanceByPeriod, getAllActiveWorkers, getAllActiveWorkersPersentage, 
     getAllAdminNotifacation, getNotificationAttendance, getNotificationVariablePay, getNotificationWagesApproval,
     getDepartmentWiseWagesPercentage,
-    getDevicesWithPing
+    getDevicesWithPing , 
+    addMultipleDevices
+    
 } = require('../controllers/dataController');
 const { addEmployee } = require("../controllers/sendLabourData")
 const router = express.Router();
@@ -76,6 +78,8 @@ router.get('/deptPercentageCount' , getDepartmentWiseWagesPercentage);
 router.get('/getDevices' , getDevicesWithPing)
 // router.get('/getYesterdayAttendanceCount' ,getYesterdayAttendanceCount)
 
+// -----------------  Add multiple Devices into projrects ___________________________------------------>>>
+router.post('/addMultipleDevices', addMultipleDevices);
 
 
 module.exports = router;
