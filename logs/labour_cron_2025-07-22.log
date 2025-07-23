@@ -1,0 +1,48 @@
+[2025-07-22 16:34:06] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 17:10:00] [INFO] ⏰ Running all shift jobs sequentially...
+[2025-07-22 17:10:00] [INFO] Shift 1 (08:00 AM) - Job Started
+[2025-07-22 17:29:24] [INFO] Shift 1 (08:00 AM) - Success: {"success":false,"message":"Error comparing labour punch data","error":"Transaction (Process ID 57) was deadlocked on lock | communication buffer resources with another process and has been chosen as the deadlock victim. Rerun the transaction."}
+[2025-07-22 17:29:24] [INFO] Shift 2 (11:00 AM) - Job Started
+[2025-07-22 17:34:09] [INFO] Shift 2 (11:00 AM) - Success: {"success":false,"message":"Error comparing labour punch data","error":"Transaction (Process ID 57) was deadlocked on lock | communication buffer resources with another process and has been chosen as the deadlock victim. Rerun the transaction."}
+[2025-07-22 17:34:09] [INFO] Shift 3 (02:00 PM) - Job Started
+[2025-07-22 18:05:24] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:05:29] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:06:51] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:09:11] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:09:13] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:09:17] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:09:20] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:09:23] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:09:26] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:09:28] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:09:30] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:10:19] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:10:24] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:10:26] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:10:29] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:10:52] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:10:58] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:11:00] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:11:10] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:11:12] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:11:24] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:11:34] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:11:41] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:11:50] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:11:55] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:11:59] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:12:04] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:12:25] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:13:30] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:22:47] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:22:49] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:22:51] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:22:56] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:22:59] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:23:27] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:23:29] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:23:38] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:23:42] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:23:46] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:26:39] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-07-22 18:51:03] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
