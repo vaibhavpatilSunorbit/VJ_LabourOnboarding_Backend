@@ -32,6 +32,7 @@ async function runScheduledJob(shiftLabel) {
   try {
     logger.info(`${shiftLabel} - Job Started`);
     const result = await compareAndUpdateLabourPunches();
+    logger.info(`${shiftLabel} - Job Completed`,result);
     logger.info(`${shiftLabel} - Success: ${JSON.stringify(result)}`);
   } catch (error) {
     logger.error(`${shiftLabel} - Failed: ${error.message}`);
