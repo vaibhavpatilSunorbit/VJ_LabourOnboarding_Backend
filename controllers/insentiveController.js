@@ -1397,6 +1397,43 @@ async function getAllLabours(req, res) {
     }
 }
 
+
+  const getMatchedLabourIdsWithValidPunch = async () => {
+  try {
+    const pool1 = await poolPromise;
+    const pool2 = await poolPromise3;
+
+    // Fetch LabourIds with NULL FirstPunch in last 10 days
+   const result1 = await pool1.request().query(`
+  SELECT DISTINCT LabourId
+  FROM [LabourOnboardingForm].[dbo].[LabourAttendanceDetails]
+  WHERE FirstPunch IS NULL
+    AND [Date] BETWEEN DATEADD(DAY, -11, CAST(GETDATE() AS DATE)) 
+                    AND DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
+`);
+
+const result2 = await pool2.request().query(`
+  SELECT DISTINCT user_id
+  FROM [etimetracklite11.8].[dbo].[Attendance]
+  WHERE punch_time IS NOT NULL
+    AND punch_date BETWEEN DATEADD(DAY, -11, CAST(GETDATE() AS DATE)) 
+                       AND DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
+`);
+.0
+
+    const nullFirstPunchIds = result1.recordset.map(row => row.LabourId);
+    const validPunchTimeIds = new Set(result2.recordset.map(row => row.user_id));
+
+    // Filter only those LabourIds which have valid punch
+    const matchedIds = nullFirstPunchIds.filter(id => validPunchTimeIds.has(id));
+console.log("matchedIds ValidPunch -------", matchedIds)
+    return matchedIds; // <- final response
+  } catch (err) {
+    console.error("Error in getMatchedLabourIdsWithValidPunch:", err);
+    throw err;
+  }
+};
+
 module.exports = {
     getAllLabours,
     createRecord,
@@ -1436,5 +1473,5 @@ module.exports = {
     exportWagesexcelSheet,
     exportMonthlyWagesExcel,
     exportFixedWagesExcel,
-
+getMatchedLabourIdsWithValidPunch
 }

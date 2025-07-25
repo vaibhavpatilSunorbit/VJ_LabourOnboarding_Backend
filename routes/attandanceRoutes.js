@@ -2,6 +2,6 @@
  const router = express.Router();
  const attandanceController = require('../controllers/attandanceController');
 
- router.get('/valid-punches', attandanceController.getValidPunches);
+ router.get('/validPunches', attandanceController.getMatchedLabourIdsWithValidPunch);
 
  module.exports =router;
