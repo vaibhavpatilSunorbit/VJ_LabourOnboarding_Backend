@@ -138,7 +138,8 @@ async function getNextUniqueID(req, res) {
 
 async function getCommandStatus(req, res) {
     const commandId = req.params.commandId;
-
+     console.log( commandId , 'commandId ---------');
+     
     try {
         const pool = await poolPromise3;
         const result = await pool.request()

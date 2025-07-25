@@ -502,32 +502,60 @@ const approveLabour = async (req, res) => {
   }
 };
 
+// const getProjectDeviceStatus = async (req, res) => {
+//   try {
+//     const { projectName } = req.params;
+//     const pool = await poolPromise;
+//     const result = await pool.request()
+//       .input('ProjectName', sql.VarChar, projectName)
+//       .query(`
+//         SELECT pds.[SerialNumber]
+//         FROM ProjectDeviceStatus AS pds
+//         JOIN labourOnboarding AS lob
+//         ON pds.[ProjectID] = lob.[projectName]
+//         WHERE pds.[ProjectID] = @ProjectName
+//         AND lob.[projectName] = @ProjectName
+//       `);
+    
+//     //  console.log( result , '----- resultSet');
+//     if (result.recordset.length === 0) {
+//       return res.status(404).json({ message: 'Serial number not found' });
+//     }
+//     //  console.log( result , '----- resultSet');
+     
+//     res.json({ serialNumber: result.recordset });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).send('Server error');
+//   }
+// };
+
 const getProjectDeviceStatus = async (req, res) => {
   try {
     const { projectName } = req.params;
     const pool = await poolPromise;
+
     const result = await pool.request()
       .input('ProjectName', sql.VarChar, projectName)
       .query(`
-        SELECT pds.[SerialNumber]
+        SELECT DISTINCT pds.[SerialNumber]
         FROM ProjectDeviceStatus AS pds
         JOIN labourOnboarding AS lob
-        ON pds.[ProjectID] = lob.[projectName]
+          ON pds.[ProjectID] = lob.[projectName]
         WHERE pds.[ProjectID] = @ProjectName
-        AND lob.[projectName] = @ProjectName
+          AND lob.[projectName] = @ProjectName
       `);
 
     if (result.recordset.length === 0) {
       return res.status(404).json({ message: 'Serial number not found' });
     }
 
-    res.json({ serialNumber: result.recordset[0].SerialNumber });
+    res.json({ serialNumber: result.recordset });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');
   }
 };
-
 
 const getProjectDeviceStatusSS = async (req, res) => {
   try {
@@ -3550,6 +3578,9 @@ const getDevicesWithPing = async (req, res) => {
 const addMultipleDevices = async (req, res) => {
   try {
     const { projectId, deviceIds } = req.body;
+
+    console.log(req.body , 'multiple Devices ');
+    
 
     if (!projectId || !Array.isArray(deviceIds) || deviceIds.length === 0) {
       return res.status(400).json({ success: false, message: 'projectId & deviceIds[] required' });
