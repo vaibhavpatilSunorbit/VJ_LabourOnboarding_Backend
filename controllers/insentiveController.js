@@ -1398,41 +1398,141 @@ async function getAllLabours(req, res) {
 }
 
 
-  const getMatchedLabourIdsWithValidPunch = async () => {
+// const getMatchedLabourIdsWithValidPunch = async () => {
+//   try {
+//     const pool1 = await poolPromise;
+//     const pool2 = await poolPromise3;
+
+//     // Step 1: Get LabourIds with NULL FirstPunch in last 10 days
+//     const result1 = await pool1.request().query(`
+//       SELECT DISTINCT LabourId
+//       FROM [LabourOnboardingForm].[dbo].[LabourAttendanceDetails]
+//       WHERE FirstPunch IS NULL
+//         AND [Date] BETWEEN DATEADD(DAY, -17, CAST(GETDATE() AS DATE)) 
+//                         AND DATEADD(DAY, -3, CAST(GETDATE() AS DATE))
+//     `);
+
+//     const nullFirstPunchIds = result1.recordset.map(row => row.LabourId);
+//     if (nullFirstPunchIds.length === 0) return [];
+
+//     // Step 2: Check which of these have logs in current month in LabourAttendanceLogs
+//     const matchedIdString = nullFirstPunchIds.map(id => `'${id}'`).join(',');
+//     const result2 = await pool1.request().query(`
+//       SELECT DISTINCT LabourId
+//       FROM [LabourOnboardingForm].[dbo].[LabourAttendanceLogs]
+//       WHERE LabourId IN (${matchedIdString})
+//         AND MONTH(CreatedAt) = MONTH(GETDATE())
+//         AND YEAR(CreatedAt) = YEAR(GETDATE())
+//     `);
+
+//     const labourIdsWithLogs = result2.recordset.map(row => row.LabourId);
+//     if (labourIdsWithLogs.length === 0) return [];
+
+//     // Step 3: Check which of these LabourIds have valid punch in Attendance table
+//     const labourIdsWithLogsString = labourIdsWithLogs.map(id => `'${id}'`).join(',');
+//     const result3 = await pool2.request().query(`
+//       SELECT DISTINCT user_id
+//       FROM [etimetracklite11.8].[dbo].[Attendance]
+//       WHERE punch_time IS NOT NULL
+//         AND punch_date BETWEEN DATEADD(DAY, -17, CAST(GETDATE() AS DATE)) 
+//                            AND DATEADD(DAY, -3, CAST(GETDATE() AS DATE))
+//         AND user_id IN (${labourIdsWithLogsString})
+//         AND (
+//           user_id LIKE 'JC%' 
+//           OR user_id LIKE 'JIH%'
+//         );
+//     `);
+
+//     const finalMatchedIds = result3.recordset.map(row => row.user_id);
+
+//     console.log("Final Matched IDs (FirstPunch NULL + Logs This Month + Valid Punch):", finalMatchedIds);
+//     return finalMatchedIds;
+
+//   } catch (err) {
+//     console.error("Error in getMatchedLabourIdsWithValidPunch:", err);
+//     throw err;
+//   }
+// };
+
+
+const getMatchedLabourIdsWithValidPunch = async () => {
   try {
     const pool1 = await poolPromise;
     const pool2 = await poolPromise3;
 
-    // Fetch LabourIds with NULL FirstPunch in last 10 days
-   const result1 = await pool1.request().query(`
-  SELECT DISTINCT LabourId
-  FROM [LabourOnboardingForm].[dbo].[LabourAttendanceDetails]
-  WHERE FirstPunch IS NULL
-    AND [Date] BETWEEN DATEADD(DAY, -11, CAST(GETDATE() AS DATE)) 
-                    AND DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
-`);
+    // Step 1: Get LabourId + Date where FirstPunch IS NULL
+    const result1 = await pool1.request().query(`
+      SELECT LabourId, CONVERT(VARCHAR, [Date], 23) AS PunchDate
+      FROM [LabourOnboardingForm].[dbo].[LabourAttendanceDetails]
+      WHERE FirstPunch IS NULL
+        AND [Date] BETWEEN DATEADD(DAY, -30, CAST(GETDATE() AS DATE)) 
+                        AND DATEADD(DAY, -2, CAST(GETDATE() AS DATE))
+    `);
 
-const result2 = await pool2.request().query(`
-  SELECT DISTINCT user_id
-  FROM [etimetracklite11.8].[dbo].[Attendance]
-  WHERE punch_time IS NOT NULL
-    AND punch_date BETWEEN DATEADD(DAY, -11, CAST(GETDATE() AS DATE)) 
-                       AND DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
-`);
-.0
+    const nullFirstPunchRows = result1.recordset;
+    if (nullFirstPunchRows.length === 0) return [];
 
-    const nullFirstPunchIds = result1.recordset.map(row => row.LabourId);
-    const validPunchTimeIds = new Set(result2.recordset.map(row => row.user_id));
+    const nullFirstPunchIds = [...new Set(nullFirstPunchRows.map(row => row.LabourId))];
 
-    // Filter only those LabourIds which have valid punch
-    const matchedIds = nullFirstPunchIds.filter(id => validPunchTimeIds.has(id));
-console.log("matchedIds ValidPunch -------", matchedIds)
-    return matchedIds; // <- final response
+    // Step 2: Filter LabourIds with logs in current month in LabourAttendanceLogs
+    const matchedIdString = nullFirstPunchIds.map(id => `'${id}'`).join(',');
+    const result2 = await pool1.request().query(`
+      SELECT DISTINCT LabourId
+      FROM [LabourOnboardingForm].[dbo].[LabourAttendanceLogs]
+      WHERE LabourId IN (${matchedIdString})
+        AND MONTH(CreatedAt) = MONTH(GETDATE())
+        AND YEAR(CreatedAt) = YEAR(GETDATE())
+    `);
+
+    const labourIdsWithLogs = result2.recordset.map(row => row.LabourId);
+    if (labourIdsWithLogs.length === 0) return [];
+
+    // Filter nullFirstPunchRows to include only those with logs this month
+    const filteredNullPunchRows = nullFirstPunchRows.filter(row =>
+      labourIdsWithLogs.includes(row.LabourId)
+    );
+    if (filteredNullPunchRows.length === 0) return [];
+
+    // Step 3: Get valid punches from Attendance
+    const result3 = await pool2.request().query(`
+      SELECT user_id, CONVERT(VARCHAR, punch_date, 23) AS PunchDate
+      FROM [etimetracklite11.8].[dbo].[Attendance]
+      WHERE punch_time IS NOT NULL
+        AND punch_date BETWEEN DATEADD(DAY, -30, CAST(GETDATE() AS DATE)) 
+                           AND DATEADD(DAY, -2, CAST(GETDATE() AS DATE))
+        AND (
+          user_id LIKE 'JC%' 
+          OR user_id LIKE 'JIH%'
+        );
+    `);
+
+    const validPunchRows = result3.recordset;
+
+    // Build set from Step 1 + 2 (only those LabourIds with logs)
+    const nullPunchSet = new Set(
+      filteredNullPunchRows.map(row => `${row.LabourId}::${row.PunchDate}`)
+    );
+
+    // Match all (user_id, PunchDate) from Attendance that appear in the set
+    const matchedResults = validPunchRows.filter(row =>
+      nullPunchSet.has(`${row.user_id}::${row.PunchDate}`)
+    );
+
+    // ✅ Keep full list of duplicates — same user_id across multiple dates
+    const finalMatchedIdsWithDates = matchedResults.map(row => ({
+      user_id: row.user_id,
+      date: row.PunchDate
+    }));
+
+    console.log("✅ Final Matches (Duplicates allowed):", finalMatchedIdsWithDates);
+    return finalMatchedIdsWithDates;
+
   } catch (err) {
-    console.error("Error in getMatchedLabourIdsWithValidPunch:", err);
+    console.error("❌ Error in getMatchedLabourIdsWithValidPunch:", err);
     throw err;
   }
 };
+
 
 module.exports = {
     getAllLabours,

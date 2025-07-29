@@ -1770,7 +1770,7 @@ async function getAttendanceByLabourId(labourId, month, year) {
             .input('month', sql.Int, month)
             .input('year', sql.Int, year)
             .query(`
-                SELECT * FROM [dbo].[Attendance]
+                SELECT * FROM [etimetracklite11.8].[dbo].[Attendance]
                 WHERE user_id = @labourId
                 AND MONTH(punch_date) = @month
                 AND YEAR(punch_date) = @year
@@ -2003,388 +2003,398 @@ async function addApprovalRequest(labourId, punchType, punchDate, punchTime) {
     }
 }
 
-async function insertIntoLabourAttendanceSummary(summary) {
-    try {
-        const pool = await poolPromise;
-
-        const {
-            labourId,
-            date,
-            selectedMonth,
-            creationDate,
-            shift,
-        } = summary;
-
-        // Step 1: Try to compute monthly summary from details table
-        const summaryDataResult = await pool
-            .request()
-            .input('LabourId', sql.NVarChar, labourId)
-            .input('SelectedMonth', sql.NVarChar, selectedMonth)
-            .query(`
-                SELECT 
-                    COUNT(*) AS TotalDays,
-                    SUM(CASE WHEN Status = 'P' THEN 1 ELSE 0 END) AS PresentDays,
-                    SUM(CASE WHEN Status = 'HD' THEN 1 ELSE 0 END) AS HalfDays,
-                    SUM(CASE WHEN Status = 'A' THEN 1 ELSE 0 END) AS AbsentDays,
-                    SUM(CASE WHEN Status = 'MP' THEN 1 ELSE 0 END) AS MissPunchDays,
-                    SUM(Overtime) AS TotalOvertimeHours,
-                    SUM(OvertimeManually) AS TotalOvertimeHoursManually,
-                    SUM(PayrollCalRoundOffOvertime) AS PayrollCalRoundoffTotalOvertime,
-                    SUM(PayrollCalRoundOffOvertime) AS RoundOffTotalOvertime
-                FROM LabourAttendanceDetails
-                WHERE LabourId = @LabourId
-                AND FORMAT(Date, 'yyyy-MM') = @SelectedMonth
-            `);
-
-        const dbSummary = summaryDataResult.recordset[0];
-
-        // Step 2: Use DB summary if available; otherwise use passed summary as fallback
-        const TotalDays = dbSummary?.TotalDays ?? summary.totalDays;
-        const PresentDays = dbSummary?.PresentDays ?? summary.presentDays;
-        const HalfDays = dbSummary?.HalfDays ?? summary.halfDays;
-        const AbsentDays = dbSummary?.AbsentDays ?? summary.absentDays;
-        const MissPunchDays = dbSummary?.MissPunchDays ?? summary.missPunchDays;
-        const TotalOvertimeHours = dbSummary?.TotalOvertimeHours ?? summary.totalOvertimeHours;
-        const TotalOvertimeHoursManually = dbSummary?.TotalOvertimeHoursManually ?? summary.TotalOvertimeHoursManually;
-        const PayrollCalRoundoffTotalOvertime = dbSummary?.PayrollCalRoundoffTotalOvertime ?? summary.PayrollCalRoundoffTotalOvertime;
-        const RoundOffTotalOvertime = dbSummary?.RoundOffTotalOvertime ?? summary.RoundOffTotalOvertime;
-
-        // Step 3: Check if record exists
-        const existingRecord = await pool
-            .request()
-            .input('LabourId', sql.NVarChar, labourId)
-            .input('SelectedMonth', sql.NVarChar, selectedMonth)
-            .query(`
-                SELECT COUNT(*) AS count 
-                FROM LabourAttendanceSummary 
-                WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
-            `);
-
-        const request = pool.request()
-            .input('LabourId', sql.NVarChar, labourId)
-            .input('TotalDays', sql.Int, TotalDays)
-            .input('PresentDays', sql.Int, PresentDays)
-            .input('HalfDays', sql.Int, HalfDays)
-            .input('AbsentDays', sql.Int, AbsentDays)
-            .input('MissPunchDays', sql.Int, MissPunchDays)
-            .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
-            .input('RoundOffTotalOvertime', sql.Float, RoundOffTotalOvertime)
-            .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
-            .input('PayrollCalRoundoffTotalOvertime', sql.Float, PayrollCalRoundoffTotalOvertime)
-            .input('Shift', sql.NVarChar, shift)
-            .input('CreationDate', sql.DateTime, creationDate)
-            .input('SelectedMonth', sql.NVarChar, selectedMonth)
-            .input('Date', sql.Date, date);
-
-        if (existingRecord.recordset[0].count > 0) {
-            // Update
-            await request.query(`
-                UPDATE LabourAttendanceSummary
-                SET 
-                    TotalDays = @TotalDays,
-                    PresentDays = @PresentDays,
-                    HalfDays = @HalfDays,
-                    AbsentDays = @AbsentDays,
-                    MissPunchDays = @MissPunchDays,
-                    TotalOvertimeHours = @TotalOvertimeHours,
-                    RoundOffTotalOvertime = @RoundOffTotalOvertime,
-                    TotalOvertimeHoursManually = @TotalOvertimeHoursManually,
-                    PayrollCalRoundoffTotalOvertime = @PayrollCalRoundoffTotalOvertime,
-                    Shift = @Shift,
-                    CreationDate = @CreationDate,
-                    Date = @Date
-                WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
-            `);
-        } else {
-            // Insert
-            await request.query(`
-                INSERT INTO LabourAttendanceSummary (
-                    LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
-                    TotalOvertimeHours, RoundOffTotalOvertime, TotalOvertimeHoursManually,
-                    PayrollCalRoundoffTotalOvertime, Shift, CreationDate, SelectedMonth, Date
-                )
-                VALUES (
-                    @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
-                    @TotalOvertimeHours, @RoundOffTotalOvertime, @TotalOvertimeHoursManually,
-                    @PayrollCalRoundoffTotalOvertime, @Shift, @CreationDate, @SelectedMonth, @Date
-                )
-            `);
-        }
-
-    } catch (err) {
-        console.error('Error in insertIntoLabourAttendanceSummary:', err);
-        throw err;
-    }
-}
-
-
-
-
 // async function insertIntoLabourAttendanceSummary(summary) {
 //     try {
 //         const pool = await poolPromise;
-//         // console.log("summary",summary)
+
+//         const {
+//             labourId,
+//             date,
+//             selectedMonth,
+//             creationDate,
+//             shift,
+//         } = summary;
+
+//         // Step 1: Try to compute monthly summary from details table
+//         const summaryDataResult = await pool
+//             .request()
+//             .input('LabourId', sql.NVarChar, labourId)
+//             .input('SelectedMonth', sql.NVarChar, selectedMonth)
+//             .query(`
+//                 SELECT 
+//                     COUNT(*) AS TotalDays,
+//                     SUM(CASE WHEN Status = 'P' THEN 1 ELSE 0 END) AS PresentDays,
+//                     SUM(CASE WHEN Status = 'HD' THEN 1 ELSE 0 END) AS HalfDays,
+//                     SUM(CASE WHEN Status = 'A' THEN 1 ELSE 0 END) AS AbsentDays,
+//                     SUM(CASE WHEN Status = 'MP' THEN 1 ELSE 0 END) AS MissPunchDays,
+//                     SUM(Overtime) AS TotalOvertimeHours,
+//                     SUM(OvertimeManually) AS TotalOvertimeHoursManually,
+//                     SUM(PayrollCalRoundOffOvertime) AS PayrollCalRoundoffTotalOvertime,
+//                     SUM(PayrollCalRoundOffOvertime) AS RoundOffTotalOvertime
+//                 FROM LabourAttendanceDetails
+//                 WHERE LabourId = @LabourId
+//                 AND FORMAT(Date, 'yyyy-MM') = @SelectedMonth
+//             `);
+
+//         const dbSummary = summaryDataResult.recordset[0];
+
+//         // Step 2: Use DB summary if available; otherwise use passed summary as fallback
+//         const TotalDays = dbSummary?.TotalDays ?? summary.totalDays;
+//         const PresentDays = dbSummary?.PresentDays ?? summary.presentDays;
+//         const HalfDays = dbSummary?.HalfDays ?? summary.halfDays;
+//         const AbsentDays = dbSummary?.AbsentDays ?? summary.absentDays;
+//         const MissPunchDays = dbSummary?.MissPunchDays ?? summary.missPunchDays;
+//         const TotalOvertimeHours = dbSummary?.TotalOvertimeHours ?? summary.totalOvertimeHours;
+//         const TotalOvertimeHoursManually = dbSummary?.TotalOvertimeHoursManually ?? summary.TotalOvertimeHoursManually;
+//         const PayrollCalRoundoffTotalOvertime = dbSummary?.PayrollCalRoundoffTotalOvertime ?? summary.PayrollCalRoundoffTotalOvertime;
+//         const RoundOffTotalOvertime = dbSummary?.RoundOffTotalOvertime ?? summary.RoundOffTotalOvertime;
+
+//         // Step 3: Check if record exists
 //         const existingRecord = await pool
 //             .request()
-//             .input('LabourId', sql.NVarChar, summary.labourId)
-//             .input('SelectedMonth', sql.NVarChar, summary.selectedMonth)
+//             .input('LabourId', sql.NVarChar, labourId)
+//             .input('SelectedMonth', sql.NVarChar, selectedMonth)
 //             .query(`
 //                 SELECT COUNT(*) AS count 
-//                 FROM [dbo].[LabourAttendanceSummary] 
+//                 FROM LabourAttendanceSummary 
 //                 WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
 //             `);
 
+//         const request = pool.request()
+//             .input('LabourId', sql.NVarChar, labourId)
+//             .input('TotalDays', sql.Int, TotalDays)
+//             .input('PresentDays', sql.Int, PresentDays)
+//             .input('HalfDays', sql.Int, HalfDays)
+//             .input('AbsentDays', sql.Int, AbsentDays)
+//             .input('MissPunchDays', sql.Int, MissPunchDays)
+//             .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
+//             .input('RoundOffTotalOvertime', sql.Float, RoundOffTotalOvertime)
+//             .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
+//             .input('PayrollCalRoundoffTotalOvertime', sql.Float, PayrollCalRoundoffTotalOvertime)
+//             .input('Shift', sql.NVarChar, shift)
+//             .input('CreationDate', sql.DateTime, creationDate)
+//             .input('SelectedMonth', sql.NVarChar, selectedMonth)
+//             .input('Date', sql.Date, date);
+
 //         if (existingRecord.recordset[0].count > 0) {
-//             // console.log(`Record already exists for LabourId: ${summary.labourId} in month: ${summary.selectedMonth}`);
-//             return;
+//             // Update
+//             await request.query(`
+//                 UPDATE LabourAttendanceSummary
+//                 SET 
+//                     TotalDays = @TotalDays,
+//                     PresentDays = @PresentDays,
+//                     HalfDays = @HalfDays,
+//                     AbsentDays = @AbsentDays,
+//                     MissPunchDays = @MissPunchDays,
+//                     TotalOvertimeHours = @TotalOvertimeHours,
+//                     RoundOffTotalOvertime = @RoundOffTotalOvertime,
+//                     TotalOvertimeHoursManually = @TotalOvertimeHoursManually,
+//                     PayrollCalRoundoffTotalOvertime = @PayrollCalRoundoffTotalOvertime,
+//                     Shift = @Shift,
+//                     CreationDate = @CreationDate,
+//                     Date = @Date
+//                 WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
+//             `);
+//         } else {
+//             // Insert
+//             await request.query(`
+//                 INSERT INTO LabourAttendanceSummary (
+//                     LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
+//                     TotalOvertimeHours, RoundOffTotalOvertime, TotalOvertimeHoursManually,
+//                     PayrollCalRoundoffTotalOvertime, Shift, CreationDate, SelectedMonth, Date
+//                 )
+//                 VALUES (
+//                     @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
+//                     @TotalOvertimeHours, @RoundOffTotalOvertime, @TotalOvertimeHoursManually,
+//                     @PayrollCalRoundoffTotalOvertime, @Shift, @CreationDate, @SelectedMonth, @Date
+//                 )
+//             `);
 //         }
 
-//         const query = `
-//             INSERT INTO [dbo].[LabourAttendanceSummary] (
-//                 LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
-//                 TotalOvertimeHours, Shift, CreationDate, SelectedMonth, Date , RoundOffTotalOvertime, PayrollCalRoundoffTotalOvertime, TotalOvertimeHoursManually
-//             ) VALUES (
-//                 @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
-//                 @TotalOvertimeHours, @Shift, @CreationDate, @SelectedMonth, @Date , @RoundOffTotalOvertime, @PayrollCalRoundoffTotalOvertime, @TotalOvertimeHoursManually
-//             )
-//         `;
-
-//         await pool
-//             .request()
-//             .input('LabourId', sql.NVarChar, summary.labourId)
-//             .input('TotalDays', sql.Int, summary.totalDays)
-//             .input('PresentDays', sql.Int, summary.presentDays)
-//             .input('HalfDays', sql.Int, summary.halfDays)
-//             .input('AbsentDays', sql.Int, summary.absentDays)
-//             .input('MissPunchDays', sql.Int, summary.missPunchDays)
-//             .input('TotalOvertimeHours', sql.Float, summary.totalOvertimeHours)
-//             .input('RoundOffTotalOvertime', sql.Float, summary.RoundOffTotalOvertime)
-//             .input('Shift', sql.NVarChar, summary.shift)
-//             .input('CreationDate', sql.DateTime, summary.creationDate)
-//             .input('SelectedMonth', sql.NVarChar, summary.selectedMonth)
-//             .input('Date', sql.Date, summary.date)
-//             .input('PayrollCalRoundoffTotalOvertime', sql.Float, summary.PayrollCalRoundoffTotalOvertime)
-//             .input('TotalOvertimeHoursManually', sql.Float, summary.TotalOvertimeHoursManually)
-//             .query(query);
-
-//         // console.log(`Inserted summary for LabourId updated: ${summary.labourId}`);
 //     } catch (err) {
-//         console.error('Error inserting into LabourAttendanceSummary:', err);
+//         console.error('Error in insertIntoLabourAttendanceSummary:', err);
 //         throw err;
 //     }
 // }
 
 
-async function insertIntoLabourAttendanceDetails(details) {
-    try {
-        const pool = await poolPromise;
-        // console.log("details", details)
-        // We add the new columns (PayrollCalRoundOffOvertime, OvertimeManually, etc.)
-        // so the monthly re-calc can also save them if that row doesn't exist yet.
-        const query = `
-            IF NOT EXISTS (
-                SELECT 1
-                FROM [dbo].[LabourAttendanceDetails]
-                WHERE LabourId = @LabourId AND Date = @Date
-            )
-            BEGIN
-                INSERT INTO [dbo].[LabourAttendanceDetails] (
-                    [LabourId], [Date],
-                    [FirstPunch], [FirstPunchAttendanceId], [FirstPunchDeviceId],
-                    [LastPunch], [LastPunchAttendanceId], [LastPunchDeviceId],
-                    [TotalHours], [Overtime], [PayrollCalRoundOffOvertime], [Status],
-                    [CreationDate], [projectName],
-                    [FirstPunchManually], [LastPunchManually],
-                    [OvertimeManually], [RemarkManually], [projectIdFromDevicefirstPunch], [projectIdFromDeviceLastPunch] 
-                )
-                VALUES (
-                    @LabourId, @Date,
-                    @FirstPunch, @FirstPunchAttendanceId, @FirstPunchDeviceId,
-                    @LastPunch, @LastPunchAttendanceId, @LastPunchDeviceId,
-                    @TotalHours, @Overtime, @PayrollCalRoundOffOvertime, @Status,
-                    @CreationDate, @projectName,
-                    @FirstPunchManually, @LastPunchManually,
-                    @OvertimeManually, @RemarkManually, @projectIdFromDevicefirstPunch, @projectIdFromDeviceLastPunch 
-                )
-            END
-        `;
 
-        await pool
-            .request()
-            .input('LabourId', sql.NVarChar, details.labourId)
-            .input('projectName', sql.Int, details.projectName)
-            .input('Date', sql.Date, details.date)
-            .input('FirstPunch', sql.NVarChar, details.firstPunch)
-            .input('FirstPunchAttendanceId', sql.Int, details.firstPunchAttendanceId || null)
-            .input('FirstPunchDeviceId', sql.NVarChar, details.firstPunchDeviceId || null)
-            .input('LastPunch', sql.NVarChar, details.lastPunch)
-            .input('LastPunchAttendanceId', sql.Int, details.lastPunchAttendanceId || null)
-            .input('LastPunchDeviceId', sql.NVarChar, details.lastPunchDeviceId || null)
-            .input('TotalHours', sql.Float, parseFloat(details.totalHours) || 0)
-            .input('Overtime', sql.Float, parseFloat(details.overtime) || 0)
-            .input('PayrollCalRoundOffOvertime', sql.Float, parseFloat(details.PayrollCalRoundOffOvertime) || 0)
-            .input('Status', sql.NVarChar, details.status)
-            .input('CreationDate', sql.DateTime, details.creationDate)
-            .input('FirstPunchManually', sql.NVarChar, details.firstPunch)
-            .input('LastPunchManually', sql.NVarChar, details.lastPunch)
-            .input('OvertimeManually', sql.Float, parseFloat(details.OvertimeManually) || 0)
-            .input('RemarkManually', sql.NVarChar, details.remarkManually || null)
-            .input('projectIdFromDevicefirstPunch', sql.Int, parseInt(details.projectIdFromDevicefirstPunch) || 0)
-            .input('projectIdFromDeviceLastPunch', sql.Int, parseInt(details.projectIdFromDeviceLastPunch) || 0)
-            .query(query);
+async function insertIntoLabourAttendanceSummary(summary) {
+  try {
+    const pool = await poolPromise;
 
-    } catch (err) {
-        console.error('Error inserting into LabourAttendanceDetails:', err);
-        throw err;
+    const {
+      labourId,
+      date,
+      selectedMonth,
+      creationDate,
+      shift,
+    } = summary;
+
+    // Step 1: Compute monthly summary
+    const summaryDataResult = await pool
+      .request()
+      .input('LabourId', sql.NVarChar, labourId)
+      .input('SelectedMonth', sql.NVarChar, selectedMonth)
+      .query(`
+        SELECT 
+            COUNT(*) AS TotalDays,
+            SUM(CASE WHEN Status = 'P' THEN 1 ELSE 0 END) AS PresentDays,
+            SUM(CASE WHEN Status = 'HD' THEN 1 ELSE 0 END) AS HalfDays,
+            SUM(CASE WHEN Status = 'A' THEN 1 ELSE 0 END) AS AbsentDays,
+            SUM(CASE WHEN Status = 'MP' THEN 1 ELSE 0 END) AS MissPunchDays,
+            SUM(Overtime) AS TotalOvertimeHours,
+            SUM(OvertimeManually) AS TotalOvertimeHoursManually,
+            SUM(PayrollCalRoundOffOvertime) AS PayrollCalRoundoffTotalOvertime,
+            SUM(PayrollCalRoundOffOvertime) AS RoundOffTotalOvertime
+        FROM LabourAttendanceDetails
+        WHERE LabourId = @LabourId
+        AND FORMAT(Date, 'yyyy-MM') = @SelectedMonth
+      `);
+
+    const dbSummary = summaryDataResult.recordset[0];
+
+    // Fallback to provided values if DB values are null
+    const TotalDays = dbSummary?.TotalDays ?? summary.totalDays;
+    const PresentDays = dbSummary?.PresentDays ?? summary.presentDays;
+    const HalfDays = dbSummary?.HalfDays ?? summary.halfDays;
+    const AbsentDays = dbSummary?.AbsentDays ?? summary.absentDays;
+    const MissPunchDays = dbSummary?.MissPunchDays ?? summary.missPunchDays;
+    const TotalOvertimeHours = dbSummary?.TotalOvertimeHours ?? summary.totalOvertimeHours;
+    const TotalOvertimeHoursManually = dbSummary?.TotalOvertimeHoursManually ?? summary.TotalOvertimeHoursManually;
+    const PayrollCalRoundoffTotalOvertime = dbSummary?.PayrollCalRoundoffTotalOvertime ?? summary.PayrollCalRoundoffTotalOvertime;
+    const RoundOffTotalOvertime = dbSummary?.RoundOffTotalOvertime ?? summary.RoundOffTotalOvertime;
+
+    // Step 2: Check for existing summary record
+    const existingRecordResult = await pool
+      .request()
+      .input('LabourId', sql.NVarChar, labourId)
+      .input('SelectedMonth', sql.NVarChar, selectedMonth)
+      .query(`
+        SELECT PresentDays
+        FROM LabourAttendanceSummary
+        WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
+      `);
+
+    const exists = existingRecordResult.recordset.length > 0;
+    const shouldUpdate = exists && existingRecordResult.recordset[0].PresentDays === null;
+
+    const request = pool.request()
+      .input('LabourId', sql.NVarChar, labourId)
+      .input('TotalDays', sql.Int, TotalDays)
+      .input('PresentDays', sql.Int, PresentDays)
+      .input('HalfDays', sql.Int, HalfDays)
+      .input('AbsentDays', sql.Int, AbsentDays)
+      .input('MissPunchDays', sql.Int, MissPunchDays)
+      .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
+      .input('RoundOffTotalOvertime', sql.Float, RoundOffTotalOvertime)
+      .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
+      .input('PayrollCalRoundoffTotalOvertime', sql.Float, PayrollCalRoundoffTotalOvertime)
+      .input('Shift', sql.NVarChar, shift)
+      .input('CreationDate', sql.DateTime, creationDate)
+      .input('SelectedMonth', sql.NVarChar, selectedMonth)
+      .input('Date', sql.Date, date);
+
+    if (exists && shouldUpdate) {
+      // Step 3a: Update only if PresentDays is NULL
+      await request.query(`
+        UPDATE LabourAttendanceSummary
+        SET 
+            TotalDays = @TotalDays,
+            PresentDays = @PresentDays,
+            HalfDays = @HalfDays,
+            AbsentDays = @AbsentDays,
+            MissPunchDays = @MissPunchDays,
+            TotalOvertimeHours = @TotalOvertimeHours,
+            RoundOffTotalOvertime = @RoundOffTotalOvertime,
+            TotalOvertimeHoursManually = @TotalOvertimeHoursManually,
+            PayrollCalRoundoffTotalOvertime = @PayrollCalRoundoffTotalOvertime,
+            Shift = @Shift,
+            CreationDate = @CreationDate,
+            Date = @Date
+        WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
+      `);
+    } else if (!exists) {
+      // Step 3b: Insert new record
+      await request.query(`
+        INSERT INTO LabourAttendanceSummary (
+            LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
+            TotalOvertimeHours, RoundOffTotalOvertime, TotalOvertimeHoursManually,
+            PayrollCalRoundoffTotalOvertime, Shift, CreationDate, SelectedMonth, Date
+        )
+        VALUES (
+            @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
+            @TotalOvertimeHours, @RoundOffTotalOvertime, @TotalOvertimeHoursManually,
+            @PayrollCalRoundoffTotalOvertime, @Shift, @CreationDate, @SelectedMonth, @Date
+        )
+      `);
     }
+
+  } catch (err) {
+    console.error('❌ Error in insertIntoLabourAttendanceSummary:', err);
+    throw err;
+  }
 }
 
 
 // async function insertIntoLabourAttendanceDetails(details) {
 //     try {
 //         const pool = await poolPromise;
+//         // console.log("details", details)
+//         // We add the new columns (PayrollCalRoundOffOvertime, OvertimeManually, etc.)
+//         // so the monthly re-calc can also save them if that row doesn't exist yet.
 //         const query = `
-//             INSERT INTO LabourAttendanceDetails (
-//                 LabourId, Date, FirstPunch, FirstPunchAttendanceId, FirstPunchDeviceId,
-//                 LastPunch, LastPunchAttendanceId, LastPunchDeviceId, 
-//                 TotalHours, Overtime, Status, CreationDate
-//             ) VALUES (
-//                 @LabourId, @Date, @FirstPunch, @FirstPunchAttendanceId, @FirstPunchDeviceId,
-//                 @LastPunch, @LastPunchAttendanceId, @LastPunchDeviceId, 
-//                 @TotalHours, @Overtime, @Status, @CreationDate
+//             IF NOT EXISTS (
+//                 SELECT 1
+//                 FROM [dbo].[LabourAttendanceDetails]
+//                 WHERE LabourId = @LabourId AND Date = @Date
 //             )
+//             BEGIN
+//                 INSERT INTO [dbo].[LabourAttendanceDetails] (
+//                     [LabourId], [Date],
+//                     [FirstPunch], [FirstPunchAttendanceId], [FirstPunchDeviceId],
+//                     [LastPunch], [LastPunchAttendanceId], [LastPunchDeviceId],
+//                     [TotalHours], [Overtime], [PayrollCalRoundOffOvertime], [Status],
+//                     [CreationDate], [projectName],
+//                     [FirstPunchManually], [LastPunchManually],
+//                     [OvertimeManually], [RemarkManually], [projectIdFromDevicefirstPunch], [projectIdFromDeviceLastPunch] 
+//                 )
+//                 VALUES (
+//                     @LabourId, @Date,
+//                     @FirstPunch, @FirstPunchAttendanceId, @FirstPunchDeviceId,
+//                     @LastPunch, @LastPunchAttendanceId, @LastPunchDeviceId,
+//                     @TotalHours, @Overtime, @PayrollCalRoundOffOvertime, @Status,
+//                     @CreationDate, @projectName,
+//                     @FirstPunchManually, @LastPunchManually,
+//                     @OvertimeManually, @RemarkManually, @projectIdFromDevicefirstPunch, @projectIdFromDeviceLastPunch 
+//                 )
+//             END
 //         `;
+
 //         await pool
 //             .request()
 //             .input('LabourId', sql.NVarChar, details.labourId)
+//             .input('projectName', sql.Int, details.projectName)
 //             .input('Date', sql.Date, details.date)
 //             .input('FirstPunch', sql.NVarChar, details.firstPunch)
-//             .input('FirstPunchAttendanceId', sql.Int, details.firstPunchAttendanceId)
-//             .input('FirstPunchDeviceId', sql.NVarChar, details.firstPunchDeviceId)
+//             .input('FirstPunchAttendanceId', sql.Int, details.firstPunchAttendanceId || null)
+//             .input('FirstPunchDeviceId', sql.NVarChar, details.firstPunchDeviceId || null)
 //             .input('LastPunch', sql.NVarChar, details.lastPunch)
-//             .input('LastPunchAttendanceId', sql.Int, details.lastPunchAttendanceId)
-//             .input('LastPunchDeviceId', sql.NVarChar, details.lastPunchDeviceId)
-//             .input('TotalHours', sql.Float, details.totalHours)
-//             .input('Overtime', sql.Float, details.overtime)
+//             .input('LastPunchAttendanceId', sql.Int, details.lastPunchAttendanceId || null)
+//             .input('LastPunchDeviceId', sql.NVarChar, details.lastPunchDeviceId || null)
+//             .input('TotalHours', sql.Float, parseFloat(details.totalHours) || 0)
+//             .input('Overtime', sql.Float, parseFloat(details.overtime) || 0)
+//             .input('PayrollCalRoundOffOvertime', sql.Float, parseFloat(details.PayrollCalRoundOffOvertime) || 0)
 //             .input('Status', sql.NVarChar, details.status)
 //             .input('CreationDate', sql.DateTime, details.creationDate)
+//             .input('FirstPunchManually', sql.NVarChar, details.firstPunch)
+//             .input('LastPunchManually', sql.NVarChar, details.lastPunch)
+//             .input('OvertimeManually', sql.Float, parseFloat(details.OvertimeManually) || 0)
+//             .input('RemarkManually', sql.NVarChar, details.remarkManually || null)
+//             .input('projectIdFromDevicefirstPunch', sql.Int, parseInt(details.projectIdFromDevicefirstPunch) || 0)
+//             .input('projectIdFromDeviceLastPunch', sql.Int, parseInt(details.projectIdFromDeviceLastPunch) || 0)
 //             .query(query);
 
-//         //console.log(`Inserted details for LabourId: ${details.labourId} on Date: ${details.date}`);
 //     } catch (err) {
 //         console.error('Error inserting into LabourAttendanceDetails:', err);
 //         throw err;
 //     }
 // }
 
+async function insertIntoLabourAttendanceDetails(details) {
+  try {
+    const pool = await poolPromise;
 
-async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
-    try {
-        const pool = await poolPromise;
+    const query = `
+      IF NOT EXISTS (
+        SELECT 1
+        FROM [dbo].[LabourAttendanceDetails]
+        WHERE LabourId = @LabourId AND Date = @Date
+      )
+      BEGIN
+        INSERT INTO [dbo].[LabourAttendanceDetails] (
+          [LabourId], [Date],
+          [FirstPunch], [FirstPunchAttendanceId], [FirstPunchDeviceId],
+          [LastPunch], [LastPunchAttendanceId], [LastPunchDeviceId],
+          [TotalHours], [Overtime], [PayrollCalRoundOffOvertime], [Status],
+          [CreationDate], [projectName],
+          [FirstPunchManually], [LastPunchManually],
+          [OvertimeManually], [RemarkManually],
+          [projectIdFromDevicefirstPunch], [projectIdFromDeviceLastPunch]
+        )
+        VALUES (
+          @LabourId, @Date,
+          @FirstPunch, @FirstPunchAttendanceId, @FirstPunchDeviceId,
+          @LastPunch, @LastPunchAttendanceId, @LastPunchDeviceId,
+          @TotalHours, @Overtime, @PayrollCalRoundOffOvertime, @Status,
+          @CreationDate, @projectName,
+          @FirstPunchManually, @LastPunchManually,
+          @OvertimeManually, @RemarkManually,
+          @projectIdFromDevicefirstPunch, @projectIdFromDeviceLastPunch
+        )
+      END
+      ELSE IF EXISTS (
+        SELECT 1 FROM [dbo].[LabourAttendanceDetails]
+        WHERE LabourId = @LabourId AND Date = @Date AND FirstPunch IS NULL
+      )
+      BEGIN
+        UPDATE [dbo].[LabourAttendanceDetails]
+        SET 
+          FirstPunch = @FirstPunch,
+          FirstPunchAttendanceId = @FirstPunchAttendanceId,
+          FirstPunchDeviceId = @FirstPunchDeviceId,
+          LastPunch = @LastPunch,
+          LastPunchAttendanceId = @LastPunchAttendanceId,
+          LastPunchDeviceId = @LastPunchDeviceId,
+          TotalHours = @TotalHours,
+          Overtime = @Overtime,
+          PayrollCalRoundOffOvertime = @PayrollCalRoundOffOvertime,
+          Status = @Status,
+          CreationDate = @CreationDate,
+          projectName = @projectName,
+          FirstPunchManually = @FirstPunchManually,
+          LastPunchManually = @LastPunchManually,
+          OvertimeManually = @OvertimeManually,
+          RemarkManually = @RemarkManually,
+          projectIdFromDevicefirstPunch = @projectIdFromDevicefirstPunch,
+          projectIdFromDeviceLastPunch = @projectIdFromDeviceLastPunch
+        WHERE LabourId = @LabourId AND Date = @Date
+      END
+    `;
 
-        // Calculate summary data for the given LabourId and Date range
-        const summaryData = await pool
-            .request()
-            .input('LabourId', sql.NVarChar, labourId)
-            .input('SelectedMonth', sql.NVarChar, date.substring(0, 7)) // e.g., "2024-12"
-            .query(`
-                SELECT 
-                    COUNT(*) AS TotalDays,
-                    SUM(CASE WHEN Status = 'P' THEN 1 ELSE 0 END) AS PresentDays,
-                    SUM(CASE WHEN Status = 'HD' THEN 1 ELSE 0 END) AS HalfDays,
-                    SUM(CASE WHEN Status = 'A' THEN 1 ELSE 0 END) AS AbsentDays,
-                    SUM(CASE WHEN Status = 'MP' THEN 1 ELSE 0 END) AS MissPunchDays,
-                    SUM(Overtime) AS TotalOvertimeHours,
-                    SUM(OvertimeManually) AS TotalOvertimeHoursManually,
-                    SUM(PayrollCalRoundOffOvertime) AS PayrollCalRoundoffTotalOvertime
-                FROM LabourAttendanceDetails
-                WHERE LabourId = @LabourId
-                AND FORMAT(Date, 'yyyy-MM') = @SelectedMonth
-            `);
+    await pool
+      .request()
+      .input('LabourId', sql.NVarChar, details.labourId)
+      .input('projectName', sql.Int, details.projectName)
+      .input('Date', sql.Date, details.date)
+      .input('FirstPunch', sql.NVarChar, details.firstPunch)
+      .input('FirstPunchAttendanceId', sql.Int, details.firstPunchAttendanceId || null)
+      .input('FirstPunchDeviceId', sql.NVarChar, details.firstPunchDeviceId || null)
+      .input('LastPunch', sql.NVarChar, details.lastPunch)
+      .input('LastPunchAttendanceId', sql.Int, details.lastPunchAttendanceId || null)
+      .input('LastPunchDeviceId', sql.NVarChar, details.lastPunchDeviceId || null)
+      .input('TotalHours', sql.Float, parseFloat(details.totalHours) || 0)
+      .input('Overtime', sql.Float, parseFloat(details.overtime) || 0)
+      .input('PayrollCalRoundOffOvertime', sql.Float, parseFloat(details.PayrollCalRoundOffOvertime) || 0)
+      .input('Status', sql.NVarChar, details.status)
+      .input('CreationDate', sql.DateTime, details.creationDate)
+      .input('FirstPunchManually', sql.NVarChar, details.firstPunch)
+      .input('LastPunchManually', sql.NVarChar, details.lastPunch)
+      .input('OvertimeManually', sql.Float, parseFloat(details.OvertimeManually) || 0)
+      .input('RemarkManually', sql.NVarChar, details.remarkManually || null)
+      .input('projectIdFromDevicefirstPunch', sql.Int, parseInt(details.projectIdFromDevicefirstPunch) || 0)
+      .input('projectIdFromDeviceLastPunch', sql.Int, parseInt(details.projectIdFromDeviceLastPunch) || 0)
+      .query(query);
 
-        const {
-            TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
-            TotalOvertimeHours, TotalOvertimeHoursManually, PayrollCalRoundoffTotalOvertime
-        } = summaryData.recordset[0];
+  } catch (err) {
+    console.error('❌ Error inserting/updating LabourAttendanceDetails:', err);
+    throw err;
+  }
+}
 
-        // Check if an existing summary record exists for this LabourId and SelectedMonth
-        const existingRecord = await pool
-            .request()
-            .input('LabourId', sql.NVarChar, labourId)
-            .input('SelectedMonth', sql.NVarChar, date.substring(0, 7)) // e.g., "2024-12"
-            .query(`
-                SELECT COUNT(*) AS count 
-                FROM LabourAttendanceSummary 
-                WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
-            `);
-
-        if (existingRecord.recordset[0].count > 0) {
-            // Update existing record
-            await pool
-                .request()
-                .input('LabourId', sql.NVarChar, labourId)
-                .input('TotalDays', sql.Int, TotalDays)
-                .input('PresentDays', sql.Int, PresentDays)
-                .input('HalfDays', sql.Int, HalfDays)
-                .input('AbsentDays', sql.Int, AbsentDays)
-                .input('MissPunchDays', sql.Int, MissPunchDays)
-                .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
-                .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
-                .input('PayrollCalRoundoffTotalOvertime', sql.Float, PayrollCalRoundoffTotalOvertime)
-                .input('CreationDate', sql.DateTime, new Date())
-                .input('SelectedMonth', sql.NVarChar, date.substring(0, 7))
-                .query(`
-                    UPDATE LabourAttendanceSummary
-                    SET 
-                        TotalDays = @TotalDays,
-                        PresentDays = @PresentDays,
-                        HalfDays = @HalfDays,
-                        AbsentDays = @AbsentDays,
-                        MissPunchDays = @MissPunchDays,
-                        TotalOvertimeHours = @TotalOvertimeHours,
-                        TotalOvertimeHoursManually = @TotalOvertimeHoursManually,
-                        PayrollCalRoundoffTotalOvertime = @PayrollCalRoundoffTotalOvertime,
-                        CreationDate = @CreationDate
-                    WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
-                `);
-
-            // console.log(`Updated summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
-        } else {
-            // Insert new record
-            await pool
-                .request()
-                .input('LabourId', sql.NVarChar, labourId)
-                .input('TotalDays', sql.Int, TotalDays)
-                .input('PresentDays', sql.Int, PresentDays)
-                .input('HalfDays', sql.Int, HalfDays)
-                .input('AbsentDays', sql.Int, AbsentDays)
-                .input('MissPunchDays', sql.Int, MissPunchDays)
-                .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
-                .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
-                .input('PayrollCalRoundoffTotalOvertime', sql.Float, PayrollCalRoundoffTotalOvertime)
-                .input('CreationDate', sql.DateTime, new Date())
-                .input('SelectedMonth', sql.NVarChar, date.substring(0, 7))
-                .query(`
-                    INSERT INTO LabourAttendanceSummary (
-                        LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
-                        TotalOvertimeHours, TotalOvertimeHoursManually, PayrollCalRoundoffTotalOvertime, CreationDate, SelectedMonth
-                    ) VALUES (
-                        @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
-                        @TotalOvertimeHours, @TotalOvertimeHoursManually, @PayrollCalRoundoffTotalOvertime, @CreationDate, @SelectedMonth
-                    )
-                `);
-
-            // console.log(`Inserted summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
-        }
-    } catch (err) {
-        console.error('Error in insertOrUpdateLabourAttendanceSummary:', err);
-        throw err;
-    }
-};
 
 
 // async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
-//     // //console.log('date++__++__++__',date)
 //     try {
 //         const pool = await poolPromise;
 
@@ -2401,14 +2411,17 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
 //                     SUM(CASE WHEN Status = 'A' THEN 1 ELSE 0 END) AS AbsentDays,
 //                     SUM(CASE WHEN Status = 'MP' THEN 1 ELSE 0 END) AS MissPunchDays,
 //                     SUM(Overtime) AS TotalOvertimeHours,
-//                     SUM(OvertimeManually) AS TotalOvertimeHoursManually
+//                     SUM(OvertimeManually) AS TotalOvertimeHoursManually,
+//                     SUM(PayrollCalRoundOffOvertime) AS PayrollCalRoundoffTotalOvertime
 //                 FROM LabourAttendanceDetails
 //                 WHERE LabourId = @LabourId
 //                 AND FORMAT(Date, 'yyyy-MM') = @SelectedMonth
 //             `);
 
-//         const { TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays, TotalOvertimeHours, TotalOvertimeHoursManually } =
-//             summaryData.recordset[0];
+//         const {
+//             TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
+//             TotalOvertimeHours, TotalOvertimeHoursManually, PayrollCalRoundoffTotalOvertime
+//         } = summaryData.recordset[0];
 
 //         // Check if an existing summary record exists for this LabourId and SelectedMonth
 //         const existingRecord = await pool
@@ -2433,6 +2446,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
 //                 .input('MissPunchDays', sql.Int, MissPunchDays)
 //                 .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
 //                 .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
+//                 .input('PayrollCalRoundoffTotalOvertime', sql.Float, PayrollCalRoundoffTotalOvertime)
 //                 .input('CreationDate', sql.DateTime, new Date())
 //                 .input('SelectedMonth', sql.NVarChar, date.substring(0, 7))
 //                 .query(`
@@ -2445,11 +2459,12 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
 //                         MissPunchDays = @MissPunchDays,
 //                         TotalOvertimeHours = @TotalOvertimeHours,
 //                         TotalOvertimeHoursManually = @TotalOvertimeHoursManually,
+//                         PayrollCalRoundoffTotalOvertime = @PayrollCalRoundoffTotalOvertime,
 //                         CreationDate = @CreationDate
 //                     WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
 //                 `);
 
-//             console.log(`Updated summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
+//             // console.log(`Updated summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
 //         } else {
 //             // Insert new record
 //             await pool
@@ -2462,25 +2477,144 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
 //                 .input('MissPunchDays', sql.Int, MissPunchDays)
 //                 .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
 //                 .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
+//                 .input('PayrollCalRoundoffTotalOvertime', sql.Float, PayrollCalRoundoffTotalOvertime)
 //                 .input('CreationDate', sql.DateTime, new Date())
 //                 .input('SelectedMonth', sql.NVarChar, date.substring(0, 7))
 //                 .query(`
 //                     INSERT INTO LabourAttendanceSummary (
 //                         LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
-//                         TotalOvertimeHours, TotalOvertimeHoursManually, CreationDate, SelectedMonth
+//                         TotalOvertimeHours, TotalOvertimeHoursManually, PayrollCalRoundoffTotalOvertime, CreationDate, SelectedMonth
 //                     ) VALUES (
 //                         @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
-//                         @TotalOvertimeHours, @TotalOvertimeHoursManually, @CreationDate, @SelectedMonth
+//                         @TotalOvertimeHours, @TotalOvertimeHoursManually, @PayrollCalRoundoffTotalOvertime, @CreationDate, @SelectedMonth
 //                     )
 //                 `);
 
-//             console.log(`Inserted summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
+//             // console.log(`Inserted summary for LabourId: ${labourId} in month: ${date.substring(0, 7)}`);
 //         }
 //     } catch (err) {
 //         console.error('Error in insertOrUpdateLabourAttendanceSummary:', err);
 //         throw err;
 //     }
 // };
+
+async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
+  try {
+    const pool = await poolPromise;
+
+    const selectedMonth = date.substring(0, 7); // e.g., "2025-07"
+
+    // Step 1: Get attendance summary data for the month
+    const summaryData = await pool
+      .request()
+      .input('LabourId', sql.NVarChar, labourId)
+      .input('SelectedMonth', sql.NVarChar, selectedMonth)
+      .query(`
+        SELECT 
+            COUNT(*) AS TotalDays,
+            SUM(CASE WHEN Status = 'P' THEN 1 ELSE 0 END) AS PresentDays,
+            SUM(CASE WHEN Status = 'HD' THEN 1 ELSE 0 END) AS HalfDays,
+            SUM(CASE WHEN Status = 'A' THEN 1 ELSE 0 END) AS AbsentDays,
+            SUM(CASE WHEN Status = 'MP' THEN 1 ELSE 0 END) AS MissPunchDays,
+            SUM(Overtime) AS TotalOvertimeHours,
+            SUM(OvertimeManually) AS TotalOvertimeHoursManually,
+            SUM(PayrollCalRoundOffOvertime) AS PayrollCalRoundoffTotalOvertime
+        FROM LabourAttendanceDetails
+        WHERE LabourId = @LabourId
+        AND FORMAT(Date, 'yyyy-MM') = @SelectedMonth
+      `);
+
+    const {
+      TotalDays,
+      PresentDays,
+      HalfDays,
+      AbsentDays,
+      MissPunchDays,
+      TotalOvertimeHours,
+      TotalOvertimeHoursManually,
+      PayrollCalRoundoffTotalOvertime
+    } = summaryData.recordset[0];
+
+    // Step 2: Check if record exists and whether PresentDays is NULL
+    const existingRecord = await pool
+      .request()
+      .input('LabourId', sql.NVarChar, labourId)
+      .input('SelectedMonth', sql.NVarChar, selectedMonth)
+      .query(`
+        SELECT PresentDays
+        FROM LabourAttendanceSummary
+        WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
+      `);
+
+    const exists = existingRecord.recordset.length > 0;
+    const shouldUpdate = exists && existingRecord.recordset[0].PresentDays === null;
+
+    if (exists && !shouldUpdate) {
+      // Record exists and PresentDays is not null → skip update
+      return;
+    }
+
+    if (exists) {
+      // Step 3a: Update if record exists and PresentDays is null
+      await pool
+        .request()
+        .input('LabourId', sql.NVarChar, labourId)
+        .input('TotalDays', sql.Int, TotalDays)
+        .input('PresentDays', sql.Int, PresentDays)
+        .input('HalfDays', sql.Int, HalfDays)
+        .input('AbsentDays', sql.Int, AbsentDays)
+        .input('MissPunchDays', sql.Int, MissPunchDays)
+        .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
+        .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
+        .input('PayrollCalRoundoffTotalOvertime', sql.Float, PayrollCalRoundoffTotalOvertime)
+        .input('CreationDate', sql.DateTime, new Date())
+        .input('SelectedMonth', sql.NVarChar, selectedMonth)
+        .query(`
+          UPDATE LabourAttendanceSummary
+          SET 
+              TotalDays = @TotalDays,
+              PresentDays = @PresentDays,
+              HalfDays = @HalfDays,
+              AbsentDays = @AbsentDays,
+              MissPunchDays = @MissPunchDays,
+              TotalOvertimeHours = @TotalOvertimeHours,
+              TotalOvertimeHoursManually = @TotalOvertimeHoursManually,
+              PayrollCalRoundoffTotalOvertime = @PayrollCalRoundoffTotalOvertime,
+              CreationDate = @CreationDate
+          WHERE LabourId = @LabourId AND SelectedMonth = @SelectedMonth
+        `);
+    } else {
+      // Step 3b: Insert if no record
+      await pool
+        .request()
+        .input('LabourId', sql.NVarChar, labourId)
+        .input('TotalDays', sql.Int, TotalDays)
+        .input('PresentDays', sql.Int, PresentDays)
+        .input('HalfDays', sql.Int, HalfDays)
+        .input('AbsentDays', sql.Int, AbsentDays)
+        .input('MissPunchDays', sql.Int, MissPunchDays)
+        .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
+        .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
+        .input('PayrollCalRoundoffTotalOvertime', sql.Float, PayrollCalRoundoffTotalOvertime)
+        .input('CreationDate', sql.DateTime, new Date())
+        .input('SelectedMonth', sql.NVarChar, selectedMonth)
+        .query(`
+          INSERT INTO LabourAttendanceSummary (
+              LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
+              TotalOvertimeHours, TotalOvertimeHoursManually, PayrollCalRoundoffTotalOvertime, CreationDate, SelectedMonth
+          ) VALUES (
+              @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
+              @TotalOvertimeHours, @TotalOvertimeHoursManually, @PayrollCalRoundoffTotalOvertime, @CreationDate, @SelectedMonth
+          )
+        `);
+    }
+
+  } catch (err) {
+    console.error('❌ Error in insertOrUpdateLabourAttendanceSummary:', err);
+    throw err;
+  }
+}
+
 
 
 async function deleteAttendanceDetails(month, year) {
