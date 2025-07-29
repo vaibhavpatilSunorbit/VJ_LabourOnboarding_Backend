@@ -180,6 +180,7 @@ const EmployeeRoute = require('./routes/dataRoutes');
 const labourController = require('./controllers/labourController');
 const userRoutes = require('./routes/UserRoutes');
 const dataRoutes = require('./routes/dataRoutes');
+
 const documentRoutes = require('./routes/documentRoutes');
 const { poolPromise2 } = require('./config/dbConfig2');
 const { poolPromise } = require('./config/dbConfig');
@@ -220,90 +221,8 @@ const upload = multer({
 });
 
 app.use('/api/labours', labourRoutes);
-app.use('/api',attandanceRouter);
+// app.use('/api',attandanceRouter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Add the route to download the Excel file
-// app.get('/download-excel', async (req, res) => {
-//     try {
-//         const pool = await poolPromise;
-//         const result = await pool.request().query('SELECT * FROM labourOnboarding');
-//         const data = result.recordset;
-
-//         // Create a new workbook and a sheet
-//         const workbook = new ExcelJS.Workbook();
-//         const worksheet = workbook.addWorksheet('SSMS Data');
-
-//         // Add headers to the sheet
-//         worksheet.columns = Object.keys(data[0]).map(key => ({ header: key, key }));
-
-//         // Add data to the sheet
-//         data.forEach(row => {
-//             worksheet.addRow(row);
-//         });
-
-//         // Adjust column widths
-//         worksheet.columns.forEach(column => {
-//             let maxLength = 0;
-//             column.eachCell({ includeEmpty: true }, cell => {
-//                 const cellValueLength = cell.value ? cell.value.toString().length : 0;
-//                 maxLength = Math.max(maxLength, cellValueLength);
-//             });
-//             column.width = maxLength < 10 ? 10 : maxLength + 2; // Minimum width of 10, or length of content + 2
-//         });
-
-//         // Set the response headers for download
-//         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-//         res.setHeader('Content-Disposition', 'attachment; filename=ssms_data.xlsx');
-
-//         // Send the workbook to the client
-//         await workbook.xlsx.write(res);
-//         res.end();
-//     } catch (error) {
-//         console.error('Error generating Excel file:', error);
-//         res.status(500).send('Error generating Excel file');
-//     }
-// });
-
-
-
-
-
-
-
-// app.get('/labours/:id/download/aadhaar-card', async (req, res) => {
-//     const { id } = req.params;
-//     const frontFilePath = path.join(__dirname, 'uploads', `aadhaar_front_${id}.jpg`);
-//     const backFilePath = path.join(__dirname, 'uploads', `aadhaar_back_${id}.jpg`);
-//     const idProofFilePath = path.join(__dirname, 'uploads', `id_Proof${id}.jpg`);
-//     const inductionFilePath = path.join(__dirname, 'uploads', `id_Proof${id}.jpg`);
-
-//     if (fs.existsSync(frontFilePath) && fs.existsSync(backFilePath) && fs.existsSync(idProofFilePath) && fs.existsSync(inductionFilePath)) {
-//         const frontFile = fs.readFileSync(frontFilePath);
-//         const backFile = fs.readFileSync(backFilePath);
-//         const idFile = fs.readFileSync(idProofFilePath);
-//         const inductionFile = fs.readFileSync(inductionFilePath);
-
-//         const zip = new JSZip();
-//         zip.file(`aadhaar_front_${id}.jpg`, frontFile);
-//         zip.file(`aadhaar_back_${id}.jpg`, backFile);
-//         zip.file(`id_Proof${id}.jpg`, idFile);
-//         zip.file(`Upload_Induction${id}.jpg`, inductionFile);
-
-//         res.set('Content-Type', 'application/zip');
-//         res.set('Content-Disposition', `attachment; filename="aadhaar_${id}.zip"`);
-
-//         zip.generateNodeStream({ type: 'nodebuffer', streamFiles: true })
-//             .pipe(res)
-//             .on('finish', () => {
-//                 console.log(`Aadhaar card zip for Labour ID ${id} has been generated and sent.`);
-//             });
-//     } else {
-//         res.status(404).send('File not found.');
-//     }
-// });
-
-
 app.use('/users', userRoutes);
 app.use('/api', (req, res, next) => { console.log('/api'); next() }, dataRoutes);
 app.use('/insentive', insentiveRoutes);
