@@ -2953,7 +2953,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
             // console.log("[FIXED] Expected Days Worked:", expectedDays);
 
             if (expectedDays >= daysInSlice) {
-                baseWage = baseMonthly + sundayPayment;
+                baseWage = baseMonthly;
                 // console.log("[FIXED] Full Month Pay applicable");
             } else {
                 const actualWorkedHours = Math.min(expectedDays * parsedWorkingHours, totalHrsExcludingOT);
@@ -2963,11 +2963,12 @@ async function calculateSalaryForLabour(labourId, month, year) {
                     ? (weeklyOffDays / 2) * parsedWorkingHours * hourlyWage
                     : weeklyOffDays * parsedWorkingHours * hourlyWage;
 
-                baseWage = Math.round(workedPay + weeklyOffPay) + sundayPayment;
+                baseWage = Math.round(workedPay + weeklyOffPay);
                 // console.log("[FIXED] Worked Pay:", workedPay);
                 // console.log("[FIXED] Weekly Off Pay:", weeklyOffPay);
                 // console.log("[FIXED] Base Wage Calculated:", baseWage);
             }
+             baseWage += sundayPayment;
         }
 
         const derivedPerHour = isDailyWage && parsedWorkingHours > 0
