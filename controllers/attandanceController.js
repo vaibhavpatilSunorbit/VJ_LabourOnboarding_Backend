@@ -592,6 +592,8 @@ const determineStatus = (punches, shiftHours, halfDayHours, workingHours) => {
 
 
 // ✅ Helper to split array into chunks
+
+
 function chunkArray(arr, size) {
   return arr.reduce((chunks, _, i) => (i % size ? chunks : [...chunks, arr.slice(i, i + size)]), []);
 }
