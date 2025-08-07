@@ -440,7 +440,7 @@ const getLabourMonthlyWages = async (LabourID) => {
 // Add or update variablePay
 const upsertLabourVariablePay = async (variablePay) => {
     const pool = await poolPromise;
-    //console.log('Payload received for variablePay:', variablePay);
+    console.log('Payload received for variablePay:', variablePay);
     // Step 2: Perform the upsert operation
     const onboardingData = await pool.request()
         .input('LabourID', sql.NVarChar, variablePay.LabourID || '')
@@ -462,9 +462,10 @@ const upsertLabourVariablePay = async (variablePay) => {
 
     const labourDetails = onboardingData.recordset[0];
 
-    const effectiveDate = new Date(variablePay.effectiveDate + 'T00:00:00'); // Append time part to avoid time zone issues
+    const effectiveDate = new Date(variablePay.effectiveDate); // Append time part to avoid time zone issues
+    console.log("effectiveDate", effectiveDate)
     if (isNaN(effectiveDate.getTime())) {
-        //console.log("effectiveDate", effectiveDate)
+        
         console.error('Invalid effective date provided:', variablePay.effectiveDate);
         throw new Error('Invalid effective date');
     }
@@ -1456,8 +1457,9 @@ async function getAttendanceSummaryForLabour(labourId, month, year, workingHours
             parsedWorkingHours = 9;
         } else if (!isNaN(parseFloat(workingHours))) {
             parsedWorkingHours = parseFloat(workingHours);
-        } else {
-            for (const sunday of sundays) {
+        }
+
+         for (const sunday of sundays) {
                 const sundayAttendanceResult = await pool.request()
                     .input('labourId', sql.NVarChar, labourId)
                     .input('date', sql.Date, sunday)
@@ -1485,7 +1487,7 @@ async function getAttendanceSummaryForLabour(labourId, month, year, workingHours
                     }
                 }
             }
-        }
+            
         console.log(`Additional Present: ${additionalPresent}, Additional Half: ${additionalHalf}`);
 
 
@@ -2805,7 +2807,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
     const salaryTimer = `Salary-${labourId}`;
     console.time(salaryTimer);
     try {
-        // console.log(`\n[START] Salary calculation for Labour ID: ${labourId}, Month: ${month}, Year: ${year}`);
+        console.log(`\n[START] Salary calculation for Labour ID: ${labourId}, Month: ${month}, Year: ${year}`);
         console.time('getWageInfoForLabour');
         const wagesInfo = await withTimeout(getWageInfoForLabour(labourId, month, year), DEFAULT_TIMEOUT_MS, // increased to 30s
             `getWageInfoForLabour-${labourId}`
@@ -2891,11 +2893,11 @@ async function calculateSalaryForLabour(labourId, month, year) {
             weeklyOffDay: weeklyOffDays = 0
         } = attendance;
 
-        // console.log("[INFO] Attendance Parsed Values", {
-        //     presentDays, absentDays, halfDays, missPunchDays,
-        //     normalOvertimeCount, totalHolidaysInMonth, weeklyOffDays,
-        //     totalHoursForMonth, holidayOvertimeHours, holidayOvertimeWages
-        // });
+        console.log("[INFO] Attendance Parsed Values", {
+            presentDays, absentDays, halfDays, missPunchDays,
+            normalOvertimeCount, totalHolidaysInMonth, weeklyOffDays,
+            totalHoursForMonth, holidayOvertimeHours, holidayOvertimeWages
+        });
 
         // Destructure variable pay
         const {
@@ -2921,8 +2923,8 @@ async function calculateSalaryForLabour(labourId, month, year) {
         const workingHoursRaw = wagesInfo.workingHours || '';
         const parsedWorkingHours = workingHoursRaw === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
 
-        // console.log("[INFO] Latest Wage Slice:", latestWage);
-        // console.log("[INFO] Parsed Working Hours:", parsedWorkingHours);
+        console.log("[INFO] Latest Wage Slice:", latestWage);
+        console.log("[INFO] Parsed Working Hours:", parsedWorkingHours);
 
         let baseWage = 0;
         let weeklyOffPay = 0;
@@ -2930,40 +2932,57 @@ async function calculateSalaryForLabour(labourId, month, year) {
         const isFixedMonthly = wageType.includes("FIXED");
         const totalHrsExcludingOT = totalHoursForMonth - cappedOvertime;
 
-        // console.log("[INFO] Wage Type Flags:", { isDailyWage, isFixedMonthly });
+        console.log("[INFO] Wage Type Flags:", { isDailyWage, isFixedMonthly });
 
         if (isDailyWage) {
-            // console.log("[DAILY] presentDays=======================", presentDays);
-            // console.log("[DAILY] parsedWorkingHours=======================", parsedWorkingHours);
+            console.log("[DAILY] presentDays=======================", presentDays);
+            console.log("[DAILY] parsedWorkingHours=======================", parsedWorkingHours);
             const totalPossibleHours = presentDays * parsedWorkingHours;
             const hourlyWage = dailyWageRate / parsedWorkingHours;
-            // console.log("[DAILY] Total Possible Hours:", totalPossibleHours);
-            // console.log("[DAILY] Hourly totalHrsExcludingOT:", totalHrsExcludingOT);
-            baseWage = Math.min(totalPossibleHours, totalHrsExcludingOT) * hourlyWage;
+            console.log("[DAILY] Total Possible Hours:", totalPossibleHours);
+            console.log("[DAILY] Hourly totalHrsExcludingOT:", totalHrsExcludingOT);
+            baseWage = totalPossibleHours * hourlyWage;
+            console.log("[DAILY] sundayPayment:", sundayPayment);
             baseWage += sundayPayment;
-            // console.log("[DAILY] Hourly Wage:", hourlyWage);
-            // console.log("[DAILY] Base Wage Calculated:", baseWage);
+            console.log("[DAILY] Hourly Wage:", hourlyWage);
+            console.log("[DAILY] Base Wage Calculated:", baseWage);
         } else if (isFixedMonthly) {
             const baseMonthly = fixedMonthlyWage || monthlySalary;
             const hourlyWage = baseMonthly / (daysInSlice * parsedWorkingHours);
-            const expectedDays = presentDays + weeklyOffDays;
+            const expectedDays = presentDays + (latestWage?.weeklyOff && latestWage?.weeklyOff > 0 ? weeklyOffDays : 0);
 
-            // console.log("[FIXED] Base Monthly:", baseMonthly);
-            // console.log("[FIXED] Hourly Wage:", hourlyWage);
-            // console.log("[FIXED] Expected Days Worked:", expectedDays);
+            console.log("[FIXED] Base Monthly:", baseMonthly);
+            console.log("[FIXED] Hourly Wage:", hourlyWage);
+            console.log("[FIXED] Expected Days Worked:", expectedDays);
+            console.log("[FIXED] parsedWorkingHours:", parsedWorkingHours);
+            console.log("[FIXED] totalHrsExcludingOT:", totalHrsExcludingOT);
 
-            if (expectedDays >= daysInSlice) {
-                baseWage = baseMonthly;
-                // console.log("[FIXED] Full Month Pay applicable");
-            } else {
-                const actualWorkedHours = Math.min(expectedDays * parsedWorkingHours, totalHrsExcludingOT);
+           if (expectedDays >= daysInSlice && (latestWage?.weeklyOff || latestWage?.weeklyOff > 0)) {
+               const actualWorkedHours = presentDays * parsedWorkingHours;
                 const workedPay = actualWorkedHours * hourlyWage;
-
+console.log("[FIXED] actualWorkedHours:", actualWorkedHours);
                 weeklyOffPay = (presentDays <= daysInSlice / 2)
                     ? (weeklyOffDays / 2) * parsedWorkingHours * hourlyWage
                     : weeklyOffDays * parsedWorkingHours * hourlyWage;
 
                 baseWage = Math.round(workedPay + weeklyOffPay);
+                 console.log("[FIXED] Worked Pay:", workedPay);
+                console.log("[FIXED] Weekly Off Pay:", weeklyOffPay);
+                console.log("[FIXED] Base Wage Calculated:", baseWage);
+            }
+             else   if (expectedDays >= daysInSlice) {
+                baseWage = baseMonthly;
+                console.log("[FIXED] Full Month Pay applicable");
+            } else {
+                const actualWorkedHours = presentDays * parsedWorkingHours;
+                const workedPay = actualWorkedHours * hourlyWage;
+                // console.log("[FIXED] actualWorkedHours:", actualWorkedHours);
+
+                weeklyOffPay = (presentDays <= daysInSlice / 2)
+                    ? (weeklyOffDays / 2) * parsedWorkingHours * hourlyWage
+                    : weeklyOffDays * parsedWorkingHours * hourlyWage;
+
+                baseWage = latestWage?.weeklyOff ? Math.round(workedPay + weeklyOffPay) : Math.round(workedPay);
                 // console.log("[FIXED] Worked Pay:", workedPay);
                 // console.log("[FIXED] Weekly Off Pay:", weeklyOffPay);
                 // console.log("[FIXED] Base Wage Calculated:", baseWage);
@@ -2974,13 +2993,13 @@ async function calculateSalaryForLabour(labourId, month, year) {
         const derivedPerHour = isDailyWage && parsedWorkingHours > 0
             ? dailyWageRate / parsedWorkingHours
             : 0;
-        // console.log("[INFO] Derived Per Hour Rate:", derivedPerHour);
+        console.log("[INFO] Derived Per Hour Rate:", derivedPerHour);
 
         const overtimePay = isDailyWage ? cappedOvertime * derivedPerHour : 0;
-        // console.log("[INFO] Overtime Pay:", overtimePay);
+        console.log("[INFO] Overtime Pay:", overtimePay);
 
         const hasAttendanceIssues = absentDays > 0 || missPunchDays > 0 || halfDays > 0;
-        // console.log("[INFO] Attendance Issue:", hasAttendanceIssues);
+        console.log("[INFO] Attendance Issue:", hasAttendanceIssues);
 
         let holidayOvertimePay = 0;
         if (isDailyWage) {
@@ -2990,15 +3009,15 @@ async function calculateSalaryForLabour(labourId, month, year) {
         } else {
             holidayOvertimePay = holidayOvertimeWages || 0;
         }
-        // console.log("[INFO] Holiday Overtime Pay:", holidayOvertimePay);
+        console.log("[INFO] Holiday Overtime Pay:", holidayOvertimePay);
 
         const previousWageAmount = 0;
         const bonuses = incentive || 0;
         const totalAttendanceDeductions = 0;
         const totalDeductions = totalAttendanceDeductions + advance + debit;
 
-        // console.log("[INFO] Bonuses:", bonuses);
-        // console.log("[INFO] Total Deductions:", totalDeductions);
+        console.log("[INFO] Bonuses:", bonuses);
+        console.log("[INFO] Total Deductions:", totalDeductions);
 
         let grossPay = baseWage + bonuses;
         if (isDailyWage) {
@@ -3009,10 +3028,10 @@ async function calculateSalaryForLabour(labourId, month, year) {
         const isNegativeSalary = netPay < 0;
         netPay = Math.max(netPay, 0);
 
-        // console.log("[RESULT] Gross Pay:", grossPay);
-        // console.log("[RESULT] Net Pay:", netPay);
-        // console.log("[RESULT] Is Negative Salary:", isNegativeSalary);
-        // console.log(`[END] Salary calculation complete for Labour ID: ${labourId}\n`);
+        console.log("[RESULT] Gross Pay:", grossPay);
+        console.log("[RESULT] Net Pay:", netPay);
+        console.log("[RESULT] Is Negative Salary:", isNegativeSalary);
+        console.log(`[END] Salary calculation complete for Labour ID: ${labourId}\n`);
 
         return {
             labourId,

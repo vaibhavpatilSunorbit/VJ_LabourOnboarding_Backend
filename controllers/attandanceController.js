@@ -740,7 +740,7 @@ const compareAndUpdateLabourPunches = async () => {
         FROM [LabourOnboardingForm].[dbo].[LabourAttendanceDetails]
         WHERE LastPunch IS NULL
           AND [Date] BETWEEN DATEADD(DAY, -30, CAST(GETDATE() AS DATE)) 
-                          AND DATEADD(DAY, -2, CAST(GETDATE() AS DATE))
+                          AND DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
       `)
     ).recordset.map((row) => row.LabourId);
 
@@ -763,7 +763,7 @@ const compareAndUpdateLabourPunches = async () => {
         FROM [etimetracklite11.8].[dbo].[Attendance]
         WHERE punch_time IS NOT NULL
           AND punch_date BETWEEN DATEADD(DAY, -30, CAST(GETDATE() AS DATE)) 
-                             AND DATEADD(DAY, -2, CAST(GETDATE() AS DATE))
+                             AND DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
           AND user_id IN (${chunkString})
           AND (user_id LIKE 'JC%' OR user_id LIKE 'JIH%');
       `);

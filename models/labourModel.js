@@ -3747,6 +3747,7 @@ console.log("updasertAttendnace",labourId,date,firstPunchManually,lastPunchManua
             // No punches, no OT => absent
             status = 'A';
             rawOvertime = 0;
+            finalOvertimeManually = 0;
         }
         // console.log("rawOvertime",rawOvertime)
         // 5) Round the computed rawOvertime
@@ -4787,17 +4788,17 @@ async function markWagesForApproval(
 
     const labourName = getNameResult.recordset.length > 0 ? getNameResult.recordset[0].name : null;
         const request = pool.request();
-
+        console.log("effectiveDate", effectiveDate);
         const perHourWages = dailyWages ? dailyWages / 8 : 0;
-        const effectiveDateOnly = effectiveDate ? new Date(effectiveDate).toISOString().split('T')[0] : null;
-
+        const effectiveDateOnly = effectiveDate ? new Date(effectiveDate) : null;
+  console.log("effectiveDateOnly", effectiveDateOnly);
         request.input('WageID', sql.Int, wageId);
         request.input('LabourID', sql.NVarChar, labourId);
         request.input('DailyWages', sql.Float, dailyWages || null);
         request.input('MonthlyWages', sql.Float, monthlyWages || null);
         request.input('PerHourWages', sql.Float, perHourWages);
         request.input('YearlyWages', sql.Float, yearlyWages || null);
-        request.input('EffectiveDate', sql.Date, effectiveDateOnly);
+        request.input('EffectiveDate', sql.Date, effectiveDate);
         request.input('FixedMonthlyWages', sql.Float, fixedMonthlyWages || null);
         request.input('WeeklyOff', sql.Int, weeklyOff || null);
         request.input('PayStructure', sql.NVarChar, payStructure || null);
