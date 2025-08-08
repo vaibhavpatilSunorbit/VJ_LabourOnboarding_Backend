@@ -599,8 +599,134 @@ function chunkArray(arr, size) {
 }
 
 // ✅ Extracted labour processing logic
-async function processLabourAttendance(labourId, pool1) {
-  console.log(`\n🔄 Processing Labour ID: ${labourId}`);
+// async function processLabourAttendance(labourId, pool1) {
+//   console.log(`\n🔄 Processing Labour ID: ${labourId}`);
+
+//   const basicDataRes = await pool1
+//     .request()
+//     .input("currentId", sql.VarChar, labourId)
+//     .query(`
+//       SELECT LabourID AS labourId, workingHours, projectName
+//       FROM [labourOnboarding]
+//       WHERE LabourID = @currentId
+//     `);
+
+//   const basicData = basicDataRes.recordset[0];
+//   if (!basicData) {
+//     console.log(`⚠️ No basic data found for Labour ID: ${labourId}. Skipping...`);
+//     return;
+//   }
+
+//   const { workingHours, projectName } = basicData;
+//   const shiftHours = getShiftHours(workingHours);
+//   const halfDayHours = getHalfDayHours(shiftHours);
+
+//   const today = new Date();
+//   const parsedMonth = today.getMonth() + 1;
+//   const parsedYear = today.getFullYear();
+//   const daysInMonth = new Date(parsedYear, parsedMonth, 0).getDate();
+
+//   const labourAttendance = await labourModel.getAttendanceByLabourId(
+//     labourId,
+//     parsedMonth,
+//     parsedYear
+//   );
+
+//   console.log(`📥 Retrieved ${labourAttendance.length} punch records for ${labourId}`);
+
+//   // Counters
+//   let presentDays = 0,
+//     halfDays = 0,
+//     missPunchDays = 0,
+//     absentDays = 0;
+//   let totalOvertimeHours = 0,
+//     PayrollCalRoundoffTotalOvertime = 0,
+//     roundOffTotalOvertime = 0,
+//     totalManualOvertimeManually = 0;
+
+//   for (let day = 1; day <= daysInMonth; day++) {
+//     const date = `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-${String(day).padStart(
+//       2,
+//       "0"
+//     )}`;
+
+//     const punchesForDay = labourAttendance.filter(
+//       (att) => new Date(att.punch_date).toISOString().split("T")[0] === date
+//     );
+
+//     const { status, firstPunch, lastPunch, totalHours } = determineStatus(
+//       punchesForDay,
+//       shiftHours,
+//       halfDayHours,
+//       workingHours
+//     );
+
+//     console.log(`📆 ${date} | Status: ${status} | Punches: ${punchesForDay.length}`);
+
+//     const overtime = status === "P" && totalHours > shiftHours ? totalHours - shiftHours : 0;
+//     const dailyRoundOffOvertime = roundOvertime(overtime);
+//     const OvertimeManually = dailyRoundOffOvertime > 4 ? 4 : dailyRoundOffOvertime;
+
+//     if (status === "P") presentDays++;
+//     else if (status === "HD") halfDays++;
+//     else if (status === "MP") missPunchDays++;
+//     else absentDays++;
+
+//     totalOvertimeHours += overtime;
+//     PayrollCalRoundoffTotalOvertime += dailyRoundOffOvertime;
+//     roundOffTotalOvertime += dailyRoundOffOvertime;
+//     totalManualOvertimeManually += OvertimeManually;
+
+//     const details = {
+//       labourId,
+//       projectName: parseInt(projectName, 10),
+//       date,
+//       firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
+//       firstPunchAttendanceId: firstPunch?.attendance_id || null,
+//       firstPunchDeviceId: firstPunch?.Device_id || null,
+//       lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
+//       lastPunchAttendanceId: lastPunch?.attendance_id || null,
+//       lastPunchDeviceId: lastPunch?.Device_id || null,
+//       totalHours: totalHours.toFixed(2),
+//       overtime: overtime.toFixed(2),
+//       PayrollCalRoundOffOvertime: dailyRoundOffOvertime.toFixed(2),
+//       OvertimeManually: OvertimeManually.toFixed(2),
+//       status,
+//       creationDate: new Date(),
+//       projectIdFromDevicefirstPunch: firstPunch?.Device_id
+//         ? await labourModel.getProjectIdByDeviceId(firstPunch.Device_id)
+//         : null,
+//       projectIdFromDeviceLastPunch: lastPunch?.Device_id
+//         ? await labourModel.getProjectIdByDeviceId(lastPunch.Device_id)
+//         : null,
+//     };
+
+//     await labourModel.insertIntoLabourAttendanceDetails(details);
+//   }
+
+//   const summary = {
+//     labourId,
+//     projectName: parseInt(projectName, 10),
+//     totalDays: daysInMonth,
+//     presentDays,
+//     halfDays,
+//     missPunchDays,
+//     absentDays,
+//     totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(2)),
+//     PayrollCalRoundoffTotalOvertime: parseFloat(PayrollCalRoundoffTotalOvertime.toFixed(2)),
+//     RoundOffTotalOvertime: parseFloat(roundOffTotalOvertime.toFixed(2)),
+//     TotalOvertimeHoursManually: parseFloat(totalManualOvertimeManually.toFixed(2)),
+//     shift: workingHours,
+//     creationDate: new Date(),
+//     selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, "0")}`,
+//     date: today,
+//   };
+
+//   await labourModel.insertIntoLabourAttendanceSummary(summary);
+// }
+
+async function processLabourAttendanceForSpecificDate(labourId, date, pool1) {
+  console.log(`\n🔄 Processing Labour ID: ${labourId} for Date: ${date}`);
 
   const basicDataRes = await pool1
     .request()
@@ -621,109 +747,46 @@ async function processLabourAttendance(labourId, pool1) {
   const shiftHours = getShiftHours(workingHours);
   const halfDayHours = getHalfDayHours(shiftHours);
 
-  const today = new Date();
-  const parsedMonth = today.getMonth() + 1;
-  const parsedYear = today.getFullYear();
-  const daysInMonth = new Date(parsedYear, parsedMonth, 0).getDate();
+  const punchesForDay = await labourModel.getAttendanceByLabourIdAndDate(labourId, date);
+  console.log(`📥 Retrieved ${punchesForDay.length} punch records for ${labourId} on ${date}`);
 
-  const labourAttendance = await labourModel.getAttendanceByLabourId(
-    labourId,
-    parsedMonth,
-    parsedYear
+  const { status, firstPunch, lastPunch, totalHours } = determineStatus(
+    punchesForDay,
+    shiftHours,
+    halfDayHours,
+    workingHours
   );
 
-  console.log(`📥 Retrieved ${labourAttendance.length} punch records for ${labourId}`);
+  console.log(`📆 ${date} | Status: ${status} | Punches: ${punchesForDay.length}`);
 
-  // Counters
-  let presentDays = 0,
-    halfDays = 0,
-    missPunchDays = 0,
-    absentDays = 0;
-  let totalOvertimeHours = 0,
-    PayrollCalRoundoffTotalOvertime = 0,
-    roundOffTotalOvertime = 0,
-    totalManualOvertimeManually = 0;
+  const overtime = status === "P" && totalHours > shiftHours ? totalHours - shiftHours : 0;
+  const dailyRoundOffOvertime = roundOvertime(overtime);
+  const OvertimeManually = dailyRoundOffOvertime > 4 ? 4 : dailyRoundOffOvertime;
 
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-${String(day).padStart(
-      2,
-      "0"
-    )}`;
-
-    const punchesForDay = labourAttendance.filter(
-      (att) => new Date(att.punch_date).toISOString().split("T")[0] === date
-    );
-
-    const { status, firstPunch, lastPunch, totalHours } = determineStatus(
-      punchesForDay,
-      shiftHours,
-      halfDayHours,
-      workingHours
-    );
-
-    console.log(`📆 ${date} | Status: ${status} | Punches: ${punchesForDay.length}`);
-
-    const overtime = status === "P" && totalHours > shiftHours ? totalHours - shiftHours : 0;
-    const dailyRoundOffOvertime = roundOvertime(overtime);
-    const OvertimeManually = dailyRoundOffOvertime > 4 ? 4 : dailyRoundOffOvertime;
-
-    if (status === "P") presentDays++;
-    else if (status === "HD") halfDays++;
-    else if (status === "MP") missPunchDays++;
-    else absentDays++;
-
-    totalOvertimeHours += overtime;
-    PayrollCalRoundoffTotalOvertime += dailyRoundOffOvertime;
-    roundOffTotalOvertime += dailyRoundOffOvertime;
-    totalManualOvertimeManually += OvertimeManually;
-
-    const details = {
-      labourId,
-      projectName: parseInt(projectName, 10),
-      date,
-      firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
-      firstPunchAttendanceId: firstPunch?.attendance_id || null,
-      firstPunchDeviceId: firstPunch?.Device_id || null,
-      lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
-      lastPunchAttendanceId: lastPunch?.attendance_id || null,
-      lastPunchDeviceId: lastPunch?.Device_id || null,
-      totalHours: totalHours.toFixed(2),
-      overtime: overtime.toFixed(2),
-      PayrollCalRoundOffOvertime: dailyRoundOffOvertime.toFixed(2),
-      OvertimeManually: OvertimeManually.toFixed(2),
-      status,
-      creationDate: new Date(),
-      projectIdFromDevicefirstPunch: firstPunch?.Device_id
-        ? await labourModel.getProjectIdByDeviceId(firstPunch.Device_id)
-        : null,
-      projectIdFromDeviceLastPunch: lastPunch?.Device_id
-        ? await labourModel.getProjectIdByDeviceId(lastPunch.Device_id)
-        : null,
-    };
-
-    await labourModel.insertIntoLabourAttendanceDetails(details);
-  }
-
-  const summary = {
+  const details = {
     labourId,
     projectName: parseInt(projectName, 10),
-    totalDays: daysInMonth,
-    presentDays,
-    halfDays,
-    missPunchDays,
-    absentDays,
-    totalOvertimeHours: parseFloat(totalOvertimeHours.toFixed(2)),
-    PayrollCalRoundoffTotalOvertime: parseFloat(PayrollCalRoundoffTotalOvertime.toFixed(2)),
-    RoundOffTotalOvertime: parseFloat(roundOffTotalOvertime.toFixed(2)),
-    TotalOvertimeHoursManually: parseFloat(totalManualOvertimeManually.toFixed(2)),
-    shift: workingHours,
+    date,
+    firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
+    firstPunchAttendanceId: firstPunch?.attendance_id || null,
+    firstPunchDeviceId: firstPunch?.Device_id || null,
+    lastPunch: lastPunch ? formatTimeToHoursMinutes(lastPunch.punch_time) : null,
+    lastPunchAttendanceId: lastPunch?.attendance_id || null,
+    lastPunchDeviceId: lastPunch?.Device_id || null,
+    totalHours: totalHours.toFixed(2),
+    overtime: overtime.toFixed(2),
+    PayrollCalRoundOffOvertime: dailyRoundOffOvertime.toFixed(2),
+    OvertimeManually: OvertimeManually.toFixed(2),
+    status,
     creationDate: new Date(),
-    selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, "0")}`,
-    date: today,
+    projectIdFromDevicefirstPunch: firstPunch?.Device_id ? await labourModel.getProjectIdByDeviceId(firstPunch.Device_id) : null,
+    projectIdFromDeviceLastPunch: lastPunch?.Device_id ? await labourModel.getProjectIdByDeviceId(lastPunch.Device_id) : null,
   };
 
-  await labourModel.insertIntoLabourAttendanceSummary(summary);
+  await labourModel.insertIntoLabourAttendanceDetails(details);
+  await labourModel.insertOrUpdateLabourAttendanceSummary(labourId, date);
 }
+
 
 // ✅ Main function
 const compareAndUpdateLabourPunches = async () => {
@@ -733,31 +796,37 @@ const compareAndUpdateLabourPunches = async () => {
     const pool1 = await poolPromise;
     const pool2 = await poolPromise3;
 
-    // Step 1: Get LabourIds with NULL LastPunch
-    const nullFirstPunchIds = (
-      await pool1.request().query(`
-        SELECT DISTINCT LabourId
-        FROM [LabourOnboardingForm].[dbo].[LabourAttendanceDetails]
-        WHERE LastPunch IS NULL
-          AND [Date] BETWEEN DATEADD(DAY, -30, CAST(GETDATE() AS DATE)) 
-                          AND DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
-      `)
-    ).recordset.map((row) => row.LabourId);
+    // Step 1: Fetch labourId-date pairs with NULL FirstPunch or LastPunch in past 30 days
+    const rawMissingData = await pool1.request().query(`
+      SELECT LabourId, [Date]
+      FROM [LabourOnboardingForm].[dbo].[LabourAttendanceDetails]
+      WHERE (FirstPunch IS NULL OR LastPunch IS NULL)
+        AND [Date] BETWEEN DATEADD(DAY, -30, CAST(GETDATE() AS DATE)) 
+                        AND DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
+    `);
 
-    console.log(`✅ Found ${nullFirstPunchIds.length} Labour IDs with NULL LastPunch.`);
-
-    if (nullFirstPunchIds.length === 0) {
-      console.log("⚠️ No Labour IDs found. Exiting function.");
+    if (rawMissingData.recordset.length === 0) {
+      console.log("⚠️ No missing attendance data found.");
       return [];
     }
 
-    // ✅ Step 2: Fetch valid punches in chunks
-    console.log("🔍 Fetching valid punches in chunks...");
-    const chunks = chunkArray(nullFirstPunchIds, 300);
-    let validPunchTimeIds = [];
+    // Group by LabourId -> { LabourId: [date1, date2, ...] }
+    const labourDateMap = {};
+    for (const row of rawMissingData.recordset) {
+      const { LabourId, Date: punchDate } = row;
+      if (!labourDateMap[LabourId]) labourDateMap[LabourId] = new Set();
+      labourDateMap[LabourId].add(punchDate.toISOString().split('T')[0]);
+    }
+
+    const labourIds = Object.keys(labourDateMap);
+    console.log(`✅ Found ${labourIds.length} labourIds with missing data.`);
+
+    // Step 2: Check for actual punches in Attendance table
+    const chunks = chunkArray(labourIds, 300);
+    const validPunchIds = new Set();
 
     for (const chunk of chunks) {
-      const chunkString = chunk.map((id) => `'${id}'`).join(",");
+      const chunkString = chunk.map(id => `'${id}'`).join(',');
       const result = await pool2.request().query(`
         SELECT DISTINCT user_id
         FROM [etimetracklite11.8].[dbo].[Attendance]
@@ -765,39 +834,40 @@ const compareAndUpdateLabourPunches = async () => {
           AND punch_date BETWEEN DATEADD(DAY, -30, CAST(GETDATE() AS DATE)) 
                              AND DATEADD(DAY, -1, CAST(GETDATE() AS DATE))
           AND user_id IN (${chunkString})
-          AND (user_id LIKE 'JC%' OR user_id LIKE 'JIH%');
       `);
-
-      validPunchTimeIds.push(...result.recordset.map((row) => row.user_id));
+      result.recordset.forEach(row => validPunchIds.add(row.user_id));
     }
 
-    console.log(`✅ Found ${validPunchTimeIds.length} Labour IDs with valid punches.`);
+    const matchedLabours = labourIds.filter(id => validPunchIds.has(id));
+    console.log(`🎯 Matched ${matchedLabours.length} labourIds with valid punches.`);
 
-    const matchedIds = nullFirstPunchIds.filter((id) => validPunchTimeIds.includes(id));
-    console.log(`🎯 Matched ${matchedIds.length} Labour IDs for processing.`);
-
-    // ✅ Process in batches of 5 labour IDs
+    // Step 3: Process per labour per missing date
     const BATCH_SIZE = 5;
-    for (let i = 0; i < matchedIds.length; i += BATCH_SIZE) {
-      const batch = matchedIds.slice(i, i + BATCH_SIZE);
 
-      await Promise.allSettled(batch.map((labourId) => processLabourAttendance(labourId, pool1)));
+    for (let i = 0; i < matchedLabours.length; i += BATCH_SIZE) {
+      const batch = matchedLabours.slice(i, i + BATCH_SIZE);
+
+      await Promise.allSettled(batch.map(async labourId => {
+        const missingDates = [...labourDateMap[labourId]];
+        await Promise.allSettled(missingDates.map(async dateStr => {
+          await processLabourAttendanceForSpecificDate(labourId, dateStr, pool1);
+        }));
+      }));
     }
-
-    console.log("✅ compareAndUpdateLabourPunches completed successfully!");
 
     return {
       success: true,
-      message: "✅ Attendance Updated Successfully",
-      totalNullFirstPunch: nullFirstPunchIds.length,
-      matchedCount: matchedIds.length,
-      matchedLabourIds: matchedIds,
+      message: '✅ Attendance update completed',
+      totalNullFirstPunch: labourIds.length,
+      matchedCount: matchedLabours.length,
+      matchedLabourIds: matchedLabours,
     };
   } catch (error) {
     console.error("[compareAndUpdateLabourPunches] ❌ Error:", error);
     return { success: false, message: "Error updating attendance", error: error.message };
   }
 };
+
 
 
 
