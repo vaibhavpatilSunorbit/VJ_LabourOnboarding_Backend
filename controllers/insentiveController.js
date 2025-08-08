@@ -938,8 +938,8 @@ async function getOvertimeMonthlyAPI(req, res) {
  * Fetch salary generation data for all eligible labours
  */
 
-const CONCURRENCY = 4;  // adjust to SQL capacity
-const MAX_RETRIES = 1;
+const CONCURRENCY = 3;  // adjust to SQL capacity
+const MAX_RETRIES = 3;
 
 /* ─────────────────────────────────────────────────────────────── */
 /*  GET /insentive/payroll/salaryGenerationDataAllLabours          */
@@ -950,6 +950,10 @@ async function getSalaryGenerationDataAPIAllLabours(req, res) {
     /* ---------- validation ---------- */
     const month = +req.query.month;
     const year  = +req.query.year;
+    const projectIds = req.query.projectId
+  ? req.query.projectId.split(',').map(id => parseInt(id.trim()))
+  : undefined;
+
     if (!month || !year)
       return res.status(400).json({ message: 'Month and year are required.' });
 
@@ -958,11 +962,11 @@ async function getSalaryGenerationDataAPIAllLabours(req, res) {
       : undefined;
 
     /* ---------- data to process ---------- */
-    const eligible = await labourModel.getEligibleLabours(month, year, idsArray);
+    const eligible = await labourModel.getEligibleLabours(month, year, projectIds, idsArray);
     if (!eligible.length) return res.json([]); // nothing to do
 
     /* ---------- split into TWO roughly equal chunks ---------- */
-    const mid  = Math.ceil(eligible.length / 2);
+    const mid  = Math.ceil(eligible.length / 3);
     const jobs = [eligible.slice(0, mid), eligible.slice(mid)];
 
     /* keep the HTTP socket alive for a long job */

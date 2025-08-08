@@ -1784,7 +1784,25 @@ async function getAttendanceByLabourId(labourId, month, year) {
     }
 };
 
-
+async function getAttendanceByLabourIdAndDate(labourId, date) {
+  try {
+    const pool = await poolPromise3;
+    const result = await pool
+      .request()
+      .input('labourId', sql.NVarChar, labourId)
+      .input('punchDate', sql.Date, date)
+      .query(`
+        SELECT * FROM [etimetracklite11.8].[dbo].[Attendance]
+        WHERE user_id = @labourId
+          AND punch_date = @punchDate
+        ORDER BY punch_time
+      `);
+    return result.recordset;
+  } catch (err) {
+    console.error('❌ SQL error in getAttendanceByLabourIdAndDate:', err);
+    throw new Error('Error fetching attendance for specific date');
+  }
+}
 
 // Fetch Labour Details by ID
 async function getLabourDetailsById(labourId) {
@@ -6293,5 +6311,6 @@ module.exports = {
     updateTotalOvertimeHours,
     searchFromVariableInput,
     getAttendanceReportAAndLabourOnboardingJoin,
-    getAllApprovedOrMonthlyDisabledLabours
+    getAllApprovedOrMonthlyDisabledLabours,
+    getAttendanceByLabourIdAndDate
 };
