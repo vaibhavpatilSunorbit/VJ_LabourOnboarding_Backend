@@ -1995,7 +1995,7 @@ function roundOvertime(overtimeHours) {
     return hours + (minutes / 60);
 }
 
-
+// runDailyAttendanceCron()
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
     console.log("yesterday", yesterday)
@@ -2006,6 +2006,7 @@ async function runDailyAttendanceCron() {
     console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
     console.log(`Processing Attendance for Date: ${formattedYesterday}`);
 
+     console.log("getAttendanceByESSl", getAttendanceByESSl)
     cronLogger.info(`Running cron job for Attendance Date: ${formattedYesterday}`);
 
     try {
@@ -2073,8 +2074,8 @@ console.log("approvedLabours?.length",approvedLabours?.length)
         let rawOT = 0, roundedOT = 0, payrollOT = 0, manualOT = 0;
         const monthRows = [];
 
-        const punches = await labourModel.getAttendanceByLabourId(labourId, parsedMonth, parsedYear);
-
+        // const punches = await labourModel.getAttendanceByLabourId(labourId, parsedMonth, parsedYear);
+const punches = await labourModel.getESSLAttendance(labourId, attendanceDate);
         // for (let d = 1; d <= daysInMonth; d++) {
         //     const dateISO = `${parsedYear}-${String(parsedMonth).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
         //     const punchesForDay = punches.filter(p =>
@@ -3511,6 +3512,28 @@ cron.schedule('20 5 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runDailyAttendanceCron();
 });
+
+async function runAttendanceCronEssl() {
+    const yesterday = new Date();
+    console.log("yesterday", yesterday)
+    yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
+    const formattedYesterday = yesterday.toISOString().split('T')[0];
+    console.log("formattedYesterday for Essl Attendance",formattedYesterday)
+
+    console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
+    console.log(`Processing Attendance for Date: ${formattedYesterday}`);
+
+     const getAttendanceByESSl = await labourModel.saveEsslAttendance(formattedYesterday);
+     console.log("getAttendanceByESSl", getAttendanceByESSl)
+    cronLogger.info(`Running cron job for Attendance Date: ${formattedYesterday}`);
+
+}
+
+cron.schedule('20 4 * * *', async () => {
+    cronLogger.info('Scheduled cron triggered...');
+    await runAttendanceCronEssl();
+});
+
 // cron.schedule('28 14 * * *', async () => {
 //     cronLogger.info('Scheduled cron triggered...');
 //     if (currentProcessingMonth) {

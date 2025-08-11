@@ -53,5 +53,4 @@ cron.schedule('8 13 * * *', () => {
   logger.info('⏰ Running all shift jobs sequentially...');
   runAllJobsSequentially();
 });
-
 logger.info('⏰ Labour Sequential Cron Scheduled Successfully');
