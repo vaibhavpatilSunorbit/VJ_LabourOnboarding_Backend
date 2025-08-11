@@ -189,6 +189,9 @@ const insentiveRoutes = require('./routes/insentiveRoutes');
 require('./sheduler/attandanceShedular'); // Import the scheduler to start it
 
 const dashBoardRoutes = require('./routes/dashBoardRoutes');
+
+require('./sheduler/attandanceShedular'); // Import the scheduler to start it
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 

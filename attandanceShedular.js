@@ -48,8 +48,7 @@ async function runAllJobsSequentially() {
 
 // === Schedule One Cron to Run All Sequentially ===
 // Example: Runs at 12:30 PM daily
-cron.schedule('8 13 * * *', () => {
-  console.log('⏰Cron Running all to Fetch data...');
+cron.schedule('42 15 * * *', () => {
   logger.info('⏰ Running all shift jobs sequentially...');
   runAllJobsSequentially();
 });
