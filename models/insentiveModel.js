@@ -1327,7 +1327,6 @@ async function getAttendanceSummaryForLabour(labourId, month, year, workingHours
   try {
     const pool = await poolPromise;
 
-    // Sundays in the given month
     const sundays = getSundaysInMonth(month, year);
     const parsedWorkingHours = workingHours === 'FLEXI SHIFT - 9 HRS'
       ? 9
@@ -1335,9 +1334,8 @@ async function getAttendanceSummaryForLabour(labourId, month, year, workingHours
 
     const sundayListSql = sundays.length > 0
       ? sundays.map(date => `'${date}'`).join(', ')
-      : "''"; // fallback if no Sundays
+      : "''";
 
-    // Main attendance aggregation
     const result = await pool.request()
       .input('labourId', sql.NVarChar, labourId)
       .input('month', sql.Int, month)
@@ -1361,9 +1359,7 @@ async function getAttendanceSummaryForLabour(labourId, month, year, workingHours
           SUM(CASE WHEN att.TotalHours IS NOT NULL THEN att.TotalHours ELSE 0 END) AS totalHoursForMonth
         FROM [dbo].[LabourAttendanceDetails] att
         LEFT JOIN [dbo].[HolidayDate] hol
-          ON att.[Date] = hol.HolidayDate
-          AND MONTH(hol.HolidayDate) = @month
-          AND YEAR(hol.HolidayDate) = @year
+          ON att.[Date] = hol.HolidayDate AND MONTH(hol.HolidayDate) = @month AND YEAR(hol.HolidayDate) = @year
         LEFT JOIN (
           SELECT LabourID, MAX(PerHourWages) AS PerHourWages
           FROM [dbo].[LabourMonthlyWages]
@@ -1380,7 +1376,6 @@ async function getAttendanceSummaryForLabour(labourId, month, year, workingHours
 
     const row = result.recordset[0] || {};
 
-    // Sunday attendance in one DB call
     const sundayAttendanceResult = await pool.request()
       .input('labourId', sql.NVarChar, labourId)
       .query(`
@@ -1413,7 +1408,7 @@ async function getAttendanceSummaryForLabour(labourId, month, year, workingHours
 
     return {
       totalDays: (row.totalDays ?? 0) + sundays.length,
-      presentDays: row.presentDays ?? 0,
+      presentDays: (row.presentDays ?? 0) + additionalPresent,
       absentDays: row.absentDays ?? 0,
       halfDays: row.halfDays ?? 0,
       missPunchDays: row.missPunchDays ?? 0,
@@ -1432,6 +1427,7 @@ async function getAttendanceSummaryForLabour(labourId, month, year, workingHours
     throw error;
   }
 }
+
 
 
 // async function getAttendanceSummaryForLabour(labourId, month, year, workingHours, forSundaydailyWageRate) {
@@ -1637,197 +1633,197 @@ async function getAttendanceSummaryForLabour(labourId, month, year, workingHours
 // }
 
 
-// async function getAttendanceSummaryForLabourMonthly(labourId, month, year) {
-//     try {
-//         const pool = await poolPromise;
-//         const result = await pool.request()
-//             .input('labourId', sql.NVarChar, labourId)
-//             .input('month', sql.Int, month)
-//             .input('year', sql.Int, year)
-//             .query(`
-//                 WITH HolidayOvertime AS (
-//                     SELECT 
-//                         att.LabourID,
-//                         att.Date,
-//                         att.TotalHours,
-//                         wages.PerHourWages
-//                     FROM [dbo].[LabourAttendanceDetails] att
-//                     LEFT JOIN [dbo].[HolidayDate] hol
-//                         ON att.[Date] = hol.HolidayDate  
-//                         AND MONTH(hol.HolidayDate) = @month
-//                         AND YEAR(hol.HolidayDate) = @year  -- Ensure only holidays in the selected month
+async function getAttendanceSummaryForLabourMonthly(labourId, month, year) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('labourId', sql.NVarChar, labourId)
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .query(`
+                WITH HolidayOvertime AS (
+                    SELECT 
+                        att.LabourID,
+                        att.Date,
+                        att.TotalHours,
+                        wages.PerHourWages
+                    FROM [dbo].[LabourAttendanceDetails] att
+                    LEFT JOIN [dbo].[HolidayDate] hol
+                        ON att.[Date] = hol.HolidayDate  
+                        AND MONTH(hol.HolidayDate) = @month
+                        AND YEAR(hol.HolidayDate) = @year  -- Ensure only holidays in the selected month
 
-//                     LEFT JOIN (
-//                         SELECT LabourID, MAX(PerHourWages) AS PerHourWages
-//                         FROM [dbo].[LabourMonthlyWages]
-//                         WHERE PayStructure IN ('DAILY WAGES', 'FIXED MONTHLY WAGES')
-//                         GROUP BY LabourID
-//                     ) wages
-//                         ON att.LabourID = wages.LabourID  -- Only include workers with DAILY WAGES
+                    LEFT JOIN (
+                        SELECT LabourID, MAX(PerHourWages) AS PerHourWages
+                        FROM [dbo].[LabourMonthlyWages]
+                        WHERE PayStructure IN ('DAILY WAGES', 'FIXED MONTHLY WAGES')
+                        GROUP BY LabourID
+                    ) wages
+                        ON att.LabourID = wages.LabourID  -- Only include workers with DAILY WAGES
 
-//                     WHERE att.Status = 'P' -- Only count present days
-//                 )
-//                 SELECT 
-//                     -- Count total unique attendance days in the selected month
-//                     COUNT(DISTINCT att.[Date]) AS totalDays,  
+                    WHERE att.Status = 'P' -- Only count present days
+                )
+                SELECT 
+                    -- Count total unique attendance days in the selected month
+                    COUNT(DISTINCT att.[Date]) AS totalDays,  
                     
-//                     -- Count distinct days the labour was present
-//                     COUNT(DISTINCT CASE WHEN att.Status = 'P' THEN att.[Date] END) AS presentDays,
+                    -- Count distinct days the labour was present
+                    COUNT(DISTINCT CASE WHEN att.Status = 'P' THEN att.[Date] END) AS presentDays,
 
-//                     -- Count distinct days the labour was absent
-//                     COUNT(DISTINCT CASE WHEN att.Status = 'A' THEN att.[Date] END) AS absentDays,
+                    -- Count distinct days the labour was absent
+                    COUNT(DISTINCT CASE WHEN att.Status = 'A' THEN att.[Date] END) AS absentDays,
 
-//                     -- Count distinct days the labour had a half-day
-//                     COUNT(DISTINCT CASE WHEN att.Status = 'HD' THEN att.[Date] END) AS halfDays,
+                    -- Count distinct days the labour had a half-day
+                    COUNT(DISTINCT CASE WHEN att.Status = 'HD' THEN att.[Date] END) AS halfDays,
 
-//                     -- Count distinct days the labour had a missed punch
-//                     COUNT(DISTINCT CASE WHEN att.Status = 'MP' THEN att.[Date] END) AS missPunchDays,
+                    -- Count distinct days the labour had a missed punch
+                    COUNT(DISTINCT CASE WHEN att.Status = 'MP' THEN att.[Date] END) AS missPunchDays,
 
-//                      -- Count distinct days the labour had a missed punch
-//                     COUNT(DISTINCT CASE WHEN att.Status = 'WO' THEN att.[Date] END) AS weeklyOffDay,
+                     -- Count distinct days the labour had a missed punch
+                    COUNT(DISTINCT CASE WHEN att.Status = 'WO' THEN att.[Date] END) AS weeklyOffDay,
 
-//                     -- Count normal overtime days
-//                     COUNT(DISTINCT CASE WHEN att.Status = 'O' THEN att.[Date] END) AS normalOvertimeCount,
+                    -- Count normal overtime days
+                    COUNT(DISTINCT CASE WHEN att.Status = 'O' THEN att.[Date] END) AS normalOvertimeCount,
 
-//                     -- Count how many holidays exist in the selected month
-//                     COUNT(DISTINCT hol.HolidayDate) AS totalHolidaysInMonth,
+                    -- Count how many holidays exist in the selected month
+                    COUNT(DISTINCT hol.HolidayDate) AS totalHolidaysInMonth,
 
-//                     -- Sum only the actual TotalHours for holidays where the worker was present
-//                     SUM(CASE 
-//                         WHEN att.Status = 'P' 
-//                              AND hol.HolidayDate IS NOT NULL 
-//                              AND att.TotalHours IS NOT NULL
-//                         THEN att.TotalHours 
-//                         ELSE 0 
-//                     END) AS holidayOvertimeHours,
+                    -- Sum only the actual TotalHours for holidays where the worker was present
+                    SUM(CASE 
+                        WHEN att.Status = 'P' 
+                             AND hol.HolidayDate IS NOT NULL 
+                             AND att.TotalHours IS NOT NULL
+                        THEN att.TotalHours 
+                        ELSE 0 
+                    END) AS holidayOvertimeHours,
 
                    
-//                     SUM(CASE 
-//                         WHEN att.Status = 'P' 
-//                              AND hol.HolidayDate IS NOT NULL 
-//                              AND att.TotalHours IS NOT NULL
-//                              AND wages.PerHourWages IS NOT NULL
-//                         THEN att.TotalHours * wages.PerHourWages 
-//                         ELSE 0 
-//                     END) AS holidayOvertimeWages,
+                    SUM(CASE 
+                        WHEN att.Status = 'P' 
+                             AND hol.HolidayDate IS NOT NULL 
+                             AND att.TotalHours IS NOT NULL
+                             AND wages.PerHourWages IS NOT NULL
+                        THEN att.TotalHours * wages.PerHourWages 
+                        ELSE 0 
+                    END) AS holidayOvertimeWages,
 
-//     SUM(CASE 
-//         WHEN att.TotalHours IS NOT NULL 
-//         THEN att.TotalHours 
-//         ELSE 0 
-//     END) AS totalHoursForMonth
+    SUM(CASE 
+        WHEN att.TotalHours IS NOT NULL 
+        THEN att.TotalHours 
+        ELSE 0 
+    END) AS totalHoursForMonth
 
-//                 FROM [dbo].[LabourAttendanceDetails] att
+                FROM [dbo].[LabourAttendanceDetails] att
 
-//                 -- Join with HolidayDate table to ensure correct holiday mapping
-//                 LEFT JOIN [dbo].[HolidayDate] hol
-//                     ON att.[Date] = hol.HolidayDate  
-//                     AND MONTH(hol.HolidayDate) = @month
-//                     AND YEAR(hol.HolidayDate) = @year  -- Ensure only holidays in the selected month
+                -- Join with HolidayDate table to ensure correct holiday mapping
+                LEFT JOIN [dbo].[HolidayDate] hol
+                    ON att.[Date] = hol.HolidayDate  
+                    AND MONTH(hol.HolidayDate) = @month
+                    AND YEAR(hol.HolidayDate) = @year  -- Ensure only holidays in the selected month
 
-//                 -- Join with LabourMonthlyWages but avoid duplicates
-//                 LEFT JOIN (
-//                     SELECT LabourID, MAX(PerHourWages) AS PerHourWages
-//                     FROM [dbo].[LabourMonthlyWages]
-//                     WHERE PayStructure IN ('DAILY WAGES', 'FIXED MONTHLY WAGES')
-//                     GROUP BY LabourID
-//                 ) wages
-//                     ON att.LabourID = wages.LabourID  -- Only include workers with DAILY WAGES
+                -- Join with LabourMonthlyWages but avoid duplicates
+                LEFT JOIN (
+                    SELECT LabourID, MAX(PerHourWages) AS PerHourWages
+                    FROM [dbo].[LabourMonthlyWages]
+                    WHERE PayStructure IN ('DAILY WAGES', 'FIXED MONTHLY WAGES')
+                    GROUP BY LabourID
+                ) wages
+                    ON att.LabourID = wages.LabourID  -- Only include workers with DAILY WAGES
 
-//                 WHERE 
-//                     att.LabourID = @labourId
-//                     AND MONTH(att.[Date]) = @month
-//                     AND YEAR(att.[Date]) = @year;
-//             `);
+                WHERE 
+                    att.LabourID = @labourId
+                    AND MONTH(att.[Date]) = @month
+                    AND YEAR(att.[Date]) = @year;
+            `);
 
-//         const row = result.recordset[0] || {};
+        const row = result.recordset[0] || {};
 
-//         return {
-//             totalDays: row.totalDays || 0,
-//             presentDays: row.presentDays || 0,
-//             absentDays: row.absentDays || 0,
-//             halfDays: row.halfDays || 0,
-//             missPunchDays: row.missPunchDays || 0,
-//             weeklyOffDay: row.weeklyOffDay || 0,
-//             normalOvertimeCount: row.normalOvertimeCount || 0,
-//             totalHolidaysInMonth: row.totalHolidaysInMonth || 0,
-//             holidayOvertimeHours: row.holidayOvertimeHours || 0,
-//             holidayOvertimeWages: row.holidayOvertimeWages || 0,
-//             totalHoursForMonth: row.totalHoursForMonth || 0,
-//         };
-//     } catch (error) {
-//         console.error('Error in getAttendanceSummaryForLabour:', error);
-//         throw error;
-//     }
-// }
-
-async function getAttendanceSummaryForLabourMonthly(labourId, month, year) {
-  try {
-    const pool = await poolPromise;
-
-    const result = await pool.request()
-      .input('labourId', sql.NVarChar, labourId)
-      .input('month', sql.Int, month)
-      .input('year', sql.Int, year)
-      .query(`
-        SELECT 
-          COUNT(DISTINCT att.[Date]) AS totalDays,
-          COUNT(DISTINCT CASE WHEN att.Status = 'P' THEN att.[Date] END) AS presentDays,
-          COUNT(DISTINCT CASE WHEN att.Status = 'A' THEN att.[Date] END) AS absentDays,
-          COUNT(DISTINCT CASE WHEN att.Status = 'HD' THEN att.[Date] END) AS halfDays,
-          COUNT(DISTINCT CASE WHEN att.Status = 'MP' THEN att.[Date] END) AS missPunchDays,
-          COUNT(DISTINCT CASE WHEN att.Status = 'WO' THEN att.[Date] END) AS weeklyOffDay,
-          COUNT(DISTINCT CASE WHEN att.Status = 'O' THEN att.[Date] END) AS normalOvertimeCount,
-          COUNT(DISTINCT hol.HolidayDate) AS totalHolidaysInMonth,
-
-          SUM(CASE 
-            WHEN att.Status = 'P' AND hol.HolidayDate IS NOT NULL AND att.TotalHours IS NOT NULL
-            THEN att.TotalHours ELSE 0 END) AS holidayOvertimeHours,
-
-          SUM(CASE 
-            WHEN att.Status = 'P' AND hol.HolidayDate IS NOT NULL AND att.TotalHours IS NOT NULL AND wages.PerHourWages IS NOT NULL
-            THEN att.TotalHours * wages.PerHourWages ELSE 0 END) AS holidayOvertimeWages,
-
-          SUM(CASE WHEN att.TotalHours IS NOT NULL THEN att.TotalHours ELSE 0 END) AS totalHoursForMonth
-
-        FROM [dbo].[LabourAttendanceDetails] att
-        LEFT JOIN [dbo].[HolidayDate] hol
-          ON att.[Date] = hol.HolidayDate
-          AND MONTH(hol.HolidayDate) = @month
-          AND YEAR(hol.HolidayDate) = @year
-        LEFT JOIN (
-          SELECT LabourID, MAX(PerHourWages) AS PerHourWages
-          FROM [dbo].[LabourMonthlyWages]
-          WHERE PayStructure IN ('DAILY WAGES', 'FIXED MONTHLY WAGES')
-          GROUP BY LabourID
-        ) wages
-          ON att.LabourID = wages.LabourID
-        WHERE 
-          att.LabourID = @labourId
-          AND MONTH(att.[Date]) = @month
-          AND YEAR(att.[Date]) = @year;
-      `);
-
-    const row = result.recordset[0] || {};
-
-    return {
-      totalDays: row.totalDays ?? 0,
-      presentDays: row.presentDays ?? 0,
-      absentDays: row.absentDays ?? 0,
-      halfDays: row.halfDays ?? 0,
-      missPunchDays: row.missPunchDays ?? 0,
-      weeklyOffDay: row.weeklyOffDay ?? 0,
-      normalOvertimeCount: row.normalOvertimeCount ?? 0,
-      totalHolidaysInMonth: row.totalHolidaysInMonth ?? 0,
-      holidayOvertimeHours: row.holidayOvertimeHours ?? 0,
-      holidayOvertimeWages: row.holidayOvertimeWages ?? 0,
-      totalHoursForMonth: row.totalHoursForMonth ?? 0,
-    };
-  } catch (error) {
-    console.error('Error in getAttendanceSummaryForLabourMonthly:', error);
-    throw error;
-  }
+        return {
+            totalDays: row.totalDays || 0,
+            presentDays: row.presentDays || 0,
+            absentDays: row.absentDays || 0,
+            halfDays: row.halfDays || 0,
+            missPunchDays: row.missPunchDays || 0,
+            weeklyOffDay: row.weeklyOffDay || 0,
+            normalOvertimeCount: row.normalOvertimeCount || 0,
+            totalHolidaysInMonth: row.totalHolidaysInMonth || 0,
+            holidayOvertimeHours: row.holidayOvertimeHours || 0,
+            holidayOvertimeWages: row.holidayOvertimeWages || 0,
+            totalHoursForMonth: row.totalHoursForMonth || 0,
+        };
+    } catch (error) {
+        console.error('Error in getAttendanceSummaryForLabour:', error);
+        throw error;
+    }
 }
+
+// async function getAttendanceSummaryForLabourMonthly(labourId, month, year) {
+//   try {
+//     const pool = await poolPromise;
+
+//     const result = await pool.request()
+//       .input('labourId', sql.NVarChar, labourId)
+//       .input('month', sql.Int, month)
+//       .input('year', sql.Int, year)
+//       .query(`
+//         SELECT 
+//           COUNT(DISTINCT att.[Date]) AS totalDays,
+//           COUNT(DISTINCT CASE WHEN att.Status = 'P' THEN att.[Date] END) AS presentDays,
+//           COUNT(DISTINCT CASE WHEN att.Status = 'A' THEN att.[Date] END) AS absentDays,
+//           COUNT(DISTINCT CASE WHEN att.Status = 'HD' THEN att.[Date] END) AS halfDays,
+//           COUNT(DISTINCT CASE WHEN att.Status = 'MP' THEN att.[Date] END) AS missPunchDays,
+//           COUNT(DISTINCT CASE WHEN att.Status = 'WO' THEN att.[Date] END) AS weeklyOffDay,
+//           COUNT(DISTINCT CASE WHEN att.Status = 'O' THEN att.[Date] END) AS normalOvertimeCount,
+//           COUNT(DISTINCT hol.HolidayDate) AS totalHolidaysInMonth,
+
+//           SUM(CASE 
+//             WHEN att.Status = 'P' AND hol.HolidayDate IS NOT NULL AND att.TotalHours IS NOT NULL
+//             THEN att.TotalHours ELSE 0 END) AS holidayOvertimeHours,
+
+//           SUM(CASE 
+//             WHEN att.Status = 'P' AND hol.HolidayDate IS NOT NULL AND att.TotalHours IS NOT NULL AND wages.PerHourWages IS NOT NULL
+//             THEN att.TotalHours * wages.PerHourWages ELSE 0 END) AS holidayOvertimeWages,
+
+//           SUM(CASE WHEN att.TotalHours IS NOT NULL THEN att.TotalHours ELSE 0 END) AS totalHoursForMonth
+
+//         FROM [dbo].[LabourAttendanceDetails] att
+//         LEFT JOIN [dbo].[HolidayDate] hol
+//           ON att.[Date] = hol.HolidayDate
+//           AND MONTH(hol.HolidayDate) = @month
+//           AND YEAR(hol.HolidayDate) = @year
+//         LEFT JOIN (
+//           SELECT LabourID, MAX(PerHourWages) AS PerHourWages
+//           FROM [dbo].[LabourMonthlyWages]
+//           WHERE PayStructure IN ('DAILY WAGES', 'FIXED MONTHLY WAGES')
+//           GROUP BY LabourID
+//         ) wages
+//           ON att.LabourID = wages.LabourID
+//         WHERE 
+//           att.LabourID = @labourId
+//           AND MONTH(att.[Date]) = @month
+//           AND YEAR(att.[Date]) = @year;
+//       `);
+
+//     const row = result.recordset[0] || {};
+
+//     return {
+//       totalDays: row.totalDays ?? 0,
+//       presentDays: row.presentDays ?? 0,
+//       absentDays: row.absentDays ?? 0,
+//       halfDays: row.halfDays ?? 0,
+//       missPunchDays: row.missPunchDays ?? 0,
+//       weeklyOffDay: row.weeklyOffDay ?? 0,
+//       normalOvertimeCount: row.normalOvertimeCount ?? 0,
+//       totalHolidaysInMonth: row.totalHolidaysInMonth ?? 0,
+//       holidayOvertimeHours: row.holidayOvertimeHours ?? 0,
+//       holidayOvertimeWages: row.holidayOvertimeWages ?? 0,
+//       totalHoursForMonth: row.totalHoursForMonth ?? 0,
+//     };
+//   } catch (error) {
+//     console.error('Error in getAttendanceSummaryForLabourMonthly:', error);
+//     throw error;
+//   }
+// }
 
 /**
  * Get variable pay (advances, deductions, bonus/incentive, etc.) for a labour for a given month/year.
