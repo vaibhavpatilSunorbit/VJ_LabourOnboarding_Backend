@@ -23,35 +23,6 @@ async function checkAadhaarExists(aadhaarNumber) {
     }
 };
 
-
-// async function getNextUniqueID() {
-//     try {
-//         const pool = await poolPromise;
-//         // Fetch the maximum LabourID while excluding specific IDs
-//         let lastIDResult = await pool.request().query(`
-//             SELECT MAX(LabourID) AS lastID 
-//             FROM labourOnboarding 
-//             WHERE LabourID NOT IN ('JCO519', 'VJ3893')
-//         `);
-
-//         let initialID = 'JC4008'; // The starting ID
-//         let nextID = initialID;
-
-//         if (lastIDResult.recordset[0].lastID) {
-//             let lastID = lastIDResult.recordset[0].lastID;
-
-//             if (lastID) {
-//                 const numericPart = parseInt(lastID.slice(2)) + 1;
-//                 nextID = `JC${numericPart.toString().padStart(4, '0')}`; // Format to desired ID pattern
-//             }
-//         }
-
-//         return nextID;
-//     } catch (error) {
-//         throw new Error('Error fetching next unique ID');
-//     }
-// }
-
 async function getNextUniqueID(departmentId) {
     try {
         const pool = await poolPromise;
@@ -90,54 +61,6 @@ async function getNextUniqueID(departmentId) {
         throw new Error(`Error fetching next unique ID: ${error.message}`);
     }
 }
-
-
-// async function getNextUniqueID(departmentId) {
-//     try {
-//         const pool = await poolPromise;
-
-//         let prefix = 'JC';
-//         let initialID = 'JC4008';
-//         const exclusions = `'JCO519', 'VJ3893'`;
-
-//         if (departmentId === 334) {
-//             prefix = 'JIH';
-//             initialID = 'JIH0001';
-//         }
-
-//         let lastIDQuery = '';
-
-//         if (departmentId === 334) {
-//             lastIDQuery = `
-//                 SELECT MAX(LabourID) AS lastID 
-//                 FROM labourOnboarding 
-//                 WHERE LabourID NOT IN (${exclusions}) 
-//                 AND departmentId = ${departmentId} and LabourID like '%JIH%'
-//             `;
-//         } else {
-//             lastIDQuery = `
-//                 SELECT MAX(LabourID) AS lastID 
-//                 FROM labourOnboarding 
-//                 WHERE LabourID NOT IN (${exclusions}) and LabourID like '%JC%'
-//             `;
-//         }
-
-//         const result = await pool.request().query(lastIDQuery);
-//         const lastID = result.recordset[0].lastID;
-
-//         if (!lastID) {
-//             return initialID;
-//         }
-
-//         const numericPart = parseInt(lastID.slice(prefix.length)) + 1;
-//         const nextID = `${prefix}${numericPart.toString().padStart(4, '0')}`;
-
-//         return nextID;
-//     } catch (error) {
-//         throw new Error(`Error fetching next unique ID: ${error.message}`);
-//     }
-// }
-
 
 async function registerData(labourData) {
     try {
@@ -2465,6 +2388,7 @@ async function addApprovalRequest(labourId, punchType, punchDate, punchTime) {
 
 
 // async function insertIntoLabourAttendanceSummary(summary) {
+//     console.log('Inside LabourAttendanceSummary:');
 //     try {
 //         const pool = await poolPromise;
 
@@ -2574,6 +2498,7 @@ async function addApprovalRequest(labourId, punchType, punchDate, punchTime) {
 //         )
 //       `);
 //         }
+//     console.log('Completed LabourAttendanceSummary:');
 
 //     } catch (err) {
 //         console.error('❌ Error in insertIntoLabourAttendanceSummary:', err);
@@ -2849,8 +2774,9 @@ async function insertIntoLabourAttendanceDetails(details) {
 
     const key = `${details.labourId}|${details.date}`;
 
-    // return await withKeyLock(key, async () => {
-      return withSqlRetry(async () => {
+
+    if(details.date < new Date().toISOString().split('T')[0]) {
+return withSqlRetry(async () => {
         const req = pool.request();
         req.timeout = WRITE_TIMEOUT_MS;
 
@@ -2885,7 +2811,7 @@ async function insertIntoLabourAttendanceDetails(details) {
         }
         throw e;
       });
-    // });
+    }
 
   } catch (err) {
     console.error('❌ Error inserting/updating LabourAttendanceDetails:', err);
