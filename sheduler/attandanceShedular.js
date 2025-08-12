@@ -51,6 +51,6 @@ async function runAllJobsSequentially() {
 cron.schedule('8 13 * * *', () => {
   console.log('⏰Cron Running all to Fetch data...');
   logger.info('⏰ Running all shift jobs sequentially...');
-  runAllJobsSequentially();
+  // runAllJobsSequentially();
 });
 logger.info('⏰ Labour Sequential Cron Scheduled Successfully');

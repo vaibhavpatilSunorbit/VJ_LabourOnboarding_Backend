@@ -1458,7 +1458,7 @@ async function runDailyAttendanceCron() {
     try {
         console.log('Calling processLaboursAttendance function...');
         // await processLaboursAttendance(formattedYesterday);
-       await getAllLaboursAttendanceDaily(formattedYesterday);       
+        await getAllLaboursAttendanceDaily(formattedYesterday);
 
         console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
         cronLogger.info(`Cron job completed successfully for Date: ${formattedYesterday}`);
@@ -1677,7 +1677,7 @@ async function getAllLaboursAttendanceDaily(attendanceDate) {
                 selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`,
             };
             await withRetry(
-                () => withTimeout(                    
+                () => withTimeout(
                     labourModel.insertIntoLabourAttendanceSummary(summary),
                     LM_WRITE_TIMEOUT_MS,
                     `insertIntoLabourAttendanceSummary(${labourId}, ${dateKey})`
@@ -2286,15 +2286,11 @@ async function runAttendanceCronEssl() {
 
 }
 
-cron.schedule('25 11 * * *', async () => {
-    cronLogger.info('Scheduled cron triggered...');
-    await runAttendanceCronEssl();
-});
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('20 17 * * *', async () => {
+cron.schedule('10 05 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
-    // await runAttendanceCronEssl();
+    await runAttendanceCronEssl();
     await runDailyAttendanceCron();
 });
 
