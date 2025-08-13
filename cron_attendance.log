@@ -384,5 +384,46 @@
 {"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-07-11T06:50:00.426Z"}
 {"level":"info","message":"Running cron job for Attendance Date: 2025-07-10","timestamp":"2025-07-11T06:50:00.430Z"}
 {"level":"error","message":"Error running cron job for Date: 2025-07-10: approvedLabours is not iterable","stack":"TypeError: approvedLabours is not iterable\n    at runDailyAttendanceCron (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\labourController.js:2021:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Task._execution (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\labourController.js:3512:5)","timestamp":"2025-07-11T09:03:21.103Z"}
-{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-07-15T11:21:00.519Z"}
-{"level":"info","message":"Running cron job for Attendance Date: 2025-07-14","timestamp":"2025-07-15T11:21:00.523Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-10","timestamp":"2025-08-11T09:26:17.912Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-10","timestamp":"2025-08-11T09:44:44.955Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-10","timestamp":"2025-08-11T13:31:18.237Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T05:40:00.142Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T05:55:00.126Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T06:03:14.189Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T06:18:00.725Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T06:23:00.203Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T06:23:00.209Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T06:45:00.546Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T06:45:00.552Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T06:52:00.726Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T06:52:00.729Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T06:54:00.259Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T06:54:00.263Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T09:11:00.513Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T09:11:00.519Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T09:27:00.616Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T09:27:00.622Z"}
+{"level":"error","message":"Error running cron job for Date: 2025-08-11: approvedLabours is not iterable","stack":"TypeError: approvedLabours is not iterable\n    at runDailyAttendanceCron (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\labourController.js:2018:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Task._execution (C:\\Users\\Vaibhav Patil\\Desktop\\VJ_LabourApp_BackendNew\\backend\\controllers\\labourController.js:3775:5)","timestamp":"2025-08-12T09:30:42.091Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T09:41:00.014Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T09:41:00.022Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T09:53:00.418Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T09:53:00.424Z"}
+{"level":"info","message":"No approved labours found for Date: 2025-08-11","timestamp":"2025-08-12T10:05:43.004Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-11","timestamp":"2025-08-12T10:05:43.009Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T10:15:00.588Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T10:15:00.594Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-11","timestamp":"2025-08-12T10:19:02.980Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T10:43:00.618Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T10:43:00.625Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T10:46:00.411Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T10:46:00.416Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-11","timestamp":"2025-08-12T10:50:14.903Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T10:57:00.997Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T10:57:01.002Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-11","timestamp":"2025-08-12T11:11:52.257Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T11:33:00.182Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T11:33:00.189Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-11","timestamp":"2025-08-12T11:36:12.137Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-12T11:50:00.244Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-11","timestamp":"2025-08-12T11:50:00.250Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-11","timestamp":"2025-08-12T11:53:08.899Z"}
