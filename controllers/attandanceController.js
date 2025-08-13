@@ -3,8 +3,6 @@ const { sql, poolPromise } = require('../config/dbConfig');
 const { poolPromise3 } = require('../config/dbConfig3');
 const { cron } = require('node-cron')
 const labourModel = require('../models/labourModel');
-const { log } = require('@tensorflow/tfjs');
-
 
 function roundOvertime(overtimeHours) {
   if (overtimeHours <= 0) return 0;
@@ -1004,117 +1002,283 @@ const compareAndUpdateLabourPunches = async () => {
 
 
 
-const getLabourIdsWithNullFirstPunch = async () => {
-  const pool = await poolPromise;
-  const result = await pool.request().query(`
-    SELECT DISTINCT LabourId
-    FROM LabourOnboardingForm.dbo.LabourAttendanceDetails
-    WHERE FirstPunch IS NULL
-      AND [Date] >= DATEADD(DAY, -10, CAST(GETDATE() AS DATE))
-  `);
-  return result.recordset.map(row => row.LabourId);
+// const getLabourIdsWithNullFirstPunch = async () => {
+//   const pool = await poolPromise;
+//   const result = await pool.request().query(`
+//     SELECT DISTINCT LabourId
+//     FROM LabourOnboardingForm.dbo.LabourAttendanceDetails
+//     WHERE FirstPunch IS NULL
+//       AND [Date] >= DATEADD(DAY, -10, CAST(GETDATE() AS DATE))
+//   `);
+//   return result.recordset.map(row => row.LabourId);
 
 
 
-};
+// };
 
 
-// Helper 2: Labour IDs with punch_time NOT NULL in last 10 days
-const getLabourIdsWithValidPunchTime = async () => {
-  const pool = await poolPromise3;
-  const result = await pool.request().query(`
-    SELECT DISTINCT user_id
-    FROM Attendance
-    WHERE punch_time IS NOT NULL
-      AND punch_date >= DATEADD(DAY, -10, CAST(GETDATE() AS DATE))
-  `);
-  return result.recordset.map(row => row.user_id);
-};
+// // Helper 2: Labour IDs with punch_time NOT NULL in last 10 days
+// const getLabourIdsWithValidPunchTime = async () => {
+//   const pool = await poolPromise3;
+//   const result = await pool.request().query(`
+//     SELECT DISTINCT user_id
+//     FROM Attendance
+//     WHERE punch_time IS NOT NULL
+//       AND punch_date >= DATEADD(DAY, -10, CAST(GETDATE() AS DATE))
+//   `);
+//   return result.recordset.map(row => row.user_id);
+// };
 
 // Main Controller: Compare both results
-const getValidPunches = async (req, res) => {
+// const getValidPunches = async (req, res) => {
+//   try {
+//     const nullFirstPunchIds = await getLabourIdsWithNullFirstPunch(); // returns list like ['JC0929', 'JC0833', ...]
+
+//     const poolAttendance = await poolPromise3; // For Attendance DB
+//     const poolTarget = await poolPromise; // For LabourAttendanceDetails DB
+
+//     let totalUpdated = 0;
+
+//     for (const currentId of nullFirstPunchIds) {
+//       console.log(`⏳ Processing LabourId: ${currentId}`);
+
+//       const result = await poolAttendance.request()
+//         .input('currentId', sql.VarChar, currentId)
+//         .query(`
+//           SELECT attendance_id, punch_time, punch_date, Device_id
+//           FROM [dbo].[Attendance]
+//           WHERE user_id = @currentId
+//             AND punch_date >= DATEADD(DAY, -10, CAST(GETDATE() AS DATE))
+//           ORDER BY punch_date, punch_time
+//         `);
+
+//       const records = result.recordset;
+//    console.log( records , '-----------records');
+
+//       if (!records.length) {
+//         console.log(`⚠️ No attendance records for LabourId: ${currentId}`);
+//         continue;
+//       }
+
+//       // Group punches by punch_date
+//       const groupedPunches = {};
+//       for (const record of records) {
+//         console.log( record , '------------recordSet');
+
+//         const dateKey = record.punch_date.toISOString().split('T')[0];
+//         if (!groupedPunches[dateKey]) groupedPunches[dateKey] = [];
+//         groupedPunches[dateKey].push(record);
+//       }
+
+//       for (const [date, punches] of Object.entries(groupedPunches)) {
+
+//         console.log(groupedPunches , '------------------------ record set Of Valid ');
+
+//         punches.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
+//         const firstPunchTime = punches[0].punch_time.toTimeString().slice(0, 8);
+//         const lastPunchTime = punches[punches.length - 1].punch_time.toTimeString().slice(0, 8);
+
+//         // Update FirstPunch and LastPunch in [LabourAttendanceDetails]
+//         const resultSet = await poolTarget.request()
+//           .input('labourId', sql.VarChar, currentId)
+//           .input('date', sql.Date, date)
+//           .input('firstPunch', sql.VarChar, firstPunchTime)
+//           .input('lastPunch', sql.VarChar, lastPunchTime)
+//           .query(`
+//             UPDATE [LabourAttendanceDetails]
+//             SET FirstPunch = @firstPunch,
+//                 LastPunch = @lastPunch
+//             WHERE LabourId = @labourId AND [Date] = @date
+//           `);
+
+//         const rows = resultSet.rowsAffected[0];
+//         if (rows > 0) {
+//           console.log(`✅ Updated: ${currentId} | ${date} | First=${firstPunchTime} | Last=${lastPunchTime}`);
+//           totalUpdated += rows;
+//         } else {
+//           console.log(`⚠️ No matching record to update for ${currentId} on ${date}`);
+//         }
+//       }
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       message: `✅ Punch update completed`,
+//       updatedLabours: nullFirstPunchIds.length,
+//       totalUpdates: totalUpdated
+//     });
+//   } catch (error) {
+//     console.error('[getValidPunches] ❌ Error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Error during punch update',
+//       error: error.message
+//     });
+//   }
+// };
+
+
+
+const updatePunchForLabour = async (labourId, date, pool1, pool2) => {
   try {
-    const nullFirstPunchIds = await getLabourIdsWithNullFirstPunch(); // returns list like ['JC0929', 'JC0833', ...]
+    const punchResult = await pool2.request()
+      .input('labourId', labourId)
+      .input('date', date)
+      .query(`
+        SELECT 
+          user_id,
+          MIN(punch_time) AS FirstPunch,
+          MAX(punch_time) AS LastPunch,
+          MIN(attendance_id) AS FirstPunchAttendanceId,
+          MAX(attendance_id) AS LastPunchAttendanceId,
+          MIN(device_id) AS FirstPunchDeviceId
+        FROM Attendance
+        WHERE user_id = @labourId AND punch_date = @date
+        GROUP BY user_id
+      `);
 
-    const poolAttendance = await poolPromise3; // For Attendance DB
-    const poolTarget = await poolPromise; // For LabourAttendanceDetails DB
+    if (punchResult.recordset.length === 0) return null;
 
-    let totalUpdated = 0;
+    const punch = punchResult.recordset[0];
+    const isSinglePunch = punch.FirstPunch === punch.LastPunch;
 
-    for (const currentId of nullFirstPunchIds) {
-      console.log(`⏳ Processing LabourId: ${currentId}`);
+    let totalHours;
+    let overtime;
+    let overtimeManual;
+    let lastPunch = null;
+    let lastId = null;
 
-      const result = await poolAttendance.request()
-        .input('currentId', sql.VarChar, currentId)
-        .query(`
-          SELECT attendance_id, punch_time, punch_date, Device_id
-          FROM [dbo].[Attendance]
-          WHERE user_id = @currentId
-            AND punch_date >= DATEADD(DAY, -10, CAST(GETDATE() AS DATE))
-          ORDER BY punch_date, punch_time
-        `);
-
-      const records = result.recordset;
-   console.log( records , '-----------records');
-   
-      if (!records.length) {
-        console.log(`⚠️ No attendance records for LabourId: ${currentId}`);
-        continue;
-      }
-
-      // Group punches by punch_date
-      const groupedPunches = {};
-      for (const record of records) {
-        console.log( record , '------------recordSet');
-        
-        const dateKey = record.punch_date.toISOString().split('T')[0];
-        if (!groupedPunches[dateKey]) groupedPunches[dateKey] = [];
-        groupedPunches[dateKey].push(record);
-      }
-
-      for (const [date, punches] of Object.entries(groupedPunches)) {
-
-        console.log(groupedPunches , '------------------------ record set Of Valid ');
-        
-        punches.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
-        const firstPunchTime = punches[0].punch_time.toTimeString().slice(0, 8);
-        const lastPunchTime = punches[punches.length - 1].punch_time.toTimeString().slice(0, 8);
-
-        // Update FirstPunch and LastPunch in [LabourAttendanceDetails]
-        const resultSet = await poolTarget.request()
-          .input('labourId', sql.VarChar, currentId)
-          .input('date', sql.Date, date)
-          .input('firstPunch', sql.VarChar, firstPunchTime)
-          .input('lastPunch', sql.VarChar, lastPunchTime)
-          .query(`
-            UPDATE [LabourAttendanceDetails]
-            SET FirstPunch = @firstPunch,
-                LastPunch = @lastPunch
-            WHERE LabourId = @labourId AND [Date] = @date
-          `);
-
-        const rows = resultSet.rowsAffected[0];
-        if (rows > 0) {
-          console.log(`✅ Updated: ${currentId} | ${date} | First=${firstPunchTime} | Last=${lastPunchTime}`);
-          totalUpdated += rows;
-        } else {
-          console.log(`⚠️ No matching record to update for ${currentId} on ${date}`);
-        }
-      }
+    // Check if both FirstPunch and LastPunch are present
+    if (!isSinglePunch) {
+      const inTime = new Date(`${date}T${punch.FirstPunch}`);
+      const outTime = new Date(`${date}T${punch.LastPunch}`);
+      totalHours = (outTime - inTime) / 3600000; // Calculate total hours
+      overtime = Math.max(0, totalHours - 8);
+      overtimeManual = Math.max(0, (totalHours - 8) * 0.9);
+      lastPunch = punch.LastPunch;
+      lastId = punch.LastPunchAttendanceId;
+    } else {
+      // If only a single punch, set hours to 0
+      totalHours = 0;
+      overtime = 0;
+      overtimeManual = 0;
     }
 
-    res.status(200).json({
-      success: true,
-      message: `✅ Punch update completed`,
-      updatedLabours: nullFirstPunchIds.length,
-      totalUpdates: totalUpdated
-    });
-  } catch (error) {
-    console.error('[getValidPunches] ❌ Error:', error);
-    res.status(500).json({
+    const updateReq = pool1.request()
+      .input('labourId', labourId)
+      .input('date', date)
+      .input('FirstPunch', punch.FirstPunch)
+      .input('FirstId', punch.FirstPunchAttendanceId)
+      .input('DeviceId', punch.FirstPunchDeviceId)
+      .input('LastPunch', lastPunch)
+      .input('LastId', lastId)
+      .input('TotalHours', totalHours)
+      .input('Overtime', overtime)
+      .input('OvertimeManual', overtimeManual);
+
+    const status = isSinglePunch ? 'MP' : 'P';
+
+    await updateReq.query(`
+      UPDATE LabourOnboardingForm.dbo.LabourAttendanceDetails
+      SET 
+        FirstPunch = @FirstPunch,
+        LastPunch = @LastPunch,
+        Status = '${status}',
+        TotalHours = @TotalHours,
+        Overtime = @Overtime,
+        OvertimeManually = @OvertimeManual,
+        FirstPunchAttendanceId = @FirstId,
+        LastPunchAttendanceId = @LastId,
+        FirstPunchDeviceId = @DeviceId
+      WHERE LabourId = @labourId AND [Date] = @date
+    `);
+
+    return labourId;
+  } catch (err) {
+    console.error(`Error updating labourId ${labourId}:`, err.message);
+    return null;
+  }
+};
+// Concurrency helper (runs tasks in parallel, max `limit` at a time)
+async function runWithConcurrency(items, limit, task) {
+  const results = [];
+  let index = 0;
+
+  async function worker() {
+    while (index < items.length) {
+      const currentIndex = index++;
+      try {
+        results[currentIndex] = await task(items[currentIndex]);
+      } catch (err) {
+        results[currentIndex] = null;
+        console.error("Task failed:", err);
+      }
+    }
+  }
+
+  const workers = Array.from({ length: limit }, () => worker());
+  await Promise.all(workers);
+
+  return results;
+}
+
+const getValidPunches = async (req, res) => {
+  const date = req.query.date;
+  if (!date) {
+    return res.status(400).json({
       success: false,
-      message: 'Error during punch update',
-      error: error.message
+      message: "Missing required 'date' parameter (YYYY-MM-DD)",
+    });
+  }
+
+  try {
+    const pool1 = await poolPromise;
+    const pool2 = await poolPromise3;
+
+    // Get labour IDs with missing punches
+    const nullPunchResult = await pool1.request()
+      .input('date', date)
+      .query(`
+        SELECT DISTINCT LabourId
+        FROM LabourOnboardingForm.dbo.LabourAttendanceDetails
+        WHERE FirstPunch IS NULL AND [Date] = @date
+      `);
+
+    const labourIds = nullPunchResult.recordset.map(row => row.LabourId);
+
+    if (labourIds.length === 0) {
+      return res.status(200).json({
+        success: true,
+        updatedLabourCount: 0,
+        totalExpected: 0,
+        updatedLabourIds: [],
+        message: `No labourers with missing punches on ${date}`,
+      });
+    }
+
+    // Process with a concurrency limit of 5
+    const updatedLabourIds = await runWithConcurrency(
+      labourIds,
+      5, // max concurrent DB updates
+      async (labourId) => await updatePunchForLabour(labourId, date, pool1, pool2)
+    );
+
+    const filteredIds = updatedLabourIds.filter(Boolean);
+
+    return res.status(200).json({
+      success: true,
+      updatedLabourCount: filteredIds.length,
+      totalExpected: labourIds.length,
+      updatedLabourIds: filteredIds,
+      message: `Punches updated for ${filteredIds.length} labourers on ${date}`,
+    });
+
+  } catch (error) {
+    console.error("Error updating punches:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -1122,6 +1286,125 @@ const getValidPunches = async (req, res) => {
 
 
 
+//  update Labour By Id  ----------------------------------------------------------------------
 
-module.exports = { compareAndUpdateLabourPunches, getValidPunches };
+function calculateHoursAndOT(firstPunch, lastPunch) {
+  const [fh, fm, fs] = firstPunch.split(':').map(Number);
+  const [lh, lm, ls] = lastPunch.split(':').map(Number);
+
+  const start = new Date(0, 0, 0, fh, fm, fs);
+  const end = new Date(0, 0, 0, lh, lm, ls);
+
+  let diffMs = end - start;
+  if (diffMs < 0) diffMs += 24 * 60 * 60 * 1000;
+
+  const totalHours = diffMs / (1000 * 60 * 60);
+  const standardHours = 8;
+  const overtime = totalHours > standardHours ? totalHours - standardHours : 0;
+
+  return {
+    totalHours: parseFloat(totalHours.toFixed(2)),
+    overtime: parseFloat(overtime.toFixed(2)),
+  };
+}
+//  ----------------------------------------------- Add thecontroller to  the Get the All Status Update By User  __________________  
+function calculateHoursAndOT(punchIn, punchOut) {
+  const [inH, inM, inS] = punchIn.split(':').map(Number);
+  const [outH, outM, outS] = punchOut.split(':').map(Number);
+
+  const start = new Date(0, 0, 0, inH, inM, inS);
+  const end = new Date(0, 0, 0, outH, outM, outS);
+  let diff = (end - start) / 1000 / 60 / 60; // in hours
+
+  if (diff < 0) diff += 24; // handle overnight shifts
+
+  const totalHours = parseFloat(diff.toFixed(2));
+  const overtime = totalHours > 9 ? parseFloat((totalHours - 9).toFixed(2)) : 0;
+
+  return { totalHours, overtime };
+}
+
+async function updateAttandaceStatus(req, res) {
+  const { labourId, date, status, FirstPunch, LastPunch } = req.body;
+
+  if (!labourId || !date || !status) {
+    return res.status(400).json({ message: 'labourId, date and status are required' });
+  }
+
+  let punchIn = null;
+  let punchOut = null;
+  let totalHours = 0;
+  let overtime = 0;
+
+  if (status === 'P') {
+    // Present: use provided punches or default
+    punchIn = FirstPunch || '09:00:00';
+    punchOut = LastPunch || '18:00:00';
+
+    const times = calculateHoursAndOT(punchIn, punchOut);
+    totalHours = times.totalHours;
+    overtime = times.overtime;
+
+  } else if (status === 'H') {
+    // Halfday: fixed hours
+    punchIn = FirstPunch || '09:00:00';
+    punchOut = LastPunch || '13:00:00';
+    totalHours = 4;
+    overtime = 0;
+
+  } else if (status === 'A' || status === 'M') {
+    // Absent or Misspunch: set zero punches instead of null
+    punchIn = '00:00:00';
+    punchOut = '00:00:00';
+    totalHours = 0;
+    overtime = 0;
+
+  } else {
+    // Other statuses - no work
+    punchIn = '00:00:00';
+    punchOut = '00:00:00';
+    totalHours = 0;
+    overtime = 0;
+  }
+
+  try {
+    const pool = await poolPromise;
+
+    const result = await pool.request()
+      .input('labourId', sql.NVarChar, labourId)
+      .input('date', sql.Date, date)
+      .input('status', sql.NVarChar, status)
+      .input('firstPunch', sql.Time, punchIn)
+      .input('lastPunch', sql.Time, punchOut)
+      .input('totalHours', sql.Decimal(5, 2), totalHours)
+      .input('overtime', sql.Decimal(5, 2), overtime)
+      .query(`
+        UPDATE [dbo].[LabourAttendanceDetails]
+        SET 
+          Status = @status,
+          FirstPunch = @firstPunch,
+          LastPunch = @lastPunch,
+          TotalHours = @totalHours,
+          Overtime = @overtime
+        WHERE LabourId = @labourId AND Date = @date
+      `);
+
+    return res.status(200).json({
+      message: 'Attendance updated successfully',
+      rowsAffected: result.rowsAffected[0],
+      totalHours,
+      overtime,
+    });
+
+  } catch (error) {
+    console.error('Error updating attendance:', error);
+    return res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+}
+
+
+module.exports = { compareAndUpdateLabourPunches,
+   getValidPunches,
+   updateAttandaceStatus
+};
 

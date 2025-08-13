@@ -18,8 +18,14 @@ const config = {
     enableAirAbort: true,
     trustedConnection: true
   },
+
   requestTimeout: 300000, // 5 minutes (adjust as needed)
   connectionTimeout: 300000,
+   pool: {
+    max: 10,  // or 15, depending on load
+    min: 0,
+    idleTimeoutMillis: 30000
+  },
 };
 
 const poolPromise = new sql.ConnectionPool(config)

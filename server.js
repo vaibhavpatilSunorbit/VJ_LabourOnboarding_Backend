@@ -180,7 +180,7 @@ const EmployeeRoute = require('./routes/dataRoutes');
 const labourController = require('./controllers/labourController');
 const userRoutes = require('./routes/UserRoutes');
 const dataRoutes = require('./routes/dataRoutes');
-
+const attandanceRouter = require('./routes/attandanceRoutes')
 const documentRoutes = require('./routes/documentRoutes');
 const { poolPromise2 } = require('./config/dbConfig2');
 const { poolPromise } = require('./config/dbConfig');
@@ -221,7 +221,7 @@ const upload = multer({
 });
 
 app.use('/api/labours', labourRoutes);
-// app.use('/api',attandanceRouter);
+app.use('/api',attandanceRouter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/users', userRoutes);
 app.use('/api', (req, res, next) => { console.log('/api'); next() }, dataRoutes);
@@ -235,6 +235,23 @@ const server = http.createServer(app);
 server.headersTimeout = 0;    // how long Node waits for *response headers*
 server.requestTimeout = 0;    // how long Node waits for the *whole response*
 server.timeout        = 0;    // legacy fallback for Node ≤16
+
+app.get("/api/subprojects", async (req, res) => {
+  try {
+    const response = await axios.get("https://api.vjerp.com/api/subBusinessUnit", {
+      headers: {
+        Authorization:
+          "Bearer 20a763e266308b35fc75feca4b053d5ce8ea540dbdaa77ee13b1a5e7ce8aadcf",
+      },
+    });
+    res.json(response.data);
+ 
+    
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 app.listen(PORT, () => {
     console.log(`App is running on PORT ${PORT}`);
