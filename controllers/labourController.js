@@ -2280,12 +2280,13 @@ async function runAttendanceCronEssl() {
     console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
     console.log(`Processing Attendance for Date: ${formattedYesterday}`);
 
-    const getAttendanceByESSl = await labourModel.saveEsslAttendance(formattedYesterday);
-    console.log("getAttendanceByESSl", getAttendanceByESSl)
+    await labourModel.saveEsslAttendance(formattedYesterday);
+    
     cronLogger.info(`Running cron job for Attendance Date: ${formattedYesterday}`);
 
 }
 
+ runAttendanceCronEssl();
 
 // Schedule cron job to run every 20 days at 1:00 AM
 cron.schedule('10 05 * * *', async () => {

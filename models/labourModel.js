@@ -1684,7 +1684,6 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
             }, { retries: RETRIES_WRITE, label: 'insert summary' });
 
             console.log(`insertOrUpdateLabourAttendanceSummary job completed successfully for Date: ${date}`);
-            cronLogger.info(`insertOrUpdateLabourAttendanceSummary job completed successfully for Date: ${date}`);
             return { action: 'inserted', labourId, selectedMonth };
         }
     } catch (err) {
@@ -1760,13 +1759,13 @@ async function insertIntoLabourAttendanceSummary(summary) {
 
         // ---- existence / branching
         const exists = existingRecordResult.recordset?.length > 0;
-        const presentVal = exists ? existingRecordResult.recordset[0]?.PresentDays : undefined;
-        const shouldUpdate = exists && (presentVal === null || presentVal === undefined);
+        // const presentVal = exists ? existingRecordResult.recordset[0]?.PresentDays : undefined;
+        // const shouldUpdate = exists && (presentVal === null || presentVal === undefined);
 
-        if (exists && !shouldUpdate) {
-            // already populated → skip
-            return { action: 'skipped', labourId, selectedMonth };
-        }
+        // if (exists && !shouldUpdate) {
+        //     // already populated → skip
+        //     return { action: 'skipped', labourId, selectedMonth };
+        // }
 
         const bind = (req) => req
             .input('LabourId', sql.NVarChar, labourId)

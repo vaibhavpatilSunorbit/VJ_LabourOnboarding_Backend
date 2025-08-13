@@ -176,20 +176,48 @@ const determineStatus = (punches, shiftHours, halfDayHours, workingHours) => {
   };
 };
 
+const ymd = (d) => {
+  if (!d) return '';
+  if (typeof d === 'string') return d.slice(0, 10);
+  const dt = d instanceof Date ? d : new Date(d);
+  const y = dt.getFullYear();
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const day = String(dt.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
 
 
 function chunkArray(arr, size) {
   return arr.reduce((chunks, _, i) => (i % size ? chunks : [...chunks, arr.slice(i, i + size)]), []);
 }
 
-
+function makeNullDetails(labourId, date, projectName = null) {
+  return {
+    labourId,
+    projectName: Number.isFinite(Number(projectName)) ? Number(projectName) : null,
+    date,                                // 'YYYY-MM-DD'
+    firstPunch: null,
+    firstPunchAttendanceId: null,
+    firstPunchDeviceId: null,
+    lastPunch: null,
+    lastPunchAttendanceId: null,
+    lastPunchDeviceId: null,
+    totalHours: 0,
+    overtime: 0,
+    PayrollCalRoundOffOvertime: 0,
+    OvertimeManually: 0,
+    status: null,                        // per your request: nulls for fields
+    creationDate: new Date(),
+    projectIdFromDevicefirstPunch: null,
+    projectIdFromDeviceLastPunch: null,
+    remarkManually: null,
+  };
+}
 
 async function processLabourAttendanceForSpecificDate(labourId, date, pool1, { deviceProjectCache } = {}) {
   // deviceProjectCache: optional Map<number, number> to reuse across calls
 
   const safeRound2 = (n) => Math.round((n ?? 0) * 100) / 100;
-
-  console.log(`\n🔄 Processing Labour ID: ${labourId} for Date: ${date}`);
 
   try {
     // 1) Parallel reads
@@ -211,10 +239,9 @@ async function processLabourAttendanceForSpecificDate(labourId, date, pool1, { d
     }
 
     const { workingHours, projectName } = basicData;
+
     const shiftHours = getShiftHours(workingHours);
     const halfDayHours = getHalfDayHours(shiftHours);
-
-    console.log(`📥 ${labourId} ${date}: ${punchesForDay.length} punches`);
 
     const { status, firstPunch, lastPunch, totalHours } = determineStatus(
       punchesForDay,
@@ -222,8 +249,6 @@ async function processLabourAttendanceForSpecificDate(labourId, date, pool1, { d
       halfDayHours,
       workingHours
     );
-
-    console.log(`📆 ${date} | Status: ${status} | Punches: ${punchesForDay.length}`);
 
     // 2) Overtime math (keep numbers, not strings)
     const overtime = (status === "P" && totalHours > shiftHours) ? (totalHours - shiftHours) : 0;
@@ -317,14 +342,14 @@ async function processLabourAttendanceForSpecificDate(labourId, date, pool1, { d
   }
 }
 
-
 // ✅ Main function
 // Run inside an async context
 const compareAndUpdateLabourPunches = async ({
   daysBack = 30,            // was 2
   includeToday = false,      // true => up to today; false => up to yesterday
   labourId = null          // optional: limit to one LabourId (e.g., 'JC0617')
-} = {}) => {
+} = {}) => {  
+
   try {
     console.log("🚀 Starting compareAndUpdateLabourPunches process...");
 
@@ -349,36 +374,82 @@ const compareAndUpdateLabourPunches = async ({
     //   - And at least one punch for same labour/date in EsslAttendance
     const req = pool1.request()
       .input('startDate', sql.Date, startDate)
-      .input('endDate', sql.Date, endDate);
-
+      .input('endDate', sql.Date, endDate)
+.input('filterLabour', sql.NVarChar, labourId ?? null);
     if (labourId) req.input('filterLabour', sql.NVarChar, labourId);
 
-    const missingPairsQuery = `
-      WITH Missing AS (
-        SELECT LabourId, [Date]
-        FROM [dbo].[LabourAttendanceDetails]
-        WHERE (FirstPunch IS NULL OR LastPunch IS NULL)
-          AND [Date] >= @startDate AND [Date] < @endDate
-          ${labourId ? 'AND LabourId = @filterLabour' : ''}
-      )
-      SELECT DISTINCT m.LabourId, m.[Date]
-      FROM Missing m
-      JOIN [dbo].[EsslAttendance] e
-        ON e.user_id = m.LabourId
-       AND e.punch_date = m.[Date]
-       AND e.punch_time IS NOT NULL
-      ORDER BY m.LabourId, m.[Date];
-    `;
+   const missingPairsSql = `
+  WITH Missing AS (
+    SELECT LabourId, [Date]
+    FROM [dbo].[LabourAttendanceDetails]
+    WHERE (FirstPunch IS NULL OR LastPunch IS NULL)
+      AND [Date] >= @startDate AND [Date] < @endDate
+      AND (@filterLabour IS NULL OR LabourId = @filterLabour)
+  )
+  SELECT DISTINCT m.LabourId, m.[Date]
+  FROM Missing m
+  JOIN [dbo].[EsslAttendance] e
+    ON e.user_id = m.LabourId
+   AND e.punch_date = m.[Date]
+   AND e.punch_time IS NOT NULL
+  ORDER BY m.LabourId, m.[Date];
+`;
 
-    const pairsRes = await req.query(missingPairsQuery);
-    const pairs = pairsRes.recordset;
+const missingPairsRes = await req.query(missingPairsSql);
+const missingPairs = missingPairsRes.recordset; // [{ LabourId, Date }, ...]
 
-    if (!pairs.length) {
-      console.log("✅ Nothing to update: no missing days with punches found.");
-      return { success: true, message: 'No updates needed', totalPairs: 0 };
-    }
+// -------- B) "no-row" days: Essl has punches but Details has NO row at all
+const reqNoRow = pool1.request()
+  .input('startDate', sql.Date, startDate)
+  .input('endDate',   sql.Date, endDate)
+  .input('filterLabour', sql.NVarChar, labourId ?? null);
 
-    console.log(`🎯 Found ${pairs.length} labour-date pairs to process.`);
+const noRowPairsSql = `
+  SELECT DISTINCT e.user_id AS LabourId, e.punch_date AS [Date]
+  FROM [dbo].[EsslAttendance] e
+  WHERE e.punch_date >= @startDate AND e.punch_date < @endDate
+    AND e.punch_time IS NOT NULL
+    AND (@filterLabour IS NULL OR e.user_id = @filterLabour)
+    AND NOT EXISTS (
+      SELECT 1
+      FROM [dbo].[LabourAttendanceDetails] d
+      WHERE d.LabourId = e.user_id
+        AND d.[Date]   = e.punch_date
+    )
+  ORDER BY e.user_id, e.punch_date;
+`;
+
+const noRowPairsRes = await reqNoRow.query(noRowPairsSql);
+const noRowPairs = noRowPairsRes.recordset; // [{ LabourId, Date }, ...]
+
+// -------- C) Merge + de-dup (prefer param order LabourId asc, Date asc)
+const allPairsRaw = [...missingPairs, ...noRowPairs];
+
+const seen = new Set();
+const allPairs = [];
+for (const p of allPairsRaw) {
+  const key = `${p.LabourId}||${ymd(p.Date)}`;
+  if (!seen.has(key)) {
+    seen.add(key);
+    allPairs.push({ LabourId: p.LabourId, Date: ymd(p.Date) });
+  }
+}
+
+// Optional: sort for stable processing
+allPairs.sort((a, b) =>
+  String(a.LabourId).localeCompare(String(b.LabourId)) ||
+  String(a.Date).localeCompare(String(b.Date))
+);
+
+if (!allPairs.length) {
+  console.log("✅ Nothing to update: no missing/no-row days with punches found.");
+  return { success: true, message: 'No updates needed', totalPairs: 0 };
+}
+
+console.log(`🎯 Found ${allPairs.length} labour-date pairs to process (incl. no-row days).`);
+
+// -------- D) Use allPairs downstream
+const pairs = allPairs;
 
     // Concurrency control (use a small limit to avoid DB overload)
     const CONCURRENCY = 8;
@@ -386,22 +457,20 @@ const compareAndUpdateLabourPunches = async ({
     let active = 0, idx = 0, processed = 0, failed = 0;
 
     const runNext = async () => {
-      if (idx >= pairs.length) return;
-      const { LabourId, Date: punchDate } = pairs[idx++];
-      active++;
-
-      const dateStr = punchDate.toISOString().slice(0, 10); // safe because it came from SQL as a date
-      try {
-        await processLabourAttendanceForSpecificDate(LabourId, dateStr, pool1);
-        processed++;
-      } catch (err) {
-        console.error(`❌ ${LabourId} ${dateStr}:`, err.message);
-        failed++;
-      } finally {
-        active--;
-        await runNext();
-      }
-    };
+  if (idx >= pairs.length) return;
+  const { LabourId, Date } = pairs[idx++];
+  active++;
+  try {
+    await processLabourAttendanceForSpecificDate(LabourId, Date, pool1);
+    processed++;
+  } catch (err) {
+    console.error(`❌ ${LabourId} ${Date}:`, err.message);
+    failed++;
+  } finally {
+    active--;
+    await runNext();
+  }
+};
 
     // Start workers
     for (let i = 0; i < Math.min(CONCURRENCY, pairs.length); i++) {
