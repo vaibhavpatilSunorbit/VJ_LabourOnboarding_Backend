@@ -1323,111 +1323,224 @@ function getSundaysInMonth(month, year) {
     return sundays;
 }
 
+// async function getAttendanceSummaryForLabour(labourId, month, year, workingHours, forSundaydailyWageRate) {
+//   try {
+//     const pool = await poolPromise;
+
+//     const sundays = getSundaysInMonth(month, year);
+//     const parsedWorkingHours = workingHours === 'FLEXI SHIFT - 9 HRS'
+//       ? 9
+//       : !isNaN(parseFloat(workingHours)) ? parseFloat(workingHours) : 8;
+
+//     const sundayListSql = sundays.length > 0
+//       ? sundays.map(date => `'${date}'`).join(', ')
+//       : "''";
+//     const result = await pool.request()
+//       .input('labourId', sql.NVarChar, labourId)
+//       .input('month', sql.Int, month)
+//       .input('year', sql.Int, year)
+//       .query(`
+//         SELECT 
+//           COUNT(DISTINCT att.[Date]) AS totalDays,
+//           COUNT(DISTINCT CASE WHEN att.Status = 'P' THEN att.[Date] END) AS presentDays,
+//           COUNT(DISTINCT CASE WHEN att.Status = 'A' THEN att.[Date] END) AS absentDays,
+//           COUNT(DISTINCT CASE WHEN att.Status = 'HD' THEN att.[Date] END) AS halfDays,
+//           COUNT(DISTINCT CASE WHEN att.Status = 'MP' THEN att.[Date] END) AS missPunchDays,
+//           COUNT(DISTINCT CASE WHEN att.Status = 'WO' THEN att.[Date] END) AS weeklyOffDay,
+//           COUNT(DISTINCT CASE WHEN att.Status = 'O' THEN att.[Date] END) AS normalOvertimeCount,
+//           COUNT(DISTINCT hol.HolidayDate) AS totalHolidaysInMonth,
+//           SUM(CASE 
+//             WHEN att.Status = 'P' AND hol.HolidayDate IS NOT NULL AND att.TotalHours IS NOT NULL
+//             THEN att.TotalHours ELSE 0 END) AS holidayOvertimeHours,
+//           SUM(CASE 
+//             WHEN att.Status = 'P' AND hol.HolidayDate IS NOT NULL AND att.TotalHours IS NOT NULL AND wages.PerHourWages IS NOT NULL
+//             THEN att.TotalHours * wages.PerHourWages ELSE 0 END) AS holidayOvertimeWages,
+//           SUM(CASE WHEN att.TotalHours IS NOT NULL THEN att.TotalHours ELSE 0 END) AS totalHoursForMonth
+//         FROM [dbo].[LabourAttendanceDetails] att
+//         LEFT JOIN [dbo].[HolidayDate] hol
+//           ON att.[Date] = hol.HolidayDate AND MONTH(hol.HolidayDate) = @month AND YEAR(hol.HolidayDate) = @year
+//         LEFT JOIN (
+//           SELECT LabourID, MAX(PerHourWages) AS PerHourWages
+//           FROM [dbo].[LabourMonthlyWages]
+//           WHERE PayStructure IN ('DAILY WAGES', 'FIXED MONTHLY WAGES')
+//           GROUP BY LabourID
+//         ) wages
+//           ON att.LabourID = wages.LabourID
+//         WHERE 
+//           att.LabourID = @labourId
+//           AND att.Date NOT IN (${sundayListSql})
+//           AND MONTH(att.[Date]) = @month
+//           AND YEAR(att.[Date]) = @year;
+//       `);
+
+//     const row = result.recordset[0] || {};
+
+//     const sundayAttendanceResult = await pool.request()
+//       .input('labourId', sql.NVarChar, labourId)
+//       .query(`
+//         SELECT [Date], TotalHours
+//         FROM [dbo].[LabourAttendanceDetails]
+//         WHERE LabourID = @labourId AND [Date] IN (${sundayListSql})
+//       `);
+
+//     let additionalPresent = 0, additionalHalf = 0, additionalHours = 0;
+
+//     for (const { TotalHours } of sundayAttendanceResult.recordset) {
+//       const hours = parseFloat(TotalHours);
+//       const halfThreshold = parsedWorkingHours / 2;
+
+//       if (hours >= parsedWorkingHours) {
+//         additionalPresent++;
+//       } else if (hours > 0 && hours < halfThreshold) {
+//         additionalHalf++;
+//         additionalHours += hours;
+//       }
+//     }
+
+//     let sundayPayment = 0;
+//     if (additionalPresent > 0) {
+//       sundayPayment += additionalPresent * forSundaydailyWageRate;
+//     }
+//     if (additionalHours > 0) {
+//       sundayPayment += additionalHours * (forSundaydailyWageRate / parsedWorkingHours);
+//     }
+
+//     return {
+//       totalDays: (row.totalDays ?? 0) + sundays.length,
+//       presentDays: (row.presentDays ?? 0) + additionalPresent,
+//       absentDays: row.absentDays ?? 0,
+//       halfDays: row.halfDays ?? 0,
+//       missPunchDays: row.missPunchDays ?? 0,
+//       weeklyOffDay: row.weeklyOffDay ?? 0,
+//       normalOvertimeCount: row.normalOvertimeCount ?? 0,
+//       totalHolidaysInMonth: row.totalHolidaysInMonth ?? 0,
+//       holidayOvertimeHours: row.holidayOvertimeHours ?? 0,
+//       holidayOvertimeWages: row.holidayOvertimeWages ?? 0,
+//       totalHoursForMonth: row.totalHoursForMonth ?? 0,
+//       sundayPayment,
+//       additionalPresent,
+//       additionalHalf,
+//     };
+//   } catch (error) {
+//     console.error('Error in getAttendanceSummaryForLabour:', error);
+//     throw error;
+//   }
+// }
+
 async function getAttendanceSummaryForLabour(labourId, month, year, workingHours, forSundaydailyWageRate) {
   try {
     const pool = await poolPromise;
 
+    // Sundays for the month (YYYY-MM-DD strings)
     const sundays = getSundaysInMonth(month, year);
-    const parsedWorkingHours = workingHours === 'FLEXI SHIFT - 9 HRS'
-      ? 9
-      : !isNaN(parseFloat(workingHours)) ? parseFloat(workingHours) : 8;
+    const sundayListSql = sundays.length ? sundays.map(d => `'${d}'`).join(', ') : "''";
 
-    const sundayListSql = sundays.length > 0
-      ? sundays.map(date => `'${date}'`).join(', ')
-      : "''";
+    // Parse working hours -> numeric
+    const parsedWorkingHours =
+      workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 :
+      Number.isFinite(parseFloat(workingHours)) ? parseFloat(workingHours) : 8;
 
+    // ---- Base summary EXCLUDING Sundays (note the NOT IN ...) ----
     const result = await pool.request()
       .input('labourId', sql.NVarChar, labourId)
       .input('month', sql.Int, month)
-      .input('year', sql.Int, year)
+      .input('year',  sql.Int, year)
       .query(`
         SELECT 
           COUNT(DISTINCT att.[Date]) AS totalDays,
-          COUNT(DISTINCT CASE WHEN att.Status = 'P' THEN att.[Date] END) AS presentDays,
-          COUNT(DISTINCT CASE WHEN att.Status = 'A' THEN att.[Date] END) AS absentDays,
+          COUNT(DISTINCT CASE WHEN att.Status = 'P'  THEN att.[Date] END) AS presentDays,
+          COUNT(DISTINCT CASE WHEN att.Status = 'A'  THEN att.[Date] END) AS absentDays,
           COUNT(DISTINCT CASE WHEN att.Status = 'HD' THEN att.[Date] END) AS halfDays,
           COUNT(DISTINCT CASE WHEN att.Status = 'MP' THEN att.[Date] END) AS missPunchDays,
           COUNT(DISTINCT CASE WHEN att.Status = 'WO' THEN att.[Date] END) AS weeklyOffDay,
-          COUNT(DISTINCT CASE WHEN att.Status = 'O' THEN att.[Date] END) AS normalOvertimeCount,
+          COUNT(DISTINCT CASE WHEN att.Status = 'O'  THEN att.[Date] END) AS normalOvertimeCount,
+
           COUNT(DISTINCT hol.HolidayDate) AS totalHolidaysInMonth,
+
           SUM(CASE 
-            WHEN att.Status = 'P' AND hol.HolidayDate IS NOT NULL AND att.TotalHours IS NOT NULL
-            THEN att.TotalHours ELSE 0 END) AS holidayOvertimeHours,
+                WHEN att.Status = 'P' AND hol.HolidayDate IS NOT NULL AND att.TotalHours IS NOT NULL
+                THEN att.TotalHours ELSE 0
+              END) AS holidayOvertimeHours,
+
           SUM(CASE 
-            WHEN att.Status = 'P' AND hol.HolidayDate IS NOT NULL AND att.TotalHours IS NOT NULL AND wages.PerHourWages IS NOT NULL
-            THEN att.TotalHours * wages.PerHourWages ELSE 0 END) AS holidayOvertimeWages,
+                WHEN att.Status = 'P' AND hol.HolidayDate IS NOT NULL AND att.TotalHours IS NOT NULL AND wages.PerHourWages IS NOT NULL
+                THEN att.TotalHours * wages.PerHourWages ELSE 0
+              END) AS holidayOvertimeWages,
+
           SUM(CASE WHEN att.TotalHours IS NOT NULL THEN att.TotalHours ELSE 0 END) AS totalHoursForMonth
         FROM [dbo].[LabourAttendanceDetails] att
         LEFT JOIN [dbo].[HolidayDate] hol
-          ON att.[Date] = hol.HolidayDate AND MONTH(hol.HolidayDate) = @month AND YEAR(hol.HolidayDate) = @year
+          ON att.[Date] = hol.HolidayDate
+         AND MONTH(hol.HolidayDate) = @month
+         AND YEAR(hol.HolidayDate)  = @year
         LEFT JOIN (
           SELECT LabourID, MAX(PerHourWages) AS PerHourWages
           FROM [dbo].[LabourMonthlyWages]
           WHERE PayStructure IN ('DAILY WAGES', 'FIXED MONTHLY WAGES')
           GROUP BY LabourID
         ) wages
-          ON att.LabourID = wages.LabourID
-        WHERE 
-          att.LabourID = @labourId
-          AND att.Date NOT IN (${sundayListSql})
+          ON wages.LabourID = att.LabourID
+        WHERE att.LabourID = @labourId
           AND MONTH(att.[Date]) = @month
-          AND YEAR(att.[Date]) = @year;
+          AND YEAR(att.[Date])  = @year
+          AND att.[Date] NOT IN (${sundayListSql});
       `);
 
-    const row = result.recordset[0] || {};
+    const row = result.recordset?.[0] ?? {};
 
-    const sundayAttendanceResult = await pool.request()
-      .input('labourId', sql.NVarChar, labourId)
-      .query(`
-        SELECT [Date], TotalHours
-        FROM [dbo].[LabourAttendanceDetails]
-        WHERE LabourID = @labourId AND [Date] IN (${sundayListSql})
-      `);
+    // ---- Sunday payment (separate) — DO NOT change day counts ----
+    let additionalPresent = 0; // full-day Sundays (>= shift hours)
+    let additionalHours   = 0; // partial Sunday hours for proportional pay
 
-    let additionalPresent = 0, additionalHalf = 0, additionalHours = 0;
+    if (sundays.length) {
+      const sundayRows = await pool.request()
+        .input('labourId', sql.NVarChar, labourId)
+        .query(`
+          SELECT [Date], TotalHours
+          FROM [dbo].[LabourAttendanceDetails]
+          WHERE LabourID = '${labourId}' AND [Date] IN (${sundayListSql})
+        `);
 
-    for (const { TotalHours } of sundayAttendanceResult.recordset) {
-      const hours = parseFloat(TotalHours);
-      const halfThreshold = parsedWorkingHours / 2;
-
-      if (hours >= parsedWorkingHours) {
-        additionalPresent++;
-      } else if (hours > 0 && hours < halfThreshold) {
-        additionalHalf++;
-        additionalHours += hours;
+      for (const r of sundayRows.recordset ?? []) {
+        const h = Number(r.TotalHours);
+        if (!Number.isFinite(h) || h <= 0) continue;
+        if (h >= parsedWorkingHours) additionalPresent += 1;  // full-pay Sunday
+        else additionalHours += h;                            // proportional Sunday pay
       }
     }
 
     let sundayPayment = 0;
-    if (additionalPresent > 0) {
+    if (forSundaydailyWageRate > 0) {
       sundayPayment += additionalPresent * forSundaydailyWageRate;
-    }
-    if (additionalHours > 0) {
-      sundayPayment += additionalHours * (forSundaydailyWageRate / parsedWorkingHours);
+      if (additionalHours > 0 && parsedWorkingHours > 0) {
+        sundayPayment += additionalHours * (forSundaydailyWageRate / parsedWorkingHours);
+      }
     }
 
+    // ---- Return WITHOUT adding Sundays to presentDays/totalDays ----
     return {
-      totalDays: (row.totalDays ?? 0) + sundays.length,
-      presentDays: (row.presentDays ?? 0) + additionalPresent,
-      absentDays: row.absentDays ?? 0,
-      halfDays: row.halfDays ?? 0,
-      missPunchDays: row.missPunchDays ?? 0,
-      weeklyOffDay: row.weeklyOffDay ?? 0,
-      normalOvertimeCount: row.normalOvertimeCount ?? 0,
+      totalDays:            row.totalDays            ?? 0, // excludes Sundays
+      presentDays:          row.presentDays          ?? 0, // excludes Sundays → base = 200 * 31
+      absentDays:           row.absentDays           ?? 0,
+      halfDays:             row.halfDays             ?? 0,
+      missPunchDays:        row.missPunchDays        ?? 0,
+      weeklyOffDay:         row.weeklyOffDay         ?? 0,
+      normalOvertimeCount:  row.normalOvertimeCount  ?? 0,
       totalHolidaysInMonth: row.totalHolidaysInMonth ?? 0,
       holidayOvertimeHours: row.holidayOvertimeHours ?? 0,
       holidayOvertimeWages: row.holidayOvertimeWages ?? 0,
-      totalHoursForMonth: row.totalHoursForMonth ?? 0,
+      totalHoursForMonth:   row.totalHoursForMonth   ?? 0,
+
+      // money-only additions
       sundayPayment,
       additionalPresent,
-      additionalHalf,
+      additionalHalf: 0, // not used in pay calc; add if you want to display halves separately
     };
   } catch (error) {
     console.error('Error in getAttendanceSummaryForLabour:', error);
     throw error;
   }
 }
-
 
 
 // async function getAttendanceSummaryForLabour(labourId, month, year, workingHours, forSundaydailyWageRate) {
@@ -2870,21 +2983,60 @@ const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000; // 15 minutes
 // ---------------------------------------------------------------------------
 // Generic timeout helper – now takes a fallbackValue to ensure a result.
 // ---------------------------------------------------------------------------
-function withTimeout(promise, ms = DEFAULT_TIMEOUT_MS, label = 'Operation', fallbackValue = null) {
-    return Promise.race([
-        promise.catch(err => {
-            console.error(`[ERROR] ${label} failed:`, err);
-            throw err;
-        }),
-        new Promise(resolve => {
-            setTimeout(() => {
-                const msg = `[TIMEOUT] ${label} exceeded ${ms} ms`;
-                console.error(msg);
-                resolve(fallbackValue); // return safe fallback instead of rejecting
-            }, ms);
-        })
-    ]);
+function withTimeout(op, ms = DEFAULT_TIMEOUT_MS, opts = {}) {
+  const { label = 'Operation', fallbackValue = null, rejectOnTimeout = false } = opts;
+
+  // Normalize: accept a Promise OR a function that returns a Promise
+  const p = (typeof op === 'function')
+    ? Promise.resolve().then(op) // call lazily so timeout applies to the actual work
+    : Promise.resolve(op);       // wrap non-promises/undefined safely
+
+  const started = Date.now();
+
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (settled) return;
+      const msg = `[TIMEOUT] ${label} exceeded ${ms}ms (elapsed=${Date.now() - started}ms)`;
+      console.error(msg);
+      settled = true;
+      if (rejectOnTimeout) reject(new Error(msg));
+      else resolve(fallbackValue);
+    }, ms);
+
+    p.then((val) => {
+      if (settled) return; // already timed out
+      clearTimeout(timer);
+      settled = true;
+      resolve(val);
+    }).catch((err) => {
+      if (settled) return; // already timed out; swallow to avoid unhandled rejection
+      clearTimeout(timer);
+      console.error(`[ERROR] ${label} failed:`, err);
+      settled = true;
+      reject(err);
+    });
+  });
 }
+
+
+// function withTimeout(promise, ms = DEFAULT_TIMEOUT_MS, label = 'Operation', fallbackValue = null) {
+//     return Promise.race([
+//         promise.catch(err => {
+//             console.error(`[ERROR] ${label} failed:`, err);
+//             throw err;
+//         }),
+//         new Promise(resolve => {
+//             setTimeout(() => {
+//                 const msg = `[TIMEOUT] ${label} exceeded ${ms} ms`;
+//                 console.error(msg);
+//                 resolve(fallbackValue); // return safe fallback instead of rejecting
+//             }, ms);
+//         })
+//     ]);
+// }
+
 
 
 
@@ -2894,7 +3046,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
     const salaryTimer = `Salary-${labourId}`;
     // console.time(salaryTimer);
     try {
-        // console.log(`\n[START] Salary calculation for Labour ID: ${labourId}, Month: ${month}, Year: ${year}`);
+        console.log(`\n[START] Salary calculation for Labour ID: ${labourId}, Month: ${month}, Year: ${year}`);
         // console.time('getWageInfoForLabour');
         const wagesInfo = await withTimeout(getWageInfoForLabour(labourId, month, year), DEFAULT_TIMEOUT_MS, // increased to 30s
             `getWageInfoForLabour-${labourId}`
@@ -2915,42 +3067,38 @@ async function calculateSalaryForLabour(labourId, month, year) {
 
         console.time('getAttendanceSummary');
         let attendance;
-        if (forSundaydailyWageRate) {
+       if (forSundaydailyWageRate) {
+      console.log("code is getAttendanceSummaryForLabour called");
+      // ✅ FIX: do not pass console.log into withTimeout; pass a function + fallback {}
+      attendance = await withTimeout(
+        () => getAttendanceSummaryForLabour(labourId, month, year, workingHours, forSundaydailyWageRate),
+        DEFAULT_TIMEOUT_MS,
+        { label: `getAttendanceSummaryForLabour-${labourId}`, fallbackValue: {} }
+      );
+    } else {
+      console.log("code is getAttendanceSummaryForLabourMonthly called");
+      attendance = await withTimeout(
+        () => getAttendanceSummaryForLabourMonthly(labourId, month, year),
+        DEFAULT_TIMEOUT_MS,
+        { label: `getAttendanceSummaryForLabourMonthly-${labourId}`, fallbackValue: {} }
+      );
+    }
+    console.timeEnd('getAttendanceSummary');
 
-            attendance = await withTimeout(
-                getAttendanceSummaryForLabour(labourId, month, year, workingHours, forSundaydailyWageRate),
-                DEFAULT_TIMEOUT_MS,
-                `getAttendanceSummaryForLabour-${labourId}`
-            );
-
-        } else {
-            attendance = await withTimeout(
-                getAttendanceSummaryForLabourMonthly(labourId, month, year),
-                DEFAULT_TIMEOUT_MS,
-                `getAttendanceSummaryForLabourMonthly-${labourId}`
-            );
-        }
-        console.timeEnd('getAttendanceSummary');
 
         // console.time('getVariablePayForLabour');
         const variablePay = await withTimeout(
-            getVariablePayForLabour(labourId, month, year),
-            DEFAULT_TIMEOUT_MS,
-            `getVariablePayForLabour-${labourId}`
-        );
-        // console.timeEnd('getVariablePayForLabour');
-        // console.time('calculateTotalOvertime');
-        let cappedOvertime = 0;
+      () => getVariablePayForLabour(labourId, month, year),
+      DEFAULT_TIMEOUT_MS,
+      { label: `getVariablePayForLabour-${labourId}`, fallbackValue: {} }
+    );
 
-        try {
-            cappedOvertime = await withTimeout(
-                calculateTotalOvertime(labourId, month, year),
-                DEFAULT_TIMEOUT_MS,
-                `calculateTotalOvertime-${labourId}`
-            );
-        } finally {
-            // console.timeEnd('calculateTotalOvertime');
-        }
+    // ✅ FIX: ensure OT always a number
+    const cappedOvertime = await withTimeout(
+      () => calculateTotalOvertime(labourId, month, year),
+      DEFAULT_TIMEOUT_MS,
+      { label: `calculateTotalOvertime-${labourId}`, fallbackValue: 0 }
+    );
 
 
         if (!wagesInfo || !wagesInfo.wageBreakdown?.length) {
@@ -2978,20 +3126,20 @@ async function calculateSalaryForLabour(labourId, month, year) {
             additionalHalf = 0,
             additionalPresent = 0,
             weeklyOffDay: weeklyOffDays = 0
-        } = attendance;
+        } = attendance ?? {};
 
-        // console.log("[INFO] Attendance Parsed Values", {
-        //     presentDays, absentDays, halfDays, missPunchDays,
-        //     normalOvertimeCount, totalHolidaysInMonth, weeklyOffDays,
-        //     totalHoursForMonth, holidayOvertimeHours, holidayOvertimeWages
-        // });
+        console.log("[INFO] Attendance Parsed Values", {
+            presentDays, absentDays, halfDays, missPunchDays,
+            normalOvertimeCount, totalHolidaysInMonth, weeklyOffDays,
+            totalHoursForMonth, holidayOvertimeHours, holidayOvertimeWages
+        });
 
         // Destructure variable pay
         const {
             advance = 0, advanceRemarks = '-',
             debit = 0, debitRemarks = '-',
             incentive = 0, incentiveRemarks = '-',
-        } = variablePay;
+        } = variablePay ?? {};
 
         // const latestWage = wagesInfo.wageBreakdown[wagesInfo.wageBreakdown.length - 1];
         let latestWage = wageBreakdown[wageBreakdown.length - 1];
