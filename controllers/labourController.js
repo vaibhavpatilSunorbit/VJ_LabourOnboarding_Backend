@@ -2592,6 +2592,9 @@ async function upsertAttendance(req, res) {
             WHERE LabourID = @labourId AND AttendanceId = @AttendanceId AND ApprovalStatus = 'Pending'
         `);
 
+        console.log(checkAdminApproval , 'Check the Admin Approval');
+        
+
     if (checkAdminApproval.recordset.length > 0) {
         return res.status(400).json({ message: 'Attendance is Already Pending with Admin Approval.' });
     }
@@ -2605,7 +2608,8 @@ async function upsertAttendance(req, res) {
             FROM [LabourAttendanceApproval]
             WHERE LabourID = @labourId AND AttendanceId = @AttendanceId AND ApprovalStatus = 'Pending' AND userType = @userType
         `);
-
+     console.log(checkUserApproval , 'Approval data of the Users ');
+     
     if (checkUserApproval.recordset.length > 0) {
         return res.status(400).json({ message: 'Attendance is Already Pending with User Approval.' });
     }

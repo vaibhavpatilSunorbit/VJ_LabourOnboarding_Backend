@@ -804,7 +804,7 @@ async function updateAttandaceStatus(req, res) {
 
 
 module.exports = { compareAndUpdateLabourPunches,
-   getValidPunches,
+  //  getValidPunches,
    updateAttandaceStatus
 };
 

@@ -1908,24 +1908,28 @@ async function fetchAttendanceDetailsByMonthYear(month, year) {
             .input('month', sql.Int, month)
             .input('year', sql.Int, year)
             .query(`
-                SELECT 
-                    L.*,
-                    CASE 
-                        WHEN EXISTS (
-                            SELECT 1 
-                            FROM dbo.LabourAttendanceDetails d
-                            WHERE d.LabourId = L.LabourId
-                            AND MONTH(d.Date) = @month
-                            AND YEAR(d.Date) = @year
-                            AND d.ApprovalStatus = 'Pending'
-                        ) THEN CAST(1 AS BIT)
-                        ELSE CAST(0 AS BIT)
-                    END AS InApprovalStatus
-                FROM dbo.LabourAttendanceSummary AS L
-                WHERE 
-                    MONTH(TRY_CONVERT(DATE, L.SelectedMonth + '-01')) = @month 
-                    AND YEAR(TRY_CONVERT(DATE, L.SelectedMonth + '-01')) = @year
-                    AND L.PresentDays > 0;  -- Add condition to exclude labors with PresentDays = 0
+               SELECT 
+    L.*,
+    LB.name AS LabourName,   -- fetching the name column
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 
+            FROM dbo.LabourAttendanceDetails d
+            WHERE d.LabourId = L.LabourId
+              AND MONTH(d.Date) = @month
+              AND YEAR(d.Date) = @year
+              AND d.ApprovalStatus = 'Pending'
+        ) THEN CAST(1 AS BIT)
+        ELSE CAST(0 AS BIT)
+    END AS InApprovalStatus
+FROM dbo.LabourAttendanceSummary AS L
+INNER JOIN dbo.LabourOnBoarding AS LB 
+    ON L.LabourId = LB.LabourId
+WHERE 
+    MONTH(TRY_CONVERT(DATE, L.SelectedMonth + '-01')) = @month 
+    AND YEAR(TRY_CONVERT(DATE, L.SelectedMonth + '-01')) = @year
+    AND L.PresentDays > 0;
+
             `);
         return result.recordset;
     } catch (error) {
