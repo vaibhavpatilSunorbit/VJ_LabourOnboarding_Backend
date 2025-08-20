@@ -184,6 +184,7 @@ const { poolPromise2 } = require('./config/dbConfig2');
 const { poolPromise } = require('./config/dbConfig');
 const insentiveRoutes = require('./routes/insentiveRoutes');
 const dashBoardRoutes = require('./routes/dashBoardRoutes');
+const { migrateImages } = require('./sheduler/s3upload');
 
 require('./sheduler/attandanceShedular'); // Import the scheduler to start it
 
