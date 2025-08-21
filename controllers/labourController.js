@@ -1447,7 +1447,7 @@ function roundOvertime(overtimeHours) {
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
     console.log("yesterday", yesterday)
-    yesterday.setDate(yesterday.getDate() - 17); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
     console.log("formattedYesterday", formattedYesterday)
 
@@ -2289,9 +2289,9 @@ async function runAttendanceCronEssl() {
  runAttendanceCronEssl();
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('57 16 * * *', async () => {
+cron.schedule('17 09 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
-    // await runAttendanceCronEssl();
+    await runAttendanceCronEssl();
     await runDailyAttendanceCron();
 });
 
@@ -2778,6 +2778,7 @@ async function rejectAttendanceController(req, res) {
 const exportAttendance = async (req, res) => {
     try {
         const { startDate, endDate, projectName, department } = req.query;
+        console.log("exportAttendance called with params:", req.query);
 
 
         if (!startDate || !endDate || !projectName) {
@@ -2814,12 +2815,12 @@ const importAttendance = async (req, res) => {
         const workbook = xlsx.readFile(req.file.path);
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const data = xlsx.utils.sheet_to_json(sheet);
-
+        // Convert Excel numeric date → YYYY-MM-DD
         const convertExcelDate = (serial) => {
             const utcDays = Math.floor(serial - 25569);
             const utcValue = utcDays * 86400;
             const dateInfo = new Date(utcValue * 1000);
-            return dateInfo.toISOString().split('T')[0]; // Format YYYY-MM-DD
+            return dateInfo.toISOString().split('T')[0];
         };
 
         const validData = data.map((row) => ({
@@ -2827,19 +2828,21 @@ const importAttendance = async (req, res) => {
             Date: typeof row.Date === 'number' ? convertExcelDate(row.Date) : row.Date,
         }));
 
+        // Split into matched / unmatched
         const { matchedRows, unmatchedRows } = await labourModel.getMatchedRows(validData);
+        console.log("matchedRows", matchedRows.length, "unmatchedRows", unmatchedRows.length);
 
-
-        // Update matched rows in bulk
+        // ✅ Update existing
         if (matchedRows.length > 0) {
             await labourModel.updateMatchedRows(matchedRows);
         }
 
-        // Insert unmatched rows in bulk
+        // ✅ Insert news
         if (unmatchedRows.length > 0) {
             await labourModel.insertUnmatchedRows(unmatchedRows);
         }
 
+        // ✅ Update overtime totals at summary level
         const groups = {};
         validData.forEach((row) => {
             const labourId = row.LabourId;
@@ -2862,6 +2865,60 @@ const importAttendance = async (req, res) => {
         res.status(500).send({ message: error.message });
     }
 };
+
+// const importAttendance = async (req, res) => {
+//     try {
+//         const workbook = xlsx.readFile(req.file.path);
+//         const sheet = workbook.Sheets[workbook.SheetNames[0]];
+//         const data = xlsx.utils.sheet_to_json(sheet);
+
+//         const convertExcelDate = (serial) => {
+//             const utcDays = Math.floor(serial - 25569);
+//             const utcValue = utcDays * 86400;
+//             const dateInfo = new Date(utcValue * 1000);
+//             return dateInfo.toISOString().split('T')[0]; // Format YYYY-MM-DD
+//         };
+
+//         const validData = data.map((row) => ({
+//             ...row,
+//             Date: typeof row.Date === 'number' ? convertExcelDate(row.Date) : row.Date,
+//         }));
+
+//         const { matchedRows, unmatchedRows } = await labourModel.getMatchedRows(validData);
+
+
+//         // Update matched rows in bulk
+//         if (matchedRows.length > 0) {
+//             await labourModel.updateMatchedRows(matchedRows);
+//         }
+
+//         // Insert unmatched rows in bulk
+//         if (unmatchedRows.length > 0) {
+//             await labourModel.insertUnmatchedRows(unmatchedRows);
+//         }
+
+//         const groups = {};
+//         validData.forEach((row) => {
+//             const labourId = row.LabourId;
+//             const selectedMonth = row.Date.substring(0, 7);
+//             const key = `${labourId}_${selectedMonth}`;
+//             groups[key] = { labourId, selectedMonth };
+//         });
+
+//         for (const key in groups) {
+//             await labourModel.updateTotalOvertimeHours(groups[key].labourId, groups[key].selectedMonth);
+//         }
+
+//         res.send({
+//             message: 'Data imported successfully',
+//             matchedRows: matchedRows.length,
+//             unmatchedRows: unmatchedRows.length,
+//         });
+//     } catch (error) {
+//         console.error('Error importing data:', error);
+//         res.status(500).send({ message: error.message });
+//     }
+// };
 
 async function LabourAttendanceApproval(req, res) {
     try {

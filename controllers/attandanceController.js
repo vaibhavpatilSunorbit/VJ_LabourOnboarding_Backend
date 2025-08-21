@@ -710,7 +710,7 @@ const getMatchedLabourIdsWithValidPunch = async () => {
       SELECT DISTINCT LabourId
       FROM [LabourAttendanceDetails]
       WHERE FirstPunch IS NULL
-        AND [Date] >= DATEADD(DAY, -10, CAST(GETDATE() AS DATE))
+        AND [Date] >= DATEADD(DAY, -30, CAST(GETDATE() AS DATE))
     `);
 
     // Fetch user_ids with valid punch_time in last 10 days
@@ -718,7 +718,7 @@ const getMatchedLabourIdsWithValidPunch = async () => {
       SELECT DISTINCT user_id
       FROM Attendance
       WHERE punch_time IS NOT NULL
-        AND punch_date >= DATEADD(DAY, -10, CAST(GETDATE() AS DATE))
+        AND punch_date >= DATEADD(DAY, -30, CAST(GETDATE() AS DATE))
     `);
 
     const nullFirstPunchIds = result1.recordset.map(row => row.LabourId);

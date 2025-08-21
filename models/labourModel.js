@@ -18,24 +18,24 @@ const fs = require('fs');
 // === Logger Setup ===
 const logDir = path.join(__dirname, '../logs');
 if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir);
+    fs.mkdirSync(logDir);
 }
 
 const date = new Date().toISOString().split('T')[0];
 const logFile = path.join(logDir, `labour_cron_${date}.log`);
 
 const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    winston.format.printf(({ timestamp, level, message }) => {
-      return `[${timestamp}] [${level.toUpperCase()}] ${message}`;
-    })
-  ),
-  transports: [
-    new winston.transports.File({ filename: logFile }),
-    new winston.transports.Console()
-  ],
+    level: 'info',
+    format: winston.format.combine(
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        winston.format.printf(({ timestamp, level, message }) => {
+            return `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+        })
+    ),
+    transports: [
+        new winston.transports.File({ filename: logFile }),
+        new winston.transports.Console()
+    ],
 });
 
 async function checkAadhaarExists(aadhaarNumber) {
@@ -2946,6 +2946,14 @@ async function rejectAttendance(id, rejectReason) {
         throw new Error('Error rejecting attendance.');
     }
 }
+function excelDecimalToTime(decimal) {
+    if (decimal == null || decimal === "") return null;
+    const totalSeconds = Math.round(decimal * 24 * 60 * 60);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
 
 async function getAttendanceByDateRange(projectNameStr, startDate, endDate, departmentStr) {
     const pool = await poolPromise;
@@ -2985,13 +2993,14 @@ async function getAttendanceByDateRange(projectNameStr, startDate, endDate, depa
 
     const query = `
         SELECT 
-            lad.AttendanceId, 
+            DISTINCT lad.AttendanceId, 
             lad.LabourId, 
             lad.Date, 
-            lad.ProjectName, 
+            lo.projectName, 
             lo.BusinessUnit,
             lo.name,
             lo.departmentName,
+            lo.workingHours,
             lad.Status,
             lad.FirstPunchManually, 
             lad.LastPunchManually, 
@@ -3003,7 +3012,7 @@ async function getAttendanceByDateRange(projectNameStr, startDate, endDate, depa
             labourOnboarding lo WITH (NOLOCK) 
             ON lad.LabourId = lo.LabourId
         WHERE 
-            lad.ProjectName IN (${projectPlaceholders})
+            lo.projectName IN (${projectPlaceholders})
             AND lad.Date BETWEEN @startDate AND @endDate
             ${departmentFilterClause} order by lad.LabourId asc
     `;
@@ -3041,58 +3050,246 @@ async function getMatchedRows(data) {
     return { matchedRows, unmatchedRows };
 }
 
+function excelDecimalToTime(value) {
+    if (!value) return null;
+    const totalSeconds = Math.round(value * 24 * 60 * 60);
+    const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+    const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+    const seconds = String(totalSeconds % 60).padStart(2, "0");
+    return `${hours}:${minutes}:${seconds}`;
+}
+
+function formatTime(value) {
+    if (!value) return null;
+    if (typeof value === "string" && /^\d{2}:\d{2}:\d{2}$/.test(value)) {
+        return value;
+    }
+    return null;
+}
+
+
 async function updateMatchedRows(data) {
     const pool = await poolPromise;
-
+    console.log("updateMatchedRows data:", data);
     for (const row of data) {
-        await pool
-            .request()
-            .input('AttendanceId', sql.Int, row.AttendanceId)
-            .input('LabourId', sql.VarChar(50), row.LabourId)
-            .input('Date', sql.Date, row.Date)
-            .input('FirstPunchManually', sql.NVarChar(255), row.FirstPunchManually || null)
-            .input('LastPunchManually', sql.NVarChar(255), row.LastPunchManually || null)
-            .input('OvertimeManually', sql.Decimal(18, 2), row.OvertimeManually || null)
-            .input('RemarkManually', sql.NVarChar(255), row.RemarkManually || null)
-            .query(
-                `UPDATE LabourAttendanceDetails
-           SET FirstPunchManually = @FirstPunchManually,
-               LastPunchManually = @LastPunchManually,
-               OvertimeManually = @OvertimeManually,
-               RemarkManually = @RemarkManually
-           WHERE AttendanceId = @AttendanceId AND LabourId = @LabourId AND Date = @Date`
-            );
+        // Convert decimals → time string
+        // const firstPunchStr = excelDecimalToTime(row.FirstPunchManually); // e.g. "09:01:16"
+        // const lastPunchStr = excelDecimalToTime(row.LastPunchManually);  // e.g. "21:07:59"
+// console.log(`firstPunchStr: ${firstPunchStr}, lastPunchStr: ${lastPunchStr}`);
+        // Build Date objects to calculate hours
+          let totalHours = 0;
+        const firstPunch = row.FirstPunchManually || null;
+        const lastPunch = row.LastPunchManually || null;
 
+          // ✅ Fixed working hours logic
+    const workingHours = row.workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+    const halfDayHours = workingHours / 2;
+        // Total Hours
+      
+        if (firstPunch && lastPunch) {
+             const firstDate = new Date(`1970-01-01T${firstPunch}Z`);
+                const lastDate = new Date(`1970-01-01T${lastPunch}Z`);
+            totalHours = Math.abs((lastDate - firstDate) / (1000 * 60 * 60));
+            totalHours = Math.round(totalHours * 100) / 100;
+        }
+
+        // Status
+         let status = "A";
+    if (firstPunch && lastPunch) {
+        if (totalHours >= workingHours) {
+            status = "P";
+        } else if (totalHours >= halfDayHours) {
+            status = "HD";
+        }
+    }
+
+         let OT = 0;
+    if (status === "P" && totalHours > workingHours) {
+        OT = totalHours - workingHours;
+    }
+
+    const OTrounded = roundOvertime(OT);
+
+    // Use manual OT if provided, else cap to max 4 hrs
+    const OTmanual = row.OvertimeManually || Math.min(OTrounded, 4);
+
+        // Now update DB row
+        await pool.request()
+            .input("AttendanceId", sql.Int, row.AttendanceId)
+            .input("LabourId", sql.NVarChar(50), row.LabourId)
+            .input("Date", sql.Date, row.Date)
+
+          .input("FirstPunch", sql.NVarChar(10), firstPunch)
+            .input("LastPunch", sql.NVarChar(10), lastPunch)
+
+            .input("TotalHours", sql.Decimal(10, 2), totalHours || 0)
+            .input("Overtime", sql.Decimal(10, 2), OTmanual)
+            .input("Status", sql.NVarChar(10), status)
+
+            .input("CreationDate", sql.DateTime, new Date())
+             .input("FirstPunchManually", sql.VarChar(50), firstPunch)
+            .input("LastPunchManually", sql.VarChar(50), lastPunch)
+            .input("OvertimeManually", sql.Decimal(10, 2), OTmanual)
+            .input("RemarkManually", sql.NVarChar(255), row.RemarkManually || null)
+
+            .input("EditUserName", sql.NVarChar(255), row.EditUserName || null)
+            .input("LastUpdatedDate", sql.DateTime, new Date())
+            .input("WorkingHours", sql.VarChar(50), row.workingHours || null)
+            .input("OnboardName", sql.NVarChar(255), row.OnboardName || null)
+            .input("projectName", sql.Int, row.projectName || null)
+            .input("ApprovalStatus", sql.NVarChar(50), row.ApprovalStatus || null)
+            .input("ApprovalRemark", sql.NVarChar(255), row.ApprovalRemark || null)
+
+            .query(`
+      MERGE LabourAttendanceDetails AS target
+USING (
+    SELECT @LabourId AS LabourId, @Date AS Date
+) AS source
+    ON target.LabourId = source.LabourId
+   AND target.Date = source.Date
+WHEN MATCHED THEN
+  UPDATE SET
+    FirstPunch = @FirstPunch,
+    LastPunch = @LastPunch,
+    TotalHours = @TotalHours,
+    Overtime = @Overtime,
+    Status = @Status,
+    FirstPunchManually = @FirstPunchManually,
+    LastPunchManually = @LastPunchManually,
+    OvertimeManually = @OvertimeManually,
+    RemarkManually = @RemarkManually,
+    EditUserName = @EditUserName,
+    LastUpdatedDate = @LastUpdatedDate,
+    WorkingHours = @WorkingHours,
+    OnboardName = @OnboardName,
+    projectName = @projectName,
+    ApprovalStatus = @ApprovalStatus,
+    ApprovalRemark = @ApprovalRemark
+WHEN NOT MATCHED THEN
+  INSERT (
+    LabourId, Date, FirstPunch, LastPunch, TotalHours, Overtime, Status,
+    CreationDate, FirstPunchManually, LastPunchManually, OvertimeManually,
+    RemarkManually, EditUserName, LastUpdatedDate, WorkingHours, OnboardName,
+    projectName, ApprovalStatus, ApprovalRemark
+  )
+  VALUES (
+    @LabourId, @Date, @FirstPunch, @LastPunch, @TotalHours, @Overtime, @Status,
+    @CreationDate, @FirstPunchManually, @LastPunchManually, @OvertimeManually,
+    @RemarkManually, @EditUserName, @LastUpdatedDate, @WorkingHours, @OnboardName,
+    @projectName, @ApprovalStatus, @ApprovalRemark
+  );
+
+      `);
     }
 }
+
 
 async function insertUnmatchedRows(data) {
     const pool = await poolPromise;
     const table = new sql.Table('LabourAttendanceDetails');
+
     table.columns.add('AttendanceId', sql.Int);
     table.columns.add('LabourId', sql.VarChar(50));
     table.columns.add('Date', sql.Date);
-    table.columns.add('FirstPunchManually', sql.NVarChar(255));
-    table.columns.add('LastPunchManually', sql.NVarChar(255));
+    table.columns.add('FirstPunchManually', sql.Time);
+    table.columns.add('LastPunchManually', sql.Time);
     table.columns.add('OvertimeManually', sql.Decimal(18, 2));
     table.columns.add('RemarkManually', sql.NVarChar(255));
+    table.columns.add('TotalHours', sql.Decimal(18, 2));
+    table.columns.add('Status', sql.VarChar(10));
 
     data.forEach((row) => {
+        const firstPunch = row.FirstPunchManually ? new Date(row.FirstPunchManually) : null;
+        const lastPunch = row.LastPunchManually ? new Date(row.LastPunchManually) : null;
+
+        let totalHours = 0;
+        if (firstPunch && lastPunch) {
+            totalHours = Math.abs((lastPunch - firstPunch) / (1000 * 60 * 60));
+            totalHours = Math.round(totalHours * 100) / 100;
+        }
+
+        let status = "A";
+        if (firstPunch && lastPunch) {
+            if (totalHours >= row.WorkingHours) {
+                status = "P";
+            } else if (totalHours >= row.HalfDayHours) {
+                status = "HD";
+            }
+        }
+
+        const OT = (status === "P" && totalHours > row.WorkingHours) ? (totalHours - row.WorkingHours) : 0;
+        const OTrounded = roundOvertime(OT);
+        const OTmanual = row.OvertimeManually || Math.min(OTrounded, 4);
+
         table.rows.add(
             row.AttendanceId,
             row.LabourId,
             row.Date,
             row.FirstPunchManually || null,
             row.LastPunchManually || null,
-            row.OvertimeManually || null,
-            row.RemarkManually || null
+            OTmanual,
+            row.RemarkManually || null,
+            totalHours,
+            status
         );
-        //console.log(`Row to insert:`, row);
     });
 
     await pool.request().bulk(table);
-    //console.log(`All unmatched rows inserted.`);
 }
+
+
+// async function updateMatchedRows(data) {
+//     const pool = await poolPromise;
+
+//     for (const row of data) {
+//         await pool
+//             .request()
+//             .input('AttendanceId', sql.Int, row.AttendanceId)
+//             .input('LabourId', sql.VarChar(50), row.LabourId)
+//             .input('Date', sql.Date, row.Date)
+//             .input('FirstPunchManually', sql.NVarChar(255), row.FirstPunchManually || null)
+//             .input('LastPunchManually', sql.NVarChar(255), row.LastPunchManually || null)
+//             .input('OvertimeManually', sql.Decimal(18, 2), row.OvertimeManually || null)
+//             .input('RemarkManually', sql.NVarChar(255), row.RemarkManually || null)
+//             .query(
+//                 `UPDATE LabourAttendanceDetails
+//            SET FirstPunchManually = @FirstPunchManually,
+//                LastPunchManually = @LastPunchManually,
+//                OvertimeManually = @OvertimeManually,
+//                RemarkManually = @RemarkManually
+//            WHERE AttendanceId = @AttendanceId AND LabourId = @LabourId AND Date = @Date`
+//             );
+
+//     }
+// }
+
+// async function insertUnmatchedRows(data) {
+//     const pool = await poolPromise;
+//     const table = new sql.Table('LabourAttendanceDetails');
+//     table.columns.add('AttendanceId', sql.Int);
+//     table.columns.add('LabourId', sql.VarChar(50));
+//     table.columns.add('Date', sql.Date);
+//     table.columns.add('FirstPunchManually', sql.NVarChar(255));
+//     table.columns.add('LastPunchManually', sql.NVarChar(255));
+//     table.columns.add('OvertimeManually', sql.Decimal(18, 2));
+//     table.columns.add('RemarkManually', sql.NVarChar(255));
+
+//     data.forEach((row) => {
+//         table.rows.add(
+//             row.AttendanceId,
+//             row.LabourId,
+//             row.Date,
+//             row.FirstPunchManually || null,
+//             row.LastPunchManually || null,
+//             row.OvertimeManually || null,
+//             row.RemarkManually || null
+//         );
+//         //console.log(`Row to insert:`, row);
+//     });
+
+//     await pool.request().bulk(table);
+//     //console.log(`All unmatched rows inserted.`);
+// }
 
 async function updateTotalOvertimeHours(labourId, selectedMonth) {
     try {
