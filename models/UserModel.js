@@ -163,6 +163,7 @@ const getLaboursMonthlyWages = async (labourId = null) => {
     request.input("labourId", labourId);
   }
   const result = await request.query(query);
+  console.log("Wages fetched:", result.recordset);
   return result.recordset;
 };
 

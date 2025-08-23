@@ -2872,12 +2872,12 @@ ORDER BY onboard.LabourID
         if (eligibleLabourIds.length === 0) {
             return [];
         }
-
+console.log("eligibleLabourIds:", eligibleLabourIds.length, eligibleLabourIds);
         const attendanceRequest = pool.request();
         attendanceRequest.input('month', sql.Int, month);
         attendanceRequest.input('year', sql.Int, year);
 
-         if (idsArray && idsArray.length > 0) {
+         if (eligibleLabourIds && eligibleLabourIds.length > 0) {
             attendanceRequest.input('labourIds', sql.VarChar, eligibleLabourIds.join(','));
         } else {
             attendanceRequest.input('labourIds', sql.VarChar, null);

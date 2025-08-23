@@ -3051,12 +3051,18 @@ async function getMatchedRows(data) {
 }
 
 function excelDecimalToTime(value) {
-    if (!value) return null;
+    if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "string" && /^\d{2}:\d{2}:\d{2}$/.test(value)) {
+    return value; // already valid time string
+  }
+  if (typeof value === "number" && !isNaN(value)) {
     const totalSeconds = Math.round(value * 24 * 60 * 60);
     const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
     const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
     const seconds = String(totalSeconds % 60).padStart(2, "0");
     return `${hours}:${minutes}:${seconds}`;
+  }
+  return null;
 }
 
 function formatTime(value) {
@@ -3070,16 +3076,10 @@ function formatTime(value) {
 
 async function updateMatchedRows(data) {
     const pool = await poolPromise;
-    console.log("updateMatchedRows data:", data);
     for (const row of data) {
-        // Convert decimals → time string
-        // const firstPunchStr = excelDecimalToTime(row.FirstPunchManually); // e.g. "09:01:16"
-        // const lastPunchStr = excelDecimalToTime(row.LastPunchManually);  // e.g. "21:07:59"
-// console.log(`firstPunchStr: ${firstPunchStr}, lastPunchStr: ${lastPunchStr}`);
-        // Build Date objects to calculate hours
           let totalHours = 0;
-        const firstPunch = row.FirstPunchManually || null;
-        const lastPunch = row.LastPunchManually || null;
+       const firstPunch = excelDecimalToTime(row.FirstPunchManually);
+    const lastPunch = excelDecimalToTime(row.LastPunchManually);
 
           // ✅ Fixed working hours logic
     const workingHours = row.workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
@@ -3119,16 +3119,16 @@ async function updateMatchedRows(data) {
             .input("LabourId", sql.NVarChar(50), row.LabourId)
             .input("Date", sql.Date, row.Date)
 
-          .input("FirstPunch", sql.NVarChar(10), firstPunch)
-            .input("LastPunch", sql.NVarChar(10), lastPunch)
+          .input("FirstPunch", sql.NVarChar(20), firstPunch)
+            .input("LastPunch", sql.NVarChar(20), lastPunch)
 
             .input("TotalHours", sql.Decimal(10, 2), totalHours || 0)
             .input("Overtime", sql.Decimal(10, 2), OTmanual)
             .input("Status", sql.NVarChar(10), status)
 
             .input("CreationDate", sql.DateTime, new Date())
-             .input("FirstPunchManually", sql.VarChar(50), firstPunch)
-            .input("LastPunchManually", sql.VarChar(50), lastPunch)
+             .input("FirstPunchManually", sql.NVarChar(20), firstPunch)
+            .input("LastPunchManually", sql.NVarChar(20), lastPunch)
             .input("OvertimeManually", sql.Decimal(10, 2), OTmanual)
             .input("RemarkManually", sql.NVarChar(255), row.RemarkManually || null)
 
@@ -3191,31 +3191,33 @@ async function insertUnmatchedRows(data) {
     table.columns.add('AttendanceId', sql.Int);
     table.columns.add('LabourId', sql.VarChar(50));
     table.columns.add('Date', sql.Date);
-    table.columns.add('FirstPunchManually', sql.Time);
-    table.columns.add('LastPunchManually', sql.Time);
+    table.columns.add('FirstPunchManually', sql.NVarChar(20));
+    table.columns.add('LastPunchManually', sql.NVarChar(20));
     table.columns.add('OvertimeManually', sql.Decimal(18, 2));
     table.columns.add('RemarkManually', sql.NVarChar(255));
     table.columns.add('TotalHours', sql.Decimal(18, 2));
     table.columns.add('Status', sql.VarChar(10));
 
     data.forEach((row) => {
-        const firstPunch = row.FirstPunchManually ? new Date(row.FirstPunchManually) : null;
-        const lastPunch = row.LastPunchManually ? new Date(row.LastPunchManually) : null;
+          const firstPunch = excelDecimalToTime(row.FirstPunchManually);
+    const lastPunch = excelDecimalToTime(row.LastPunchManually);
 
         let totalHours = 0;
-        if (firstPunch && lastPunch) {
-            totalHours = Math.abs((lastPunch - firstPunch) / (1000 * 60 * 60));
-            totalHours = Math.round(totalHours * 100) / 100;
-        }
+    if (firstPunch && lastPunch) {
+        const firstDate = new Date(`1970-01-01T${firstPunch}Z`);
+        const lastDate = new Date(`1970-01-01T${lastPunch}Z`);
+        totalHours = Math.abs((lastDate - firstDate) / (1000 * 60 * 60));
+        totalHours = Math.round(totalHours * 100) / 100;
+    }
 
         let status = "A";
-        if (firstPunch && lastPunch) {
-            if (totalHours >= row.WorkingHours) {
-                status = "P";
-            } else if (totalHours >= row.HalfDayHours) {
-                status = "HD";
-            }
+    if (firstPunch && lastPunch) {
+        if (totalHours >= row.WorkingHours) {
+            status = "P";
+        } else if (totalHours >= row.HalfDayHours) {
+            status = "HD";
         }
+    }
 
         const OT = (status === "P" && totalHours > row.WorkingHours) ? (totalHours - row.WorkingHours) : 0;
         const OTrounded = roundOvertime(OT);
@@ -3225,8 +3227,8 @@ async function insertUnmatchedRows(data) {
             row.AttendanceId,
             row.LabourId,
             row.Date,
-            row.FirstPunchManually || null,
-            row.LastPunchManually || null,
+           firstPunch,       // now safe
+        lastPunch,  
             OTmanual,
             row.RemarkManually || null,
             totalHours,
