@@ -1583,6 +1583,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
             SUM(CASE WHEN Status = 'HD' THEN 1 ELSE 0 END) AS HalfDays,
             SUM(CASE WHEN Status = 'A' THEN 1 ELSE 0 END) AS AbsentDays,
             SUM(CASE WHEN Status = 'MP' THEN 1 ELSE 0 END) AS MissPunchDays,
+            SUM(CASE WHEN Status = 'WO' THEN 1 ELSE 0 END) AS WeeklyOffDays,
             SUM(Overtime) AS TotalOvertimeHours,
             SUM(OvertimeManually) AS TotalOvertimeHoursManually,
             SUM(PayrollCalRoundOffOvertime) AS PayrollCalRoundoffTotalOvertime
@@ -1612,6 +1613,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
         const HalfDays = Number(row.HalfDays ?? 0);
         const AbsentDays = Number(row.AbsentDays ?? 0);
         const MissPunchDays = Number(row.MissPunchDays ?? 0);
+        const WeeklyOffDays = Number(row.WeeklyOffDays ?? 0);
         const TotalOvertimeHours = Number(row.TotalOvertimeHours ?? 0);
         const TotalOvertimeHoursManually = Number(row.TotalOvertimeHoursManually ?? 0);
         const PayrollCalRoundoffTotalOvertime = Number(row.PayrollCalRoundoffTotalOvertime ?? 0);
@@ -1635,6 +1637,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                     .input('HalfDays', sql.Int, HalfDays)
                     .input('AbsentDays', sql.Int, AbsentDays)
                     .input('MissPunchDays', sql.Int, MissPunchDays)
+                    .input('WeeklyOffDays', sql.Int, WeeklyOffDays)
                     .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
                     .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
                     .input('PayrollCalRoundoffTotalOvertime', sql.Float, PayrollCalRoundoffTotalOvertime)
@@ -1648,6 +1651,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
               HalfDays = @HalfDays,
               AbsentDays = @AbsentDays,
               MissPunchDays = @MissPunchDays,
+              WeeklyOffDays = @WeeklyOffDays,
               TotalOvertimeHours = @TotalOvertimeHours,
               TotalOvertimeHoursManually = @TotalOvertimeHoursManually,
               PayrollCalRoundoffTotalOvertime = @PayrollCalRoundoffTotalOvertime,
@@ -1667,6 +1671,7 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                     .input('HalfDays', sql.Int, HalfDays)
                     .input('AbsentDays', sql.Int, AbsentDays)
                     .input('MissPunchDays', sql.Int, MissPunchDays)
+                    .input('WeeklyOffDays', sql.Int, WeeklyOffDays)
                     .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
                     .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
                     .input('PayrollCalRoundoffTotalOvertime', sql.Float, PayrollCalRoundoffTotalOvertime)
@@ -1674,10 +1679,10 @@ async function insertOrUpdateLabourAttendanceSummary(labourId, date) {
                     .input('SelectedMonth', sql.NVarChar, selectedMonth)
                     .query(`
           INSERT INTO LabourAttendanceSummary (
-              LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
+              LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays, WeeklyOffDays,
               TotalOvertimeHours, TotalOvertimeHoursManually, PayrollCalRoundoffTotalOvertime, CreationDate, SelectedMonth
           ) VALUES (
-              @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
+              @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays, @WeeklyOffDays,
               @TotalOvertimeHours, @TotalOvertimeHoursManually, @PayrollCalRoundoffTotalOvertime, @CreationDate, @SelectedMonth
           )
         `);
@@ -1722,6 +1727,7 @@ async function insertIntoLabourAttendanceSummary(summary) {
             SUM(CASE WHEN Status = 'HD' THEN 1 ELSE 0 END) AS HalfDays,
             SUM(CASE WHEN Status = 'A' THEN 1 ELSE 0 END) AS AbsentDays,
             SUM(CASE WHEN Status = 'MP' THEN 1 ELSE 0 END) AS MissPunchDays,
+            SUM(CASE WHEN Status = 'WO' THEN 1 ELSE 0 END) AS WeeklyOffDays,
             SUM(Overtime) AS TotalOvertimeHours,
             SUM(OvertimeManually) AS TotalOvertimeHoursManually,
             SUM(PayrollCalRoundOffOvertime) AS PayrollCalRoundoffTotalOvertime,
@@ -1752,6 +1758,7 @@ async function insertIntoLabourAttendanceSummary(summary) {
         const HalfDays = n(r.HalfDays, n(summary.halfDays, 0));
         const AbsentDays = n(r.AbsentDays, n(summary.absentDays, 0));
         const MissPunchDays = n(r.MissPunchDays, n(summary.missPunchDays, 0));
+        const WeeklyOffDays = n(r.WeeklyOffDays, n(summary.weeklyOffDays, 0));
         const TotalOvertimeHours = n(r.TotalOvertimeHours, n(summary.totalOvertimeHours, 0));
         const TotalOvertimeHoursManually = n(r.TotalOvertimeHoursManually, n(summary.TotalOvertimeHoursManually, 0));
         const PayrollCalRoundoffTotalOvertime = n(r.PayrollCalRoundoffTotalOvertime, n(summary.PayrollCalRoundoffTotalOvertime, 0));
@@ -1774,6 +1781,7 @@ async function insertIntoLabourAttendanceSummary(summary) {
             .input('HalfDays', sql.Int, HalfDays)
             .input('AbsentDays', sql.Int, AbsentDays)
             .input('MissPunchDays', sql.Int, MissPunchDays)
+            .input('WeeklyOffDays', sql.Int, WeeklyOffDays)
             .input('TotalOvertimeHours', sql.Float, TotalOvertimeHours)
             .input('RoundOffTotalOvertime', sql.Float, RoundOffTotalOvertime)
             .input('TotalOvertimeHoursManually', sql.Float, TotalOvertimeHoursManually)
@@ -1794,6 +1802,7 @@ async function insertIntoLabourAttendanceSummary(summary) {
             HalfDays = @HalfDays,
             AbsentDays = @AbsentDays,
             MissPunchDays = @MissPunchDays,
+            WeeklyOffDays = @WeeklyOffDays,
             TotalOvertimeHours = @TotalOvertimeHours,
             RoundOffTotalOvertime = @RoundOffTotalOvertime,
             TotalOvertimeHoursManually = @TotalOvertimeHoursManually,
@@ -1812,12 +1821,12 @@ async function insertIntoLabourAttendanceSummary(summary) {
                 const req = pool.request(); req.timeout = WRITE_TIMEOUT_MS;
                 return bind(req).query(`
         INSERT INTO LabourAttendanceSummary (
-            LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays,
+            LabourId, TotalDays, PresentDays, HalfDays, AbsentDays, MissPunchDays, WeeklyOffDays,
             TotalOvertimeHours, RoundOffTotalOvertime, TotalOvertimeHoursManually,
             PayrollCalRoundoffTotalOvertime, Shift, CreationDate, SelectedMonth, Date
         )
         VALUES (
-            @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays,
+            @LabourId, @TotalDays, @PresentDays, @HalfDays, @AbsentDays, @MissPunchDays, @WeeklyOffDays,
             @TotalOvertimeHours, @RoundOffTotalOvertime, @TotalOvertimeHoursManually,
             @PayrollCalRoundoffTotalOvertime, @Shift, @CreationDate, @SelectedMonth, @Date
         )
@@ -1926,6 +1935,7 @@ async function fetchAttendanceDetailsByMonthYear(month, year) {
                     AND YEAR(TRY_CONVERT(DATE, L.SelectedMonth + '-01')) = @year
                     AND L.PresentDays > 0;  -- Add condition to exclude labors with PresentDays = 0
             `);
+            console.log('Attendance details for all labours:', result.recordset);
         return result.recordset;
     } catch (error) {
         console.error('Error fetching attendance details for all labours:', error);
@@ -3502,7 +3512,7 @@ async function markWagesForApproval(
         const request = pool.request();
         console.log("effectiveDate", effectiveDate);
         const perHourWages = dailyWages ? dailyWages / 8 : 0;
-        const effectiveDateOnly = effectiveDate ? new Date(effectiveDate) : null;
+        const effectiveDateOnly = effectiveDate ? parseDDMMYYYYtoDate(effectiveDate) : null;
         console.log("effectiveDateOnly", effectiveDateOnly);
         request.input('WageID', sql.Int, wageId);
         request.input('LabourID', sql.NVarChar, labourId);
@@ -3510,7 +3520,7 @@ async function markWagesForApproval(
         request.input('MonthlyWages', sql.Float, monthlyWages || null);
         request.input('PerHourWages', sql.Float, perHourWages);
         request.input('YearlyWages', sql.Float, yearlyWages || null);
-        request.input('EffectiveDate', sql.Date, effectiveDate);
+        request.input('EffectiveDate', sql.Date, effectiveDateOnly || null);
         request.input('FixedMonthlyWages', sql.Float, fixedMonthlyWages || null);
         request.input('WeeklyOff', sql.Int, weeklyOff || null);
         request.input('PayStructure', sql.NVarChar, payStructure || null);

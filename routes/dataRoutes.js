@@ -1,7 +1,15 @@
 
 const express = require('express');
 const { getProjectNames, getLabourCategories, getDepartments, getWorkingHours, getDesignations, getCompanyNamesByProjectId, getDevices, getAttendanceLogs, approveLabour, getProjectDeviceStatus, updateProjectDeviceStatus, deleteProjectDeviceStatus, getProjectDeviceStatusSS, fetchDynamicData, fetchOrgDynamicData, addFvEmpId, updateEmployeeMaster, saveApiResponsePayload, getLaboursWithOldAttendance, fetchCachedLabours, saveTransferData, getAllLaboursWithTransferDetails, employeeMasterPayloadUpdatepost, organizationMasterPayloadUpdatepost, siteTransferRequestforAdmin, approveSiteTransfer, rejectSiteTransfer, editSiteTransfer, getAdminSiteTransferApproval, getWagesforInsentiveAdd
-    , getAdminCompanyTransferApproval, companyTransferRequestforAdmin, approveCompanyTransfer, rejectCompanyTransfer, editCompanyTransfer, getSuperAdminProjectNames, getLabourAttendanceCheck, addDevicesToProject, getDevicesByProject
+    , getAdminCompanyTransferApproval, companyTransferRequestforAdmin, approveCompanyTransfer, rejectCompanyTransfer, editCompanyTransfer, getSuperAdminProjectNames, getLabourAttendanceCheck, addDevicesToProject, getDevicesByProject,
+    getAllLaboursCount,
+  getAllWagesCount,
+  getAllSiteTransferCount,
+  getAllVariablePayCount,
+  getAllLastDayPAMCount,
+  getAttendanceByPeriod,
+  getAllActiveWorkers,
+  getAllActiveWorkersPersentage
 } = require('../controllers/dataController');
 const { addEmployee } = require("../controllers/sendLabourData")
 const router = express.Router();
@@ -54,6 +62,17 @@ router.get('/admin/attendance-check', getLabourAttendanceCheck);
 
 router.post('/admin/attendance-checkToProject', addDevicesToProject);
 router.get('/projectDeviceStatusgetDevicesByProject/:projectName', getDevicesByProject);
+
+// -------------------------------------------------------  DASHBOARD ROUTES  ---------------
+
+router.get('/getAllLaboursCount', getAllLaboursCount);
+router.get('/getWagesCount', getAllWagesCount);
+router.get('/getAllSiteTransferCount', getAllSiteTransferCount);
+router.get('/getAllVariableCount' , getAllVariablePayCount);
+router.get('/getAPM' , getAllLastDayPAMCount)
+router.get('/getAllAPM' ,getAttendanceByPeriod )
+router.get('/getAllActive' ,getAllActiveWorkers)
+router.get('/getAllActivep', getAllActiveWorkersPersentage)
 
 
 module.exports = router;

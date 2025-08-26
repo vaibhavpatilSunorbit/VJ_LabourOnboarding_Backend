@@ -525,3 +525,83 @@
 {"level":"info","message":"Running cron job for Attendance Date: 2025-08-21","timestamp":"2025-08-22T12:54:31.979Z"}
 {"level":"info","message":"Running cron job for Attendance Date: 2025-08-21","timestamp":"2025-08-22T13:04:06.789Z"}
 {"level":"info","message":"Running cron job for Attendance Date: 2025-08-21","timestamp":"2025-08-22T13:09:18.072Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-23T12:24:00.212Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-22","timestamp":"2025-08-23T12:32:40.242Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-22","timestamp":"2025-08-23T12:32:43.232Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-13","timestamp":"2025-08-23T12:32:43.235Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-13","timestamp":"2025-08-23T12:35:39.311Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-23T12:40:00.821Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-22","timestamp":"2025-08-23T12:46:48.451Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-22","timestamp":"2025-08-23T12:47:10.228Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-01","timestamp":"2025-08-23T12:47:10.231Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-01","timestamp":"2025-08-23T12:50:06.538Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-23T12:52:00.696Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-03","timestamp":"2025-08-23T12:52:00.698Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-03","timestamp":"2025-08-23T12:57:10.237Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-22","timestamp":"2025-08-23T12:58:17.107Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-23T12:59:00.383Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-04","timestamp":"2025-08-23T12:59:00.386Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-04","timestamp":"2025-08-23T13:04:12.664Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-22","timestamp":"2025-08-23T13:05:31.118Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T05:11:38.536Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T05:57:43.107Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T06:16:30.989Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T07:44:57.455Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-25T09:28:00.723Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T09:28:00.726Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T09:46:17.961Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-25T09:50:00.908Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-07","timestamp":"2025-08-25T09:50:00.911Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-07","timestamp":"2025-08-25T09:55:50.932Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T09:57:43.190Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T10:30:47.270Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T10:43:38.983Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T10:53:23.304Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T11:43:32.004Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T11:58:46.437Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T12:52:31.170Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-25T13:02:27.463Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-26T04:07:00.916Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-08","timestamp":"2025-08-26T04:07:00.921Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-08","timestamp":"2025-08-26T04:12:13.862Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-26T04:14:00.846Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-09","timestamp":"2025-08-26T04:14:00.850Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-09","timestamp":"2025-08-26T04:19:07.904Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-26T04:20:00.996Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-10","timestamp":"2025-08-26T04:20:00.997Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-10","timestamp":"2025-08-26T04:25:23.489Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-26T04:27:00.317Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-12","timestamp":"2025-08-26T04:27:00.318Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-12","timestamp":"2025-08-26T04:32:04.217Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T04:33:39.139Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-26T04:38:00.028Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-15","timestamp":"2025-08-26T04:38:00.032Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-15","timestamp":"2025-08-26T04:42:54.976Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-26T04:44:00.190Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-18","timestamp":"2025-08-26T04:44:00.191Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-18","timestamp":"2025-08-26T04:49:05.411Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T04:50:42.899Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-26T04:54:00.773Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-19","timestamp":"2025-08-26T04:54:00.776Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-19","timestamp":"2025-08-26T04:59:04.152Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T05:00:22.149Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-26T05:03:00.688Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-24","timestamp":"2025-08-26T05:03:00.690Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-24","timestamp":"2025-08-26T05:08:09.550Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T05:09:26.310Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-26T05:16:00.441Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T05:16:00.444Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-25","timestamp":"2025-08-26T05:21:12.851Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T05:22:03.862Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-26T05:31:00.636Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-04","timestamp":"2025-08-26T05:31:00.639Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-04","timestamp":"2025-08-26T05:36:02.232Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T05:37:26.321Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T06:01:08.032Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T06:07:24.245Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T06:43:28.881Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T07:10:35.394Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T09:35:28.802Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T09:41:41.905Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T10:09:45.895Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-25","timestamp":"2025-08-26T10:14:31.909Z"}

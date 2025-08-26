@@ -256,7 +256,7 @@ const getAllLastDayPAMCount = async (req, res) => {
       SELECT 
         Status,
         COUNT(*) AS count
-      FROM [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceDetails]
+      FROM [LabourAttendanceDetails]
       WHERE [Date] = @Yesterday
     `;
 
@@ -337,7 +337,7 @@ const getAttendanceByPeriod = async (req, res) => {
         [Date],
         Status,
         COUNT(*) AS Count
-      FROM [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceDetails]
+      FROM [LabourAttendanceDetails]
       WHERE [Date] <= @Yesterday
     `;
 
@@ -365,7 +365,7 @@ const getAllActiveWorkers = async (req, res) => {
     const result = await pool.request().query(`
      
     SELECT COUNT(DISTINCT LabourID) AS ActiveWorkersAllTime
-      FROM [LabourOnboardingForm_TEST].[dbo].[labourOnboarding]
+      FROM [labourOnboarding]
       WHERE Status = 'Approved'
     `);
     res.json({ success: true, data: result.recordset[0] });
@@ -383,12 +383,12 @@ const getAllActiveWorkersPersentage = async (req, res) => {
         CAST(
           100.0 * 
           (SELECT COUNT(DISTINCT LabourId) 
-           FROM [LabourOnboardingForm_TEST].[dbo].[LabourAttendanceDetails] 
+           FROM [LabourAttendanceDetails] 
            WHERE Status = 'P')
           /
           NULLIF(
             (SELECT COUNT(DISTINCT LabourId) 
-             FROM [LabourOnboardingForm_TEST].[dbo].[LabourOnboarding]), 0
+             FROM [LabourOnboarding]), 0
           )
         AS DECIMAL(5,2)) AS PresentPercentageOfAllActiveWorkers
     `);

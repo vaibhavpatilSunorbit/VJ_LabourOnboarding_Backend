@@ -1624,9 +1624,15 @@ SELECT
      FROM [dbo].[HolidayDate]
      WHERE HolidayDate BETWEEN @first AND @last) AS totalHolidaysInMonth,
 
-    -- ✅ Only holidays where prev OR next day is P
+        -- ✅ Only holidays where prev OR next day is P
     (SELECT COUNT(*)
      FROM [dbo].[HolidayDate] h
+     CROSS APPLY (
+         SELECT lo.dateOfJoining
+         FROM [dbo].[labourOnboarding] lo
+         WHERE lo.LabourID = @labourId
+           AND lo.status = 'Approved'   -- only consider approved joining
+     ) AS onboard
      WHERE h.HolidayDate BETWEEN @first AND @last
        AND (
            EXISTS (
@@ -1644,7 +1650,9 @@ SELECT
                  AND attNext.Status = 'P'
            )
        )
+       AND onboard.dateOfJoining < h.HolidayDate  -- ✅ only holidays after joining date
     ) AS totalHolidaysConsider,
+
 
     SUM(CASE 
         WHEN Status = 'P' AND HolidayDate IS NOT NULL AND TotalHours IS NOT NULL
@@ -2813,7 +2821,7 @@ async function getEligibleLabours(month, year, projectIds, idsArray) {
         const endDate = endDateObj.toLocaleDateString('en-CA');
 
         let onboardingQuery = `
-          SELECT DISTINCT onboard.LabourID, onboard.status
+          SELECT DISTINCT onboard.LabourID, onboard.status, onboard.dateOfJoining
 FROM [labourOnboarding] AS onboard
 WHERE
   onboard.status IN ('Approved', 'Disable')
@@ -2831,7 +2839,6 @@ WHERE
   )
 ORDER BY onboard.LabourID
         `;
-
         const onboardingRequest = pool.request();
         onboardingRequest.input('startDate', sql.Date, startDate);
         onboardingRequest.input('endDate', sql.Date, endDate);
@@ -2849,6 +2856,7 @@ ORDER BY onboard.LabourID
             onboardingRequest.input('labourIds', sql.VarChar, null);
         }
         const onboardingResult = await onboardingRequest.query(onboardingQuery);
+         console.log("onboardingResult:", onboardingResult.recordset.length, onboardingResult.recordset); 
         const labourMap = {};
 
         onboardingResult.recordset.forEach(row => {
