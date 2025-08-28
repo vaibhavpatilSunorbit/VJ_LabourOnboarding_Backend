@@ -6,23 +6,6 @@ const { poolPromise4 } = require('../config/dbConfigSCPL');
 const { poolPromise3 } = require('../config/dbConfig3');
 const { poolPromise } = require('../config/dbConfig');
 const xml2js = require("xml2js")
-// const SOAP_URL = "https://essl.vjerp.com:8530/iclock/WebAPIService.asmx";
-
-// const getProjectNames = async (req, res) => {
-//   try {
-//     const pool = await poolPromise4;
-//     const result = await pool.request().query(`
-//   Select Id, Description AS Business_Unit ,  Type, Email1, ParentId From Framework.BusinessUnit Where Type = 'B' And 
-// (IsDiscontinueBU is null or IsDiscontinueBU = '' or IsDiscontinueBU = 0) and (IsDeleted is null or IsDeleted = '' or IsDeleted = 0)
-//     `);
-//     // console.log("result.recordset++pluse",result.recordset)
-//     res.json(result.recordset);
-//     // console.log('result.recordset}}||',result.recordset)
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).send('Server error');
-//   } 
-// };
 
 
 const getProjectNames = async (req, res) => {
@@ -72,35 +55,6 @@ const getProjectNames = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
-
-
-
-
-// const getProjectNames = async (req, res) => {
-//   try {
-//     const apiUrl = 'https://api.vjerp.com/api/businessUnit';
-//     const token = '20a763e266308b35fc75feca4b053d5ce8ea540dbdaa77ee13b1a5e7ce8aadcf';
-
-//     const apiResponse = await axios.get(apiUrl, {
-//       headers: {
-//         'Authorization': `${token}`,
-//         'Accept': 'application/json',
-//         'Content-Type': 'application/json',
-//       }
-//     });
-
-//     console.log("API Response Data:", apiResponse.data);
-//     res.json(apiResponse.data);
-//   } catch (err) {
-//     console.error('Error fetching project names:', err.response?.status, err.response?.data);
-
-//     if (err.response?.status === 401) {
-//       return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
-//     }
-
-//     res.status(500).send('Server error');
-//   }
-// };
 
 const getLabourCategories = async (req, res) => {
   try {
@@ -158,110 +112,6 @@ const getDesignations = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
-
-// const getCompanyNamesByProjectId = async (req, res) => {
-//   const projectId = req.params.projectId;
-//   try {
-//     const pool = await poolPromise2;
-
-//     // Step 1: Get the ParentId for the selected project
-//     const parentIdResult = await pool.request().query(`
-//       SELECT ParentId 
-//       FROM Framework.BusinessUnit 
-//       WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-//       AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-//       AND Id = ${projectId}
-//     `);
-
-//     if (parentIdResult.recordset.length === 0) {
-//       return res.status(404).send('ParentId not found for the selected project');
-//     }
-
-//     const parentId = parentIdResult.recordset[0].ParentId;
-
-//     // Step 2: Get the Company Name using the ParentId
-//     const companyNameResult = await pool.request().query(`
-//       SELECT Description AS Company_Name 
-//       FROM Framework.BusinessUnit 
-//       WHERE (IsDiscontinueBU = 0 OR IsDiscontinueBU IS NULL)
-//       AND (IsDeleted = 0 OR IsDeleted IS NULL) 
-//       AND Id = ${parentId}
-//     `);
-
-//     res.json(companyNameResult.recordset);
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).send('Server error');
-//   }
-// };
-
-
-// const getCompanyNamesByProjectId = async (req, res) => {
-//   const projectId = parseInt(req.params.projectId); // Ensure it's an integer
-
-//   try {
-//     const apiUrl = 'https://api.vjerp.com/api/businessUnit';
-//     const token = '20a763e266308b35fc75feca4b053d5ce8ea540dbdaa77ee13b1a5e7ce8aadcf';
-
-//     // Step 1: Fetch Business Unit Data from API
-//     const apiResponse = await axios.get(apiUrl, {
-//       headers: {
-//         'Authorization': `${token}`,
-//         'Accept': 'application/json',
-//         'Content-Type': 'application/json',
-//       }
-//     });
-
-//     const businessUnits = apiResponse.data; // API response data
-//     console.log("Business Unit Data:", businessUnits);
-
-//     // Step 2: Find the matching project in the API response
-//     const selectedUnit = businessUnits.find(unit => unit.Id === projectId);
-
-//     if (!selectedUnit) {
-//       return res.status(404).json({ error: 'Project ID not found in Business Unit API data' });
-//     }
-
-//     const parentId = selectedUnit.ParentId; // Extract ParentId from API response
-
-//     if (!parentId) {
-//       return res.status(404).json({ error: 'ParentId not found for the selected project' });
-//     }
-
-//     const pool = await poolPromise;
-
-//     // Step 3: Get Company Name using ParentId
-//     const companyNameResult = await pool.request()
-//       .input('parentId', parentId)
-//       .query(`
-//         SELECT Description AS Company_Name 
-//         FROM CompanyNameByBuId 
-//         WHERE ParentId = @parentId
-//       `);
-
-//     if (companyNameResult.recordset.length === 0) {
-//       return res.status(404).json({ error: 'Company name not found for the given ParentId' });
-//     }
-
-//     // Step 4: Return Business Unit Data & Company Name
-//     const responseData = {
-//       companyName: companyNameResult.recordset[0].Company_Name,
-//       businessUnitData: selectedUnit
-//     };
-
-//     console.log("Final Response Data:", responseData);
-//     res.json(responseData);
-//   } catch (err) {
-//     console.error('Error fetching project data:', err.response?.status, err.response?.data);
-
-//     if (err.response?.status === 401) {
-//       return res.status(401).json({ error: 'Unauthorized: Invalid or expired token' });
-//     }
-
-//     res.status(500).send('Server error');
-//   }
-// };
-
 
 const getCompanyNamesByProjectId = async (req, res) => {
   const projectId = req.params.projectId;
@@ -355,65 +205,6 @@ const getAttendanceLogs = async (req, res) => {
   }
 };
 
-
-// const approveLabour = async (req, res) => {
-//   try {
-//     const { projectId, deviceId } = req.body;
-//     console.log('projectId, deviceId', req.body)
-
-//     if (!projectId || !deviceId) {
-//       return res.status(400).json({ message: 'ProjectID and DeviceID are required' });
-//     }
-
-//     // Query from the first database (dbConfig2) for the project
-//     const pool2 = await poolPromise4;
-//     const projectResult = await pool2.request()
-//       .input('ProjectID', sql.Int, projectId)
-//       // .query('SELECT Description FROM Framework.BusinessUnit WHERE id = @ProjectID');
-//       .query(`SELECT Id, Description, Type, Email1, ParentId 
-//       FROM Framework.BusinessUnit 
-//       WHERE Type = 'B' 
-//       AND (IsDiscontinueBU IS NULL OR IsDiscontinueBU = '' OR IsDiscontinueBU = 0) 
-//       AND (IsDeleted IS NULL OR IsDeleted = '' OR IsDeleted = 0) and Id = @ProjectID`);
-
-
-//     // Query from the second database (dbConfig3) for the device
-//     const pool3 = await poolPromise3;
-//     const deviceResult = await pool3.request()
-//       .input('DeviceID', sql.Int, deviceId)
-//       .query('SELECT DeviceSName, DeviceLocation, SerialNumber FROM dbo.Devices WHERE DeviceID = @DeviceID');
-
-//     // Validate the results
-//     if (projectResult.recordset.length === 0 || deviceResult.recordset.length === 0) {
-//       return res.status(400).send('Invalid ProjectID or DeviceID');
-//     }
-
-//     const BusinessUnit = projectResult.recordset[0].Description;
-//     const DeviceSName = deviceResult.recordset[0].DeviceSName;
-//     const DeviceLocation = deviceResult.recordset[0].DeviceLocation;
-//     const DeviceSerialNumber = deviceResult.recordset[0].SerialNumber;
-
-//     const pool1 = await poolPromise;
-//     await pool1.request()
-//       .input('ProjectID', sql.Int, projectId)
-//       .input('DeviceID', sql.Int, deviceId)
-//       .input('BusinessUnit', sql.VarChar, BusinessUnit)
-//       .input('DeviceSName', sql.VarChar, DeviceSName)
-//       .input('DeviceLocation', sql.VarChar, DeviceLocation)
-//       .input('SerialNumber', sql.VarChar, DeviceSerialNumber)
-//       .input('Status', sql.VarChar, 'Active')
-//       .query(`
-//         INSERT INTO ProjectDeviceStatus (ProjectID, DeviceID, BusinessUnit, DeviceSName, DeviceLocation, SerialNumber, Status)
-//         VALUES (@ProjectID, @DeviceID, @BusinessUnit, @DeviceSName, @DeviceLocation, @SerialNumber, @Status)
-//       `);
-
-//     res.status(200).json({ success: true });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).send('Server error');
-//   }
-// };
-
 const approveLabour = async (req, res) => {
   try {
     let { projectId, deviceId } = req.body;          // projectId may be ID or name
@@ -502,34 +293,6 @@ const approveLabour = async (req, res) => {
   }
 };
 
-// const getProjectDeviceStatus = async (req, res) => {
-//   try {
-//     const { projectName } = req.params;
-//     const pool = await poolPromise;
-//     const result = await pool.request()
-//       .input('ProjectName', sql.VarChar, projectName)
-//       .query(`
-//         SELECT pds.[SerialNumber]
-//         FROM ProjectDeviceStatus AS pds
-//         JOIN labourOnboarding AS lob
-//         ON pds.[ProjectID] = lob.[projectName]
-//         WHERE pds.[ProjectID] = @ProjectName
-//         AND lob.[projectName] = @ProjectName
-//       `);
-    
-//     //  console.log( result , '----- resultSet');
-//     if (result.recordset.length === 0) {
-//       return res.status(404).json({ message: 'Serial number not found' });
-//     }
-//     //  console.log( result , '----- resultSet');
-     
-//     res.json({ serialNumber: result.recordset });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).send('Server error');
-//   }
-// };
-
 const getProjectDeviceStatus = async (req, res) => {
   try {
     const { projectName } = req.params;
@@ -549,7 +312,8 @@ const getProjectDeviceStatus = async (req, res) => {
     if (result.recordset.length === 0) {
       return res.status(404).json({ message: 'Serial number not found' });
     }
-
+     console.log( 'SerialNumbers of projectId ' , result);
+     
     res.json({ serialNumber: result.recordset });
   } catch (err) {
     console.error(err);
@@ -564,11 +328,6 @@ const getProjectDeviceStatusSS = async (req, res) => {
       SELECT ProjectID, DeviceID, BusinessUnit, DeviceSName, DeviceLocation, SerialNumber, Status
       FROM ProjectDeviceStatus
     `);
-
-    // if (result.recordset.length === 0) {
-    //   return res.status(404).json({ message: 'No records found' });
-    // }
-
     res.json(result.recordset);
   } catch (err) {
     console.error(err);
@@ -1171,136 +930,6 @@ const getAllLaboursWithTransferDetails = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
-
-// let cachedLabours = null; // This will hold the results of the cron job
-// let lastUpdate = null;
-
-// const getLaboursWithOldAttendance = async () => {
-//   try {
-//     const poolLabour = await poolPromise;
-//     const poolAttendance = await poolPromise3; // Ensure poolAttendance is initialized
-
-//     // const { page = 1, limit = 1000 } = req.query;
-//     // const offset = (page - 1) * limit;
-
-//     const today = new Date();
-//     let startDate = new Date(today);
-
-//     // Set start date to 15 days ago
-//     startDate.setDate(today.getDate() - 15);
-
-//     const todaySQL = today.toISOString().slice(0, 10);
-//     const startDateSQL = startDate.toISOString().slice(0, 10);
-
-//     // Fetch labor data with pagination, excluding labors created/approved in the last 15 days
-//     // Also exclude labors with status 'Resubmitted' (IsApproved = 3) or 'Rejected' (IsApproved = 2)
-//     const labourResult = await poolLabour.request().query(`
-//       SELECT * FROM labourOnboarding 
-//       WHERE (DATEDIFF(DAY, CreationDate, GETDATE()) > 15 OR CreationDate IS NULL)
-//       AND (status != 'Resubmitted' OR IsApproved != 3)
-//       AND (status != 'Rejected' OR IsApproved != 2)
-//       ORDER BY id
-//     `);
-
-//     const labourIds = labourResult.recordset.map(labour => labour.LabourID);
-
-//     if (labourIds.length === 0) {
-//       logger.info('No labours found for updating attendance.');
-//       // return res.status(200).json({ labors: [] });
-//       return [];
-//     }
-
-//     // Fetch attendance data, excluding Sundays (weekday = 1 for Monday and weekday = 7 for Sunday)
-//     const attendanceResult = await poolAttendance.request()
-//       .input('StartDate', sql.Date, startDateSQL)
-//       .input('TodayDate', sql.Date, todaySQL)
-//       .query(`
-//         SELECT user_id 
-//         FROM [etimetracklite11.8].[dbo].[Attendance] 
-//         WHERE punch_date BETWEEN @StartDate AND @TodayDate
-//         AND DATEPART(dw, punch_date) != 1  -- Exclude Sundays
-//         AND user_id IN (${labourIds.map(id => `'${id}'`).join(",")})
-//       `);
-
-//     const attendedLabourIds = attendanceResult.recordset.map(att => att.user_id);
-
-//     // Find labors without attendance in the last 15 days
-//     const laboursWithNoAttendance = labourResult.recordset.filter(labour => !attendedLabourIds.includes(labour.LabourID));
-
-//     // Update their status to Disable and add Reject_Reason, but only if not Resubmitted or Rejected
-//     for (let labour of laboursWithNoAttendance) {
-//       if (labour.status !== 'Resubmitted' && labour.isApproved !== 3 && labour.status !== 'Rejected' && labour.isApproved !== 2) {
-//         labour.Reject_Reason = "This labour attendance is older than 15 days or not present";
-
-//         await poolLabour.request()
-//           .input('id', sql.Int, labour.id)
-//           .input('status', sql.VarChar, 'Disable')
-//           .input('isApproved', sql.Int, 4)
-//           .input('Reject_Reason', sql.VarChar, labour.Reject_Reason)
-//           .query(`
-//             UPDATE labourOnboarding 
-//             SET status = @status, isApproved = @isApproved, Reject_Reason = @Reject_Reason
-//             WHERE id = @id
-//           `);
-//       }
-//     }
-//     logger.info(`Updated ${laboursWithNoAttendance.length} labours to 'Disable' status.`);
-//     // res.status(200).json({ labors: laboursWithNoAttendance });
-//     cachedLabours = laboursWithNoAttendance;
-//     lastUpdate = new Date(); // Track the last time the cron job ran
-
-//     return laboursWithNoAttendance;
-//   } catch (err) {
-//     // console.error("Error fetching labors:", err);
-//     logger.error(`Error during getLaboursWithOldAttendance: ${err.message}`, err);
-//     throw err;
-//     // res.status(500).json({ error: "Error fetching labors" });
-//   }
-// };
-
-// cron.schedule('17 10 * * *', async () => {
-//   logger.info('Running labour attendance check at 10.16 AM labours Attendancea at 17-10-2024');
-//   try {
-//     await getLaboursWithOldAttendance();  // Cache the results at 2 AM
-//   } catch (err) {
-//     logger.error('Cron job failed', err);
-//   }
-// });
-
-// // Serve cached results to the frontend
-// const fetchCachedLabours = async (req, res) => {
-//   try {
-//     // Check if cached data exists
-//     if (!cachedLabours) {
-//       // No cached data available yet
-//       return res.status(503).json({ error: 'Data is not available yet, please check back later.' });
-//     }
-
-//     res.status(200).json({ labours: cachedLabours, lastUpdate });
-//   } catch (err) {
-//     console.error('Error in fetching cached labours data:', err);
-//     res.status(500).json({ error: "Failed to fetch cached labours data", details: err.message });
-//   }
-// };
-
-
-
-
-
-
-
-
-
-
-
-// ATTENDANCE LABOUR CODE 
-
 let cachedLabours = [];
 let previousLabours = [];
 let lastUpdate = null;
@@ -1315,7 +944,7 @@ const getSerialNumberByLabourID = async (labourID) => {
       .query(`
         SELECT pds.SerialNumber
         FROM ProjectDeviceStatus pds
-        JOIN labourOnboarding lob ON pds.BusinessUnit = lob.BusinessUnit
+        JOIN labourOnboarding lob ON pds.ProjectID = lob.projectName
         WHERE lob.LabourID = @LabourID
       `);
 
@@ -1362,26 +991,27 @@ const saveLogToDatabase = async (userId, labourID, serialNumber, soapRequestPayl
 };
 
 // Send SOAP request to delete user
+
 const sendDeleteUserRequest = async (labour) => {
-  const labourID = labour?.LabourID; // Safely extract LabourID from labour object
-  const userId = labour?.id; // Extract userId from labour object
+  const labourID = labour?.LabourID;
+  const userId = labour?.id;
   let attendanceStatus = 'Disable';
 
   if (!labourID || typeof labourID !== 'string') {
-    console.error(`Invalid LabourID for labour:`, labour);
-    return false; // Early return if LabourID is invalid
+    console.error('Invalid LabourID for labour:', labour);
+    return false;
   }
-  console.log(`Sending SOAP request for LabourID: ${labourID}`);
+
+  let serialNumber, soapEnvelope;
   try {
-    const serialNumber = await getSerialNumberByLabourID(labourID);
+    serialNumber = await getSerialNumberByLabourID(labourID);
     if (!serialNumber) {
       console.log(`No SerialNumber found for LabourID: ${labourID}`);
-      attendanceStatus = 'Disable'; // Mark attendanceStatus as Disable if no serial number
       await saveLogToDatabase(userId, labourID, null, {}, {}, 'Error', 'SerialNumber not found', attendanceStatus, null);
       return false;
     }
 
-    const soapEnvelope = `
+    soapEnvelope = `
       <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
         <soap:Body>
           <DeleteUser xmlns="http://tempuri.org/">
@@ -1395,8 +1025,6 @@ const sendDeleteUserRequest = async (labour) => {
         </soap:Body>
       </soap:Envelope>`;
 
-    console.log(`SOAP Request for LabourID: ${labourID}`, soapEnvelope);
-
     const response = await axios.post(
       'https://essl.vjerp.com:8530/iclock/WebAPIService.asmx?op=DeleteUser',
       soapEnvelope,
@@ -1408,18 +1036,25 @@ const sendDeleteUserRequest = async (labour) => {
       }
     );
 
-    console.log(`SOAP Response for LabourID: ${labourID}`, response.data);
-    const parsedResponse = await xml2js.parseStringPromise(response.data, { trim: true, explicitArray: false });
-    const soapResponseBody = parsedResponse['soap:Envelope']['soap:Body']; // Only store the body part
+    const parsed = await xml2js.parseStringPromise(response.data, { trim: true, explicitArray: false });
+    const body = parsed?.['soap:Envelope']?.['soap:Body'] || {};
+    const deleteResp = body?.DeleteUserResponse || {};
+    const status = deleteResp.DeleteUserResult === 'success' ? 'success' : 'Failure';
+    const CommandId = deleteResp.CommandId || 'N/A';
 
-    const status = soapResponseBody?.DeleteUserResponse?.DeleteUserResult === 'success' ? 'success' : 'Failure';
-    const CommandId = soapResponseBody?.DeleteUserResponse?.CommandId || 'N/A';
-
-    // Save the SOAP request/response in the database
-    await saveLogToDatabase(userId, labourID, serialNumber, soapEnvelope, JSON.stringify(soapResponseBody), status, null, attendanceStatus, CommandId);
+    await saveLogToDatabase(
+      userId,
+      labourID,
+      serialNumber,
+      soapEnvelope,
+      JSON.stringify(body),
+      status,
+      null,
+      attendanceStatus,
+      CommandId
+    );
 
     if (status === 'success') {
-      console.log(`Updating labourOnboarding for LabourID: ${labourID} after successful SOAP response.`);
       try {
         const poolLabour = await poolPromise;
         await poolLabour.request()
@@ -1432,7 +1067,6 @@ const sendDeleteUserRequest = async (labour) => {
             SET status = @status, isApproved = @isApproved, Reject_Reason = @Reject_Reason
             WHERE id = @id
           `);
-        console.log(`Successfully updated labourOnboarding for LabourID: ${labourID}.`);
       } catch (updateError) {
         console.error(`Error updating labourOnboarding for LabourID: ${labourID}`, updateError);
         throw updateError;
@@ -1442,8 +1076,17 @@ const sendDeleteUserRequest = async (labour) => {
     return status === 'success';
   } catch (error) {
     console.error(`Error sending SOAP request for LabourID: ${labourID}`, error);
-
-    await saveLogToDatabase(userId, labourID, null, soapEnvelope, JSON.stringify({ message: error.message }), 'Error', 'SOAP request failed', attendanceStatus, null);
+    await saveLogToDatabase(
+      userId,
+      labourID,
+      null,
+      soapEnvelope || {},
+      JSON.stringify({ message: error.message }),
+      'Error',
+      'SOAP request failed',
+      attendanceStatus,
+      null
+    );
     return false;
   }
 };
@@ -2106,38 +1749,34 @@ const saveTransferData = async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!userId || !LabourID || !name || !currentSite || !transferSite) {
+    if (![userId, LabourID, name, currentSite, transferSite].every(Boolean)) {
       return res.status(400).json({
         message: "Missing required fields. Ensure all mandatory fields are provided.",
       });
     }
 
-    const sanitizedCurrentSite = parseInt(currentSite);
-    const sanitizedTransferSite = parseInt(transferSite);
+    const sanitizedCurrentSite = Number(currentSite);
+    const sanitizedTransferSite = Number(transferSite);
 
-    if (isNaN(sanitizedCurrentSite) || isNaN(sanitizedTransferSite)) {
+    if (!Number.isInteger(sanitizedCurrentSite) || !Number.isInteger(sanitizedTransferSite)) {
       return res.status(400).json({
         message: "Invalid site values. Both currentSite and transferSite must be integers.",
       });
     }
 
     // Fetch SerialNumbers
-    const currentSerialNumber = await getSerialNumberByProjectID(sanitizedCurrentSite);
-    const transferSerialNumber = await getSerialNumberByProjectID(sanitizedTransferSite);
+    const [currentSerialNumber, transferSerialNumber] = await Promise.all([
+      getSerialNumberByProjectID(sanitizedCurrentSite),
+      getSerialNumberByProjectID(sanitizedTransferSite),
+    ]);
 
-    if (!currentSerialNumber) {
+    if (!currentSerialNumber || !transferSerialNumber) {
       return res.status(400).json({
-        message: `No SerialNumber found for currentSite: ${sanitizedCurrentSite}`,
+        message: `No SerialNumber found for ${!currentSerialNumber ? "currentSite" : "transferSite"}: ${!currentSerialNumber ? sanitizedCurrentSite : sanitizedTransferSite}`,
       });
     }
 
-    if (!transferSerialNumber) {
-      return res.status(400).json({
-        message: `No SerialNumber found for transferSite: ${sanitizedTransferSite}`,
-      });
-    }
-
-    // Step 1: Add User to Transfer Site
+    // SOAP payloads
     const addUserEnvelope = `
       <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
         <soap:Body>
@@ -2154,7 +1793,7 @@ const saveTransferData = async (req, res) => {
         </soap:Body>
       </soap:Envelope>`;
 
-    let addResponseParsed, extractedCommandId;
+    let addResponseParsed = "", extractedCommandId = 25;
     try {
       const addResponse = await axios.post(
         "https://essl.vjerp.com:8530/iclock/WebAPIService.asmx?op=AddEmployee",
@@ -2166,17 +1805,15 @@ const saveTransferData = async (req, res) => {
           },
         }
       );
-
-      const parser = new xml2js.Parser({ explicitArray: false });
-      const parsedResponse = await parser.parseStringPromise(addResponse.data);
-      extractedCommandId = parsedResponse?.["soap:Envelope"]?.["soap:Body"]?.["AddEmployeeResponse"]?.["CommandId"] || 25;
-      addResponseParsed = JSON.stringify(parsedResponse);
+      const parsed = await new xml2js.Parser({ explicitArray: false }).parseStringPromise(addResponse.data);
+      extractedCommandId = parsed?.["soap:Envelope"]?.["soap:Body"]?.["AddEmployeeResponse"]?.["CommandId"] || 25;
+      addResponseParsed = JSON.stringify(parsed);
     } catch (error) {
       console.error("Error during AddEmployee:", error);
       return res.status(500).json({ message: "Failed to add user to new site.", error: error.message });
     }
 
-    // Step 2: Delete User from Current Site
+    // Delete User from Current Site
     const deleteUserEnvelope = `
       <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
         <soap:Body>
@@ -2191,7 +1828,7 @@ const saveTransferData = async (req, res) => {
         </soap:Body>
       </soap:Envelope>`;
 
-    let deleteResponseParsed;
+    let deleteResponseParsed = "";
     try {
       const deleteResponse = await axios.post(
         "https://essl.vjerp.com:8530/iclock/WebAPIService.asmx?op=DeleteUser",
@@ -2203,33 +1840,19 @@ const saveTransferData = async (req, res) => {
           },
         }
       );
-
-      const parser = new xml2js.Parser({ explicitArray: false });
-      deleteResponseParsed = JSON.stringify(await parser.parseStringPromise(deleteResponse.data));
+      const parsed = await new xml2js.Parser({ explicitArray: false }).parseStringPromise(deleteResponse.data);
+      deleteResponseParsed = JSON.stringify(parsed);
     } catch (error) {
       console.error("Error during DeleteUser:", error);
       deleteResponseParsed = JSON.stringify({ error: error.message });
     }
 
-    // Step 3: Database Insertion and Update Logic (unchanged from previous examples)
+    // DB Insert & Update
     const pool = await poolPromise;
-    const insertQuery = `
-      INSERT INTO [dbo].[API_TransferSite] 
-      ([userId], [LabourID], [name], [currentSite], [currentSiteName], 
-       [transferSite], [transferSiteName], [esslStatus], [esslCommandId], 
-       [esslPayload], [esslApiResponse], [esslResponseStatus], [siteTransferBy],
-       [deleteEsslPayload], [deleteEsslResponse], 
-       [createdAt], [updatedAt])
-      VALUES (@userId, @LabourID, @name, @currentSite, @currentSiteName, 
-              @transferSite, @transferSiteName, @esslStatus, @esslCommandId, 
-              @esslPayload, @esslApiResponse, @esslResponseStatus, @siteTransferBy,
-              @deleteEsslPayload, @deleteEsslResponse, 
-              GETDATE(), GETDATE())
-    `;
     await pool.request()
-      .input("userId", sql.Int, userId || null)
+      .input("userId", sql.Int, userId)
       .input("LabourID", sql.NVarChar(50), LabourID)
-      .input("name", sql.NVarChar(255), name || null)
+      .input("name", sql.NVarChar(255), name)
       .input("currentSite", sql.Int, sanitizedCurrentSite)
       .input("currentSiteName", sql.NVarChar(255), currentSiteName)
       .input("transferSite", sql.Int, sanitizedTransferSite)
@@ -2242,21 +1865,17 @@ const saveTransferData = async (req, res) => {
       .input("deleteEsslPayload", sql.NVarChar(sql.MAX), deleteUserEnvelope)
       .input("deleteEsslResponse", sql.NVarChar(sql.MAX), deleteResponseParsed)
       .input("siteTransferBy", sql.NVarChar(50), siteTransferBy || null)
-      .query(insertQuery);
-
-    // Step 4: Update [labourOnboarding] with transfer site details
-    const updateQuery = `
-      UPDATE [dbo].[labourOnboarding]
-      SET
-        projectName = @transferSite,
-        location = @transferSiteName,
-        WorkingBu = @transferSiteName,
-        businessUnit = @transferSiteName,
-        OnboardingProjectName = @currentSite,
-        OnboardingBusinessUnit = @currentSiteName,
-        isSiteTransfer = @isSiteTransfer
-      WHERE id = @userId
-    `;
+      .query(`
+        INSERT INTO [dbo].[API_TransferSite] 
+        ([userId], [LabourID], [name], [currentSite], [currentSiteName], 
+         [transferSite], [transferSiteName], [esslStatus], [esslCommandId], 
+         [esslPayload], [esslApiResponse], [esslResponseStatus], [siteTransferBy],
+         [deleteEsslPayload], [deleteEsslResponse], [createdAt], [updatedAt])
+        VALUES (@userId, @LabourID, @name, @currentSite, @currentSiteName, 
+                @transferSite, @transferSiteName, @esslStatus, @esslCommandId, 
+                @esslPayload, @esslApiResponse, @esslResponseStatus, @siteTransferBy,
+                @deleteEsslPayload, @deleteEsslResponse, GETDATE(), GETDATE())
+      `);
 
     const updateResult = await pool.request()
       .input("userId", sql.Int, userId)
@@ -2264,10 +1883,21 @@ const saveTransferData = async (req, res) => {
       .input("transferSiteName", sql.NVarChar(255), transferSiteName)
       .input("currentSite", sql.Int, sanitizedCurrentSite)
       .input("currentSiteName", sql.NVarChar(255), currentSiteName)
-      .input("isSiteTransfer", sql.Bit, 1) // Set isSiteTransfer to true
-      .query(updateQuery);
+      .input("isSiteTransfer", sql.Bit, 1)
+      .query(`
+        UPDATE [dbo].[labourOnboarding]
+        SET
+          projectName = @transferSite,
+          location = @transferSiteName,
+          WorkingBu = @transferSiteName,
+          businessUnit = @transferSiteName,
+          OnboardingProjectName = @currentSite,
+          OnboardingBusinessUnit = @currentSiteName,
+          isSiteTransfer = @isSiteTransfer
+        WHERE id = @userId
+      `);
 
-    if (updateResult.rowsAffected[0] === 0) {
+    if (!updateResult.rowsAffected[0]) {
       return res.status(400).json({
         message: "No rows updated in labourOnboarding table.",
       });
