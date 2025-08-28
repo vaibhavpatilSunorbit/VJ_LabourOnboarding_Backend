@@ -20,8 +20,8 @@ const pdf = require('html-pdf');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 // const baseUrl = 'http://localhost:4000/uploads/';
-const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
-// const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
+// const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 const LM_READ_TIMEOUT_MS = 90_000;
 const LM_WRITE_TIMEOUT_MS = 45_000;
@@ -1447,7 +1447,7 @@ function roundOvertime(overtimeHours) {
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
     console.log("yesterday", yesterday)
-    yesterday.setDate(yesterday.getDate() -22); // Get the previous day
+    yesterday.setDate(yesterday.getDate() -24); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
     console.log("formattedYesterday", formattedYesterday)
 
@@ -2286,10 +2286,9 @@ async function runAttendanceCronEssl() {
 
 }
 
- runAttendanceCronEssl();
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('01 11 * * *', async () => {
+cron.schedule('28 10 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     // await runAttendanceCronEssl();
     await runDailyAttendanceCron();
