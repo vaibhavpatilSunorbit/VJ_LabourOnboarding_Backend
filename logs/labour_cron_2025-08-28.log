@@ -30,3 +30,5 @@
 [2025-08-28 11:42:36] [INFO] Shift 3 (02:00 PM) - Success: {"success":true,"message":"✅ Attendance update completed","window":{"startDate":"2025-07-29T00:00:00.000Z","endDateExclusive":"2025-08-28T00:00:00.000Z"},"totalPairs":1286,"processed":1286,"failed":0}
 [2025-08-28 11:42:36] [INFO] ✅ All shift jobs completed sequentially.
 [2025-08-28 11:54:03] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-08-28 11:59:22] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
+[2025-08-28 11:59:33] [INFO] ⏰ Labour Sequential Cron Scheduled Successfully
