@@ -3364,6 +3364,7 @@ const generateAttendancePDF = async (req, res) => {
             ? (Array.isArray(department) ? department.join(',') : department)
             : '';
 
+        // ✅ Fetch attendance
         const attendanceData = await labourModel.getAttendanceByDateRange(
             projectNameStr,
             startDate,
@@ -3377,8 +3378,25 @@ const generateAttendancePDF = async (req, res) => {
             });
         }
 
-        const labourGrouped = {};
+        // ✅ Count "A" status per LabourId
+        const absentCountMap = {};
         attendanceData.forEach(entry => {
+            if (!absentCountMap[entry.LabourId]) absentCountMap[entry.LabourId] = 0;
+            if (entry.Status === "A") absentCountMap[entry.LabourId]++;
+        });
+
+        // ✅ Filter out labourers with >= 30 absent days
+        const filteredData = attendanceData.filter(entry => absentCountMap[entry.LabourId] < 30);
+
+        if (filteredData.length === 0) {
+            return res.status(404).json({
+                message: 'All labours have 30 or more absent days. Nothing to export.'
+            });
+        }
+
+        // ✅ Group filtered data by LabourId
+        const labourGrouped = {};
+        filteredData.forEach(entry => {
             const labourId = entry.LabourId;
             const date = new Date(entry.Date).toISOString().split('T')[0];
 
@@ -3401,6 +3419,7 @@ const generateAttendancePDF = async (req, res) => {
             };
         });
 
+        // ✅ Build date list
         const start = new Date(startDate);
         const end = new Date(endDate);
         const dateList = [];
@@ -3409,6 +3428,7 @@ const generateAttendancePDF = async (req, res) => {
             start.setDate(start.getDate() + 1);
         }
 
+        // ✅ Generate labour HTML sections
         let labourSections = '';
         const labourEntries = Object.entries(labourGrouped);
         for (let i = 0; i < labourEntries.length; i++) {
@@ -3448,6 +3468,7 @@ const generateAttendancePDF = async (req, res) => {
       `;
         }
 
+        // ✅ Build full HTML
         const fullHtml = `
       <html>
         <head>
@@ -3511,6 +3532,7 @@ const generateAttendancePDF = async (req, res) => {
             }
         };
 
+        // ✅ Generate PDF
         pdf.create(fullHtml, options).toBuffer((err, buffer) => {
             if (err) {
                 console.error('PDF generation error:', err);

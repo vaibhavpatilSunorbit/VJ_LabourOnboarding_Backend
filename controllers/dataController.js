@@ -293,7 +293,7 @@ const approveLabour = async (req, res) => {
   }
 };
 
-const getProjectDeviceStatus = async (req, res) => {
+const  getProjectDeviceStatus = async (req, res) => {
   try {
     const { projectName } = req.params;
     const pool = await poolPromise;

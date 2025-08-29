@@ -18,24 +18,24 @@ const fs = require('fs');
 // === Logger Setup ===
 const logDir = path.join(__dirname, '../logs');
 if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir);
+    fs.mkdirSync(logDir);
 }
 
 const date = new Date().toISOString().split('T')[0];
 const logFile = path.join(logDir, `labour_cron_${date}.log`);
 
 const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    winston.format.printf(({ timestamp, level, message }) => {
-      return `[${timestamp}] [${level.toUpperCase()}] ${message}`;
-    })
-  ),
-  transports: [
-    new winston.transports.File({ filename: logFile }),
-    new winston.transports.Console()
-  ],
+    level: 'info',
+    format: winston.format.combine(
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        winston.format.printf(({ timestamp, level, message }) => {
+            return `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+        })
+    ),
+    transports: [
+        new winston.transports.File({ filename: logFile }),
+        new winston.transports.Console()
+    ],
 });
 
 async function checkAadhaarExists(aadhaarNumber) {
@@ -2990,33 +2990,43 @@ async function getAttendanceByDateRange(projectNameStr, startDate, endDate, depa
 
     const query = `
         SELECT 
-            lad.AttendanceId, 
-            lad.LabourId, 
-            lad.Date, 
-            lad.ProjectName, 
-            lo.name,
-            lo.BusinessUnit,
-            lo.name,
-            lo.departmentName,
-            lad.Status,
-            lad.FirstPunchManually, 
-            lad.LastPunchManually, 
-            lad.OvertimeManually, 
-            lad.RemarkManually
-        FROM 
-            LabourAttendanceDetails lad WITH (NOLOCK)
-        INNER JOIN 
-            labourOnboarding lo WITH (NOLOCK) 
-            ON lad.LabourId = lo.LabourId
-        WHERE 
-            lad.ProjectName IN (${projectPlaceholders})
-            AND lad.Date BETWEEN @startDate AND @endDate
-            ${departmentFilterClause} order by lad.LabourId asc
+    lad.AttendanceId, 
+    lad.LabourId, 
+    lad.Date, 
+    lad.ProjectName, 
+    lo.name,
+    lo.BusinessUnit,
+    lo.departmentName,
+    lad.Status,
+    lad.FirstPunchManually, 
+    lad.LastPunchManually, 
+    lad.OvertimeManually, 
+    lad.RemarkManually
+FROM 
+    LabourAttendanceDetails lad WITH (NOLOCK)
+INNER JOIN 
+    labourOnboarding lo WITH (NOLOCK) 
+    ON lad.LabourId = lo.LabourId
+WHERE 
+    lad.ProjectName IN (${projectPlaceholders})
+    AND lad.Date BETWEEN @startDate AND @endDate
+    ${departmentFilterClause}
+    AND lad.LabourId NOT IN (
+        SELECT LabourId
+        FROM LabourAttendanceDetails WITH (NOLOCK)
+        WHERE Status = 'A'
+        AND Date BETWEEN @startDate AND @endDate
+        GROUP BY LabourId
+        HAVING COUNT(*) > 30
+    )
+ORDER BY 
+    lad.LabourId ASC;
+
     `;
 
     const result = await request.query(query);
-    console.log('reusltd' , result);
-    
+    console.log('reusltd', result);
+
     return result.recordset;
 }
 
@@ -3119,7 +3129,7 @@ async function updateTotalOvertimeHours(labourId, selectedMonth) {
 
         const totalOvertime = overtimeResult.recordset[0].TotalOvertime || 0;
 
-        
+
         // Update LabourAttendanceSummary with the computed overtime total
         await pool
             .request()
