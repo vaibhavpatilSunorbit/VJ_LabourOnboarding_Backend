@@ -1424,60 +1424,68 @@ async function insertIntoLabourAttendanceDetails(details) {
         const pool = await poolPromise;
 
         const query = `
-      IF NOT EXISTS (
-        SELECT 1
-        FROM [dbo].[LabourAttendanceDetails]
-        WHERE LabourId = @LabourId AND Date = @Date
-      )
-      BEGIN
-        INSERT INTO [dbo].[LabourAttendanceDetails] (
-          [LabourId], [Date],
-          [FirstPunch], [FirstPunchAttendanceId], [FirstPunchDeviceId],
-          [LastPunch], [LastPunchAttendanceId], [LastPunchDeviceId],
-          [TotalHours], [Overtime], [PayrollCalRoundOffOvertime], [Status],
-          [CreationDate], [projectName],
-          [FirstPunchManually], [LastPunchManually],
-          [OvertimeManually], [RemarkManually],
-          [projectIdFromDevicefirstPunch], [projectIdFromDeviceLastPunch]
-        )
-        VALUES (
-          @LabourId, @Date,
-          @FirstPunch, @FirstPunchAttendanceId, @FirstPunchDeviceId,
-          @LastPunch, @LastPunchAttendanceId, @LastPunchDeviceId,
-          @TotalHours, @Overtime, @PayrollCalRoundOffOvertime, @Status,
-          @CreationDate, @projectName,
-          @FirstPunchManually, @LastPunchManually,
-          @OvertimeManually, @RemarkManually,
-          @projectIdFromDevicefirstPunch, @projectIdFromDeviceLastPunch
-        )
-      END
-      ELSE IF EXISTS (
-        SELECT 1 FROM [dbo].[LabourAttendanceDetails]
-        WHERE LabourId = @LabourId AND Date = @Date AND FirstPunch IS NULL
-      )
-      BEGIN
-        UPDATE [dbo].[LabourAttendanceDetails]
-        SET 
-          FirstPunch = @FirstPunch,
-          FirstPunchAttendanceId = @FirstPunchAttendanceId,
-          FirstPunchDeviceId = @FirstPunchDeviceId,
-          LastPunch = @LastPunch,
-          LastPunchAttendanceId = @LastPunchAttendanceId,
-          LastPunchDeviceId = @LastPunchDeviceId,
-          TotalHours = @TotalHours,
-          Overtime = @Overtime,
-          PayrollCalRoundOffOvertime = @PayrollCalRoundOffOvertime,
-          Status = @Status,
-          CreationDate = @CreationDate,
-          projectName = @projectName,
-          FirstPunchManually = @FirstPunchManually,
-          LastPunchManually = @LastPunchManually,
-          OvertimeManually = @OvertimeManually,
-          RemarkManually = @RemarkManually,
-          projectIdFromDevicefirstPunch = @projectIdFromDevicefirstPunch,
-          projectIdFromDeviceLastPunch = @projectIdFromDeviceLastPunch
-        WHERE LabourId = @LabourId AND Date = @Date
-      END
+  
+UPDATE LAD
+SET 
+    FirstPunch = @FirstPunch,
+    FirstPunchAttendanceId = @FirstPunchAttendanceId,
+    FirstPunchDeviceId = @FirstPunchDeviceId,
+    LastPunch = @LastPunch,
+    LastPunchAttendanceId = @LastPunchAttendanceId,
+    LastPunchDeviceId = @LastPunchDeviceId,
+    TotalHours = @TotalHours,
+    Overtime = @Overtime,
+    PayrollCalRoundOffOvertime = @PayrollCalRoundOffOvertime,
+    Status = 'Approved',  -- Always Approved
+    CreationDate = @CreationDate,
+    projectName = @projectName,
+    FirstPunchManually = @FirstPunchManually,
+    LastPunchManually = @LastPunchManually,
+    OvertimeManually = @OvertimeManually,
+    RemarkManually = @RemarkManually,
+    projectIdFromDevicefirstPunch = @projectIdFromDevicefirstPunch,
+    projectIdFromDeviceLastPunch = @projectIdFromDeviceLastPunch
+FROM [dbo].[LabourAttendanceDetails] LAD
+JOIN [dbo].[LabourOnboardingForm] L 
+  ON LAD.LabourId = L.LabourId
+WHERE LAD.LabourId = @LabourId 
+  AND LAD.Date = @Date
+  AND LAD.FirstPunch IS NULL
+  AND (
+        L.IsDisabled = 0 -- Active labour
+        OR (L.IsDisabled = 1 AND L.DisabledDate >= DATEADD(DAY, -15, GETDATE())) -- Disabled within 15 days
+      );
+
+
+IF @@ROWCOUNT = 0
+BEGIN
+    INSERT INTO [dbo].[LabourAttendanceDetails] (
+        LabourId, Date,
+        FirstPunch, FirstPunchAttendanceId, FirstPunchDeviceId,
+        LastPunch, LastPunchAttendanceId, LastPunchDeviceId,
+        TotalHours, Overtime, PayrollCalRoundOffOvertime, Status,
+        CreationDate, projectName,
+        FirstPunchManually, LastPunchManually,
+        OvertimeManually, RemarkManually,
+        projectIdFromDevicefirstPunch, projectIdFromDeviceLastPunch
+    )
+    SELECT
+        @LabourId, @Date,
+        @FirstPunch, @FirstPunchAttendanceId, @FirstPunchDeviceId,
+        @LastPunch, @LastPunchAttendanceId, @LastPunchDeviceId,
+        @TotalHours, @Overtime, @PayrollCalRoundOffOvertime, 'Approved',
+        @CreationDate, @projectName,
+        @FirstPunchManually, @LastPunchManually,
+        @OvertimeManually, @RemarkManually,
+        @projectIdFromDevicefirstPunch, @projectIdFromDeviceLastPunch
+    FROM [dbo].[LabourOnboardingForm] L
+    WHERE L.LabourId = @LabourId
+      AND (
+            L.IsDisabled = 0 
+            OR (L.IsDisabled = 1 AND L.DisabledDate >= DATEADD(DAY, -15, GETDATE()))
+          );
+END
+
     `;
 
         const key = `${details.labourId}|${details.date}`;
