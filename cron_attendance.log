@@ -1,0 +1,4 @@
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-29T07:06:00.192Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-28","timestamp":"2025-08-29T07:11:30.770Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-28","timestamp":"2025-08-29T07:11:30.771Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-28","timestamp":"2025-08-29T07:14:46.640Z"}

@@ -20,8 +20,8 @@ const pdf = require('html-pdf');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 // const baseUrl = 'http://localhost:4000/uploads/';
-// const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
-const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
+const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+// const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 const LM_READ_TIMEOUT_MS = 90_000;
 const LM_WRITE_TIMEOUT_MS = 45_000;
@@ -192,7 +192,7 @@ async function createRecord(req, res) {
             projectId = record.Id;
             parentId = record.ParentId;
         } else {
-            console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
+            // console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
 
             const pool2 = await poolPromise;
             const fallbackQuery = `
@@ -269,7 +269,6 @@ async function createRecord(req, res) {
 
 async function getAllRecords(req, res) {
     try {
-        console.log('getAllRecords')
         const records = await labourModel.getAll();
         return res.status(200).json(records);
     } catch (error) {
@@ -290,7 +289,6 @@ async function getAllRecordsLaboursOnboarding(req, res) {
 }
 
 async function getRecordById(req, res) {
-    //console.log("getRecordById")
     try {
         const { id } = req.params;
         const record = await labourModel.getById(id);
@@ -307,8 +305,6 @@ async function getRecordById(req, res) {
 
 async function createRecordUpdate(req, res) {
     try {
-        //console.log('Request Body: check----------', req.body);
-        //console.log('Request Files:', req.files); 
 
         const {
             labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
@@ -332,7 +328,6 @@ async function createRecordUpdate(req, res) {
             return res.status(400).json({ msg: 'OnboardName is required.' });
         }
 
-        //console.log('Cleaned OnboardName Resubmitted button:', finalOnboardName);
 
 
         const labourCategoryMap = {
@@ -344,7 +339,6 @@ async function createRecordUpdate(req, res) {
         const safeLabourCategoryId = String(labourCategoryMap[labourCategory]) || null;
 
         if (safeLabourCategoryId === null) {
-            //console.log('Invalid labourCategory:', labourCategory);
             return res.status(400).json({ msg: 'Invalid labourCategory provided' });
         }
 
@@ -444,7 +438,6 @@ async function createRecordUpdate(req, res) {
             projectId = record.Id;
             parentId = record.ParentId;
         } else {
-            console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
 
             const pool2 = await poolPromise;
             const fallbackQuery = `
@@ -487,13 +480,9 @@ async function createRecordUpdate(req, res) {
         // Fetch department description
         const departmentRequest = pool.request();
 
-        // Validate and log departmentId before setting SQL input
-        //console.log('Setting SQL input for departmentId:', safeDepartmentId);
         if (safeDepartmentId !== null) {
             departmentRequest.input('departmentId', safeDepartmentId);
-            //console.log("departmentId", departmentId)
         } else {
-            //console.log('Invalid departmentId provided:', departmentId);
             return res.status(400).send('Invalid departmentId');
         }
 
@@ -504,16 +493,12 @@ async function createRecordUpdate(req, res) {
         const departmentResult = await departmentRequest.query(departmentQuery);
 
         if (departmentResult.recordset.length === 0) {
-            //console.log('Department not found for departmentId:', safeDepartmentId);
             return res.status(404).send('Department not found');
         }
 
         const departmentName = departmentResult.recordset[0].Description;
 
         const creationDate = new Date();
-
-
-        //console.log('Received OnboardName Resubmmit button functionlity:', finalOnboardName);
 
         const data = await labourModel.registerDataUpdate({
             labourOwnership,
@@ -548,11 +533,6 @@ async function createRecordUpdate(req, res) {
 
 async function updateRecord(req, res) {
     try {
-        // Log the full request body and files for debugging
-        //console.log('Request Body:', req.body);
-        //console.log('Request Files:', req.files); // Logs undefined when no files are uploaded
-
-        // Extract fields from request body
         const {
             id, LabourID, labourOwnership, name, aadhaarNumber, dateOfBirth, contactNumber, gender, dateOfJoining,
             address, pincode, taluka, district, village, state, emergencyContact, bankName, branch,
@@ -560,7 +540,6 @@ async function updateRecord(req, res) {
             contractorName, contractorNumber, designation, title, Marital_Status, companyName, Induction_Date, Inducted_By, OnboardName, expiryDate, departmentId, designationId
         } = req.body;
 
-        //console.log('LabourID from request body:', LabourID);
         let finalOnboardName = Array.isArray(OnboardName)
             ? OnboardName.filter(name => name && name.trim() !== '').pop()
             : OnboardName;
@@ -571,30 +550,23 @@ async function updateRecord(req, res) {
         }
         finalOnboardName = finalOnboardName.toUpperCase();
 
-        //console.log('Cleaned OnboardName:', finalOnboardName);
-        // Check if LabourID exists
         if (!LabourID) {
             console.error('LabourID is missing from request body.');
             return res.status(400).json({ msg: 'LabourID is required.' });
         }
 
-        // Mapping for labourCategory to labourCategoryId
         const labourCategoryMap = {
             'SKILLED': 1,
             'UN-SKILLED': 2,
             'SEMI-SKILLED': 3
         };
 
-        // Set safeLabourCategoryId using the mapping
         const safeLabourCategoryId = labourCategoryMap[labourCategory] !== undefined ? labourCategoryMap[labourCategory] : null;
 
-        // If labourCategoryId is null, handle the error or assign a default value
         if (safeLabourCategoryId === null) {
-            //console.log('Invalid labourCategory:', labourCategory);
             return res.status(400).json({ msg: 'Invalid labourCategory provided' });
         }
 
-        // Convert fields to appropriate formats
         const safeDepartmentId = departmentId ? String(departmentId) : null;
         const safeDesignationId = designationId ? String(designationId) : null;
         const safeProjectName = projectName && !isNaN(projectName) ? String(projectName) : projectName;
@@ -607,13 +579,12 @@ async function updateRecord(req, res) {
 
         const processFileField = (bodyField, fileField) => {
             if (fileField) {
-                // Binary data uploaded, get URL path
                 return baseUrl + path.basename(fileField[0].path);
             } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
-                // If no new file, use the existing URL
+                
                 return bodyField;
             }
-            return null; // No data available
+            return null; 
         };
 
         const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
@@ -641,7 +612,6 @@ async function updateRecord(req, res) {
         let projectId;
         let parentId;
 
-        // 1. Try primary query from Framework.BusinessUnit
         const primaryQuery = isNumeric
             ? `
                 SELECT Id, Description, Type, Email1, ParentId 
@@ -671,7 +641,6 @@ async function updateRecord(req, res) {
             projectId = record.Id;
             parentId = record.ParentId;
         } else {
-            console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
 
             const pool2 = await poolPromise;
             const fallbackQuery = `
@@ -711,16 +680,12 @@ async function updateRecord(req, res) {
             salaryBu = location;
         }
 
-        // Fetch department description
         const departmentRequest = pool.request();
 
-        // Validate and log departmentId before setting SQL input
-        //console.log('Setting SQL input for departmentId:', safeDepartmentId);
         if (safeDepartmentId !== null) {
             departmentRequest.input('departmentId', safeDepartmentId);
-            //console.log("departmentId", departmentId)
+         
         } else {
-            //console.log('Invalid departmentId provided:', departmentId);
             return res.status(400).send('Invalid departmentId');
         }
 
@@ -731,14 +696,12 @@ async function updateRecord(req, res) {
         const departmentResult = await departmentRequest.query(departmentQuery);
 
         if (departmentResult.recordset.length === 0) {
-            //console.log('Department not found for departmentId:', safeDepartmentId);
             return res.status(404).send('Department not found');
         }
 
         const departmentName = departmentResult.recordset[0].Description;
 
         const creationDate = new Date();
-        //console.log('Received OnboardName Edit button functionlity:', finalOnboardName);
         // Prepare data for update
         const data = await labourModel.updateData({
             id,
@@ -797,12 +760,10 @@ async function updateRecord(req, res) {
             labourCategoryId: safeLabourCategoryId
         });
 
-        //console.log("Data after update:", data);
 
         if (!data) {
             return res.status(404).json({ msg: 'No data updated' });
         }
-        //console.log('Inserted OnboardName Edit button functionlity:', finalOnboardName);
         return res.status(200).json({ msg: "User updated successfully", data: data });
     } catch (err) {
         console.error('Error updating record:', err.message);
@@ -821,7 +782,6 @@ async function updateRecordWithDisable(req, res) {
             designation, title, Marital_Status, companyName, Induction_Date, Inducted_By,
             OnboardName, expiryDate, departmentId, designationId, isResubmit, hideResubmit, isCompanyTransfer, isSiteTransfer, Reject_Reason
         } = req.body;
-        console.log("req.body-->", req.body)
 
         const parseBitField = (val) => {
             if (val === null || val === undefined || val === '' || val === 'null') return null;
@@ -880,10 +840,9 @@ async function updateRecordWithDisable(req, res) {
 
         const processFileField = (bodyField, fileField) => {
             if (fileField) {
-                // Binary data uploaded, get URL path
                 return baseUrl + path.basename(fileField[0].path);
             } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
-                // If no new file, use the existing URL
+             
                 return bodyField;
             }
             return null; // No data available
@@ -917,7 +876,6 @@ async function updateRecordWithDisable(req, res) {
         let projectId;
         let parentId;
 
-        // 1. Try primary query from Framework.BusinessUnit
         const primaryQuery = isNumeric
             ? `
                 SELECT Id, Description, Type, Email1, ParentId 
@@ -947,7 +905,6 @@ async function updateRecordWithDisable(req, res) {
             projectId = record.Id;
             parentId = record.ParentId;
         } else {
-            console.log(`Primary lookup failed for projectName: ${projectName}, trying CompanyNameByBuId...`);
 
             const pool2 = await poolPromise;
             const fallbackQuery = `
@@ -971,7 +928,6 @@ async function updateRecordWithDisable(req, res) {
             parentId = match.ParentId;
         }
 
-        // const parentId = parentIdResult.recordset[0].ParentId;
         const pool5 = await poolPromise;
         const companyNameResult = await pool5.request().query(`
               SELECT Description AS Company_Name 
@@ -987,16 +943,11 @@ async function updateRecordWithDisable(req, res) {
             salaryBu = location;
         }
 
-        // Fetch department description
         const departmentRequest = pool5.request();
 
-        // Validate and log departmentId before setting SQL input
-        console.log('Setting SQL input for departmentId:', safeDepartmentId);
         if (safeDepartmentId !== null) {
             departmentRequest.input('departmentId', safeDepartmentId);
-            console.log("departmentId", departmentId)
         } else {
-            console.log('Invalid departmentId provided:', departmentId);
             return res.status(400).send('Invalid departmentId');
         }
 
@@ -1007,7 +958,6 @@ async function updateRecordWithDisable(req, res) {
         const departmentResult = await departmentRequest.query(departmentQuery);
 
         if (departmentResult.recordset.length === 0) {
-            //console.log('Department not found for departmentId:', safeDepartmentId);
             return res.status(404).send('Department not found');
         }
 
@@ -1063,7 +1013,6 @@ async function updateRecordWithDisable(req, res) {
 const sanitizeInt = v =>
     (v !== undefined && v !== null && v !== '' && v !== 'null') ? parseInt(v, 10) : null;
 
-// converts various truthy / falsy strings → boolean / null
 const parseBit = v => {
     if (v === null || v === undefined || v === '' || v === 'null') return null;
     if (typeof v === 'boolean') return v;
@@ -1087,8 +1036,6 @@ async function updateRecordLabour(req, res) {
         // if (!updatedData || typeof updatedData !== 'object' || Object.keys(updatedData).length === 0) {
         //     return res.status(400).json({ error: 'Updated data is required and should not be empty' });
         // }
-        // //console.log('Updating record with ID:', id);
-        // //console.log('Updated data:', updatedData);
 
         const updated = await labourModel.updateLabour(id, updatedData);
         if (updated === 0) {
@@ -1176,7 +1123,6 @@ async function approveLabour(req, res) {
 async function approveDisableLabour(req, res) {
     const id = parseInt(req.params.id, 10);
     const { labourID } = req.body;
-    //console.log('labourID++++++',req.body)
 
     if (isNaN(id) || !labourID) {
         return res.status(400).json({ message: 'Invalid input parameters' });
@@ -1198,14 +1144,12 @@ async function approveDisableLabour(req, res) {
 // ---------------------------------------------------  End -----------------------------------------
 
 async function rejectLabour(req, res) {
-    // //console.log('Fetching rejected labours...');
     const id = parseInt(req.params.id, 10);
     const { Reject_Reason } = req.body;
     if (isNaN(id)) {
         return res.status(400).json({ message: 'Invalid labour ID' });
     }
     try {
-        // const success = await labourModel.rejectLabour(id);
         const success = await labourModel.rejectLabour(id, Reject_Reason);
         if (success) {
             res.json({ success: true, message: 'Labour rejected successfully.' });
@@ -1219,7 +1163,6 @@ async function rejectLabour(req, res) {
 
 async function getApprovedLabours(req, res) {
     try {
-        // //console.log('Fetching approved labours...');
         const approvedLabours = await labourModel.getApprovedLabours();
         res.json(approvedLabours);
     } catch (error) {
@@ -1261,18 +1204,15 @@ async function editbuttonLabour(req, res) {
 
 async function esslapi(req, res) {
     try {
-        const approvedLaboursXml = req.body; // This is the XML body from your request
+        const approvedLaboursXml = req.body; 
 
-        // Parse the incoming XML to extract relevant values
         const parser = new xml2js.Parser({ explicitArray: false });
         const approvedLabours = await parser.parseStringPromise(approvedLaboursXml);
 
-        // Extract values from parsed XML
         const LabourID = approvedLabours['soap:Envelope']['soap:Body']['AddEmployee']['EmployeeCode']; // EmployeeCode as LabourID
         const name = approvedLabours['soap:Envelope']['soap:Body']['AddEmployee']['EmployeeName']; // EmployeeName as name
         const userId = approvedLabours['soap:Envelope']['soap:Body']['AddEmployee']['CardNumber']; // CardNumber as userId
 
-        //console.log("Parsed Approved Labours:", { userId, LabourID, name });
 
         const esslapiurl = 'https://essl.vjerp.com:8530/iclock/webapiservice.asmx?op=AddEmployee';
         const response = await axios.post(esslapiurl, approvedLaboursXml, {
@@ -1282,14 +1222,11 @@ async function esslapi(req, res) {
         });
 
         const esslResponseData = response.data;
-        //console.log("Raw XML Response:", esslResponseData); // Debugging: Check raw XML response
 
         // Parse the XML response correctly
         const parsedResponse = await parseEsslResponse(esslResponseData);
         const { Status: esslStatus = 'false', CommandId: esslCommandId = null } = parsedResponse;
 
-        //console.log("Parsed Response - Status:", esslStatus); // Debugging: Check the parsed status
-        //console.log("Parsed Response - CommandId:", esslCommandId); // Debugging: Check the parsed command ID
 
         // Save to database with userId
         await saveEsslResponse({
@@ -1314,19 +1251,14 @@ async function parseEsslResponse(xmlData) {
         const parser = new xml2js.Parser({ explicitArray: false });  // Initialize xml2js parser
         const parsedData = await parser.parseStringPromise(xmlData);
 
-        //console.log("Parsed XML Data Structure:", parsedData); // Debugging: Check parsed XML structure
-
-        // Extract Status and CommandId using the correct path
         const status = parsedData['soap:Envelope']['soap:Body']['AddEmployeeResponse']['AddEmployeeResult'];
         const commandId = parsedData['soap:Envelope']['soap:Body']['AddEmployeeResponse']['CommandId'];
 
-        // If status is not found or is not 'success', set it to 'false'
         const result = {
             Status: status && status.toLowerCase() === 'success' ? status : 'false',
             CommandId: commandId || null
         };
 
-        //console.log("XML Parsed Result:", result); // Debugging: Check parsed result
         return result;
     } catch (error) {
         console.error('Error parsing XML response:', error.message);
@@ -1353,15 +1285,6 @@ async function saveEsslResponse(data) {
         const esslPayloadString = JSON.stringify(data.esslPayload);
         const esslApiResponseString = JSON.stringify(data.esslApiResponse);
 
-        //console.log("Data to be saved to DB:", {
-        //     userId: data.userId,  // Corrected to match the parsed XML id
-        //     LabourID: data.LabourID,
-        //     name: data.name,
-        //     esslStatus: data.esslStatus,
-        //     esslCommandId: data.esslCommandId,
-        //     esslPayload: esslPayloadString,
-        //     esslApiResponse: esslApiResponseString
-        // });
 
         await pool.request()
             .input('userId', sql.Int, data.userId) // Adjusted to match userId input type
@@ -1397,9 +1320,7 @@ async function getUserStatusController(req, res) {
 async function updateHideResubmitLabour(req, res) {
     try {
         const { id } = req.params; // Labour ID comes from the URL parameters
-        const { hideResubmit } = req.body; // hideResubmit value comes from the request body
-
-        // Call the model function to update hideResubmit
+        const { hideResubmit } = req.body; 
         const updated = await labourModel.updateHideResubmit(id, hideResubmit);
 
         if (updated === 0) {
@@ -1414,7 +1335,6 @@ async function updateHideResubmitLabour(req, res) {
 
 let cachedAttendance = null;
 
-// Create a separate logger for this cron job
 const cronLogger = createLogger({
     level: 'info',
     format: format.combine(
@@ -1446,21 +1366,16 @@ function roundOvertime(overtimeHours) {
 
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
-    console.log("yesterday", yesterday)
     yesterday.setDate(yesterday.getDate() -1); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
-    console.log("formattedYesterday", formattedYesterday)
-
-    console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
-    console.log(`Processing Attendance for Date: ${formattedYesterday}`);
+   
+    // console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
     cronLogger.info(`Running cron job for Attendance Date: ${formattedYesterday}`);
 
     try {
-        console.log('Calling processLaboursAttendance function...');
         // await processLaboursAttendance(formattedYesterday);
         await getAllLaboursAttendanceDaily(formattedYesterday);
 
-        console.log(`Cron job completed successfully for Date: ${formattedYesterday}`);
         cronLogger.info(`Cron job completed successfully for Date: ${formattedYesterday}`);
     } catch (error) {
         console.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
@@ -1577,7 +1492,6 @@ async function getAllLaboursAttendanceDaily(attendanceDate) {
     const parsedMonth = target.getMonth() + 1;
     const processedDay = target.getDate();
     const daysInMonth = new Date(parsedYear, parsedMonth, 0).getDate();
-    console.log("daysInMonth:", daysInMonth);
 
     // cohort (retry + timeout)
     const approvedLabours = await withRetry(
@@ -1589,7 +1503,6 @@ async function getAllLaboursAttendanceDaily(attendanceDate) {
         console.info(`[ATTENDANCE] No approved labours for ${parsedYear}-${parsedMonth}.`);
         return { processed: 0, succeeded: 0, failed: 0 };
     }
-    console.log("approvedLabours length:", approvedLabours.length);
 
     const getProjectIdCached = makeDeviceProjectResolver(labourModel);
 
@@ -1602,7 +1515,6 @@ async function getAllLaboursAttendanceDaily(attendanceDate) {
             const shiftHours = workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
             const halfDayHours = shiftHours === 9 ? 4.5 : 4;
 
-            // punches (retry + timeout)
             const punches = await withRetry(
                 () => withTimeout(
                     labourModel.getESSLAttendance(labourId, attendanceDate),
@@ -1650,7 +1562,6 @@ async function getAllLaboursAttendanceDaily(attendanceDate) {
                 projectIdFromDeviceLastPunch: projLP ?? null,
             };
 
-            // writes (retry + timeout)
             await withRetry(
                 () => withTimeout(
                     labourModel.insertIntoLabourAttendanceDetails(detailRow),
@@ -1719,7 +1630,6 @@ async function getAttendance(req, res) {
         const { labourId } = req.params;
         const { month, year } = req.query;
 
-        // Validate input
         if (!labourId || !month || !year) {
             return res.status(400).json({ message: 'LabourId, Month, and Year are required' });
         }
@@ -1731,7 +1641,6 @@ async function getAttendance(req, res) {
             return res.status(400).json({ message: 'Invalid month or year' });
         }
 
-        // Fetch labour details
         const labour = await labourModel.getLabourDetailsById(labourId);
 
         if (!labour) {
@@ -1749,7 +1658,6 @@ async function getAttendance(req, res) {
         let totalManualOvertimeManually = 0;
         let monthlyAttendance = [];
 
-        // Fetch attendance records for the labour for the month
         const labourAttendance = await labourModel.getAttendanceByLabourId(labourId, parsedMonth, parsedYear);
 
         for (let day = 1; day <= daysInMonth; day++) {
@@ -1780,18 +1688,14 @@ async function getAttendance(req, res) {
                 }
             }
 
-            // ✅ **Overtime Calculation**
             if (status === 'P') {
                 overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
             }
 
-            // ✅ **Overtime Rounding**
             dailyRoundOffOvertime = roundOvertime(overtime);
 
-            // ✅ **Limit OvertimeManually to 4 hours**
             let OvertimeManually = dailyRoundOffOvertime > 4 ? 4 : dailyRoundOffOvertime;
 
-            // ✅ **Update Counters**
             switch (status) {
                 case 'P': presentDays++; break;
                 case 'HD': halfDays++; break;
@@ -1807,7 +1711,6 @@ async function getAttendance(req, res) {
 
             const safeTotalHours = typeof totalHours === 'number' && !isNaN(totalHours) ? totalHours : 0;
 
-            // ✅ **Prepare Attendance Data**
             monthlyAttendance.push({
                 labourId,
                 projectName: parseInt(labour.projectName, 10),
@@ -1829,7 +1732,6 @@ async function getAttendance(req, res) {
             });
         }
 
-        // ✅ **Prepare Summary**
         const summary = {
             labourId,
             projectName: parseInt(labour.projectName, 10),
@@ -1847,7 +1749,6 @@ async function getAttendance(req, res) {
             selectedMonth: `${parsedYear}-${String(parsedMonth).padStart(2, '0')}`,
         };
 
-        // ✅ **Return Data**
         res.status(200).json({
             message: 'Attendance processed successfully',
             summary,
@@ -1861,8 +1762,6 @@ async function getAttendance(req, res) {
 }
 
 /**
- * Formats a given time string to "HH:MM:SS" format.
- * Returns "-" if the time is invalid.
  * @param {string} timeString - The time string to format.
  * @returns {string} - Formatted time or "-".
  */
@@ -1880,7 +1779,6 @@ function formatTimeToHoursMinutes(timeString) {
 }
 
 /**
- * Calculates hours worked between two punch times on a given date.
  * @param {Date} punchDate - The date of the punch.
  * @param {Date} firstPunch - The first punch time.
  * @param {Date} lastPunch - The last punch time.
@@ -1908,21 +1806,18 @@ function calculateHoursWorked(punchDate, firstPunch, lastPunch) {
 
 
 /**
- * Determines the total shift hours based on workingHours string.
  * @param {string} workingHours - The working hours string.
  * @returns {number} - Shift hours.
  */
 const getShiftHours = (workingHours) => (workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8);
 
 /**
- * Determines half-day hours based on shift hours.
  * @param {number} shiftHours - Total shift hours.
  * @returns {number} - Half-day hours.
  */
 const getHalfDayHours = (shiftHours) => (shiftHours === 9 ? 4.5 : 4);
 
 /**
- * Calculates the difference in minutes between two punch times.
  * @param {Date} firstPunchTime - First punch time.
  * @param {Date} lastPunchTime - Last punch time.
  * @returns {number} - Difference in minutes.
@@ -1933,7 +1828,6 @@ const calculateTimeDifferenceInMinutes = (firstPunchTime, lastPunchTime) => {
 };
 
 /**
- * Determines the attendance status based on punches and shift parameters.
  * @param {Array} punches - Array of punch objects for the day.
  * @param {number} shiftHours - Total shift hours.
  * @param {number} halfDayHours - Half-day hours.
@@ -1948,12 +1842,9 @@ const determineStatus = (punches, shiftHours, halfDayHours, workingHours) => {
     let totalHours = 0;
 
     if (!punches || punches.length === 0) {
-        // No punches found
-        // console.log(`No punches found for punches array: ${JSON.stringify(punches)}`);
         return { status, firstPunch: null, lastPunch: null, misPunch, totalHours };
     }
 
-    // Sort punches by time
     punches.sort((a, b) => new Date(a.punch_time) - new Date(b.punch_time));
 
     const firstPunch = punches[0];
@@ -1967,7 +1858,6 @@ const determineStatus = (punches, shiftHours, halfDayHours, workingHours) => {
     if (gapMinutes < 15) {
         // Gap less than 15 minutes, consider only firstPunch and mark as MisPunch
         misPunch = true;
-        // console.log(`MisPunch detected. GapMinutes: ${gapMinutes}`);
     } else {
         // Consider both punches
         consideredLastPunch = lastPunch;
@@ -1976,13 +1866,11 @@ const determineStatus = (punches, shiftHours, halfDayHours, workingHours) => {
     if (misPunch) {
         status = 'MP';
     } else {
-        // Calculate total hours
         if (consideredLastPunch) {
             totalHours = calculateHoursWorked(new Date(firstPunch.punch_date), firstPunchTime, lastPunchTime);
         } else {
             // Only firstPunch is considered, no valid LastPunch
             totalHours = 0;
-            // console.log(`Only firstPunch present without valid LastPunch. TotalHours set to 0.`);
         }
 
         // Define thresholds
@@ -2000,7 +1888,6 @@ const determineStatus = (punches, shiftHours, halfDayHours, workingHours) => {
             status = 'MP';
         }
 
-        // console.log(`Status Determined: ${status} | TotalHours: ${totalHours}`);
     }
 
     return {
@@ -2013,8 +1900,6 @@ const determineStatus = (punches, shiftHours, halfDayHours, workingHours) => {
 };
 
 /**
- * Processes and records the attendance of all approved labours for a specified month and year.
- * Implements rules for Present, Half Day, Absent, and Miss Punch statuses based on punch data.
  * @param {Object} req - Express request object containing query parameters month and year.
  * @param {Object} res - Express response object.
  */
@@ -2034,7 +1919,6 @@ async function getAllLaboursAttendance(req, res) {
             return res.status(400).json({ message: 'Invalid month or year' });
         }
 
-        // Fetch all approved labours
         // const approvedLabours = await labourModel.getAllApprovedLabours();
         const approvedLabours = await labourModel.getAllApprovedOrMonthlyDisabledLabours(parsedMonth, parsedYear);
 
@@ -2089,19 +1973,13 @@ async function getAllLaboursAttendance(req, res) {
                 //    let projectIdFromDevicefirstPunch = projectIdFromDevicefirstPunchIn || null;
                 //    let projectIdFromDeviceLastPunch = projectIdFromDeviceLastPunchIn || null;
 
-                // ✅ **Overtime Calculation**
                 if (status === 'P') {
                     overtime = totalHours > shiftHours ? totalHours - shiftHours : 0;
                 }
 
-                // ✅ **Overtime Rounding**
                 dailyRoundOffOvertime = roundOvertime(overtime);
-                // console.log("dailyRoundOffOvertime",dailyRoundOffOvertime)
 
-                // ✅ **Limit OvertimeManually to 4 hours**
                 let OvertimeManually = dailyRoundOffOvertime > 4 ? 4 : dailyRoundOffOvertime;
-
-                // console.log("OvertimeManually",OvertimeManually)
 
                 // ✅ **Update Counters**
                 switch (status) {
@@ -2174,8 +2052,6 @@ async function getAllLaboursAttendance(req, res) {
 };
 
 /**
- * Processes and records the attendance of all approved labours for a specific date.
- * Implements rules for Present, Half Day, Absent, and Miss Punch statuses based on punch data.
  * @param {string} date - The date for which to process attendance (ISO format string).
  */
 async function processLaboursAttendance(date) {
@@ -2215,12 +2091,10 @@ async function processLaboursAttendance(date) {
                 }
             }
 
-            // ✅ **Apply Overtime Rounding**
             const roundedOvertime = roundOvertime(rawOvertime);
             const OvertimeManually = Math.min(roundedOvertime, 4);
             totalOvertimeHours += roundedOvertime;
 
-            // ✅ **Save Attendance Record**
             dailyAttendance.push({
                 labourId,
                 projectName: parseInt(projectName, 10),
@@ -2255,7 +2129,6 @@ async function processLaboursAttendance(date) {
     }
 }
 
-// New API endpoint to get cached attendance
 async function getCachedAttendance(req, res) {
     try {
         if (!cachedAttendance) {
@@ -2272,13 +2145,10 @@ async function getCachedAttendance(req, res) {
 
 async function runAttendanceCronEssl() {
     const yesterday = new Date();
-    console.log("yesterday", yesterday)
     yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
-    console.log("formattedYesterday for Essl Attendance", formattedYesterday)
 
-    console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
-    console.log(`Processing Attendance for Date: ${formattedYesterday}`);
+    // console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
 
     await labourModel.saveEsslAttendance(formattedYesterday);
     
@@ -2287,7 +2157,6 @@ async function runAttendanceCronEssl() {
 }
 
 
-// Schedule cron job to run every 20 days at 1:00 AM
 cron.schedule('36 12 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runAttendanceCronEssl();
@@ -2303,14 +2172,12 @@ async function submitAttendanceController(req, res) {
             return res.status(400).json({ message: "All fields are required." });
         }
 
-        // Fetch existing miss punch count for the labour
         const labourPunchCount = await labourModel.getMissPunchCount(labourId, punchDate);
 
         if (!labourPunchCount) {
             return res.status(404).json({ message: "Labour data not found." });
         }
 
-        // Check if miss punch entries exceed the limit of 3
         if (labourPunchCount.missPunchCount >= 3) {
             // Route to admin for approval
             const adminApproval = await labourModel.addApprovalRequest(labourId, punchType, punchDate, punchTime);
@@ -2321,7 +2188,6 @@ async function submitAttendanceController(req, res) {
             }
         }
 
-        // If within limit, add the punch directly
         const success = await labourModel.addMissPunch(labourId, punchType, punchDate, punchTime);
         if (success) {
             return res.status(200).json({ message: "Punch entry added successfully." });
@@ -2342,13 +2208,11 @@ async function addWeeklyOff(req, res) {
             return res.status(400).json({ message: 'Labour ID and Off Date are required.' });
         }
 
-        // Check if the weekly off already exists
         const existingOff = await labourModel.getWeeklyOff(LabourID, offDate);
         if (existingOff) {
             return res.status(409).json({ message: 'Weekly off already exists for this date.' });
         }
 
-        // Add the weekly off to the database
         const success = await labourModel.addWeeklyOff(LabourID, offDate, addedBy);
         if (success) {
             return res.status(200).json({ message: 'Weekly off added successfully.' });
@@ -2379,7 +2243,6 @@ async function saveWeeklyOffs(req, res) {
             return res.status(400).json({ message: 'Labour ID, month, year, and weekly off count are required.' });
         }
 
-        // Calculate Sundays for the month
         const sundays = [];
         const daysInMonth = new Date(year, month, 0).getDate();
         for (let day = 1; day <= daysInMonth; day++) {
@@ -2389,10 +2252,8 @@ async function saveWeeklyOffs(req, res) {
             }
         }
 
-        // Adjust the Sundays based on the weeklyOffCount
         const weeklyOffDates = sundays.slice(0, weeklyOffCount);
 
-        // Save the weekly offs to the database
         const success = await labourModel.saveWeeklyOffs(LabourID, weeklyOffDates);
         if (success) {
             return res.status(200).json({ message: 'Weekly offs saved successfully.' });
@@ -2409,7 +2270,6 @@ async function getDisabledMonthsAndYears(req, res) {
     try {
         const pool = await poolPromise;
 
-        // SQL Query to extract distinct years and months from SelectedMonth
         const result = await pool.request().query(`
             SELECT DISTINCT 
                 CAST(LEFT(SelectedMonth, 4) AS INT) AS Year, -- Extract year (first 4 characters)
@@ -2417,18 +2277,15 @@ async function getDisabledMonthsAndYears(req, res) {
             FROM [dbo].[LabourAttendanceSummary];
         `);
 
-        // Map the results to return only month and year
         const disabledPeriods = result.recordset.map(record => ({
             month: record.Month,
             year: record.Year,
         }));
 
-        // Send the response
         res.status(200).json(disabledPeriods);
     } catch (err) {
         console.error("Error fetching disabled months and years:", err);
 
-        // Send a proper error response
         res.status(500).json({ message: "Error fetching disabled months and years", error: err.message });
     }
 }
@@ -2441,9 +2298,7 @@ async function deleteAttendance(req, res) {
     }
 
     try {
-        // Delete records from LabourAttendanceDetails
         await labourModel.deleteAttendanceDetails(month, year);
-        // Delete records from LabourAttendanceSummary
         await labourModel.deleteAttendanceSummary(month, year);
 
         res.status(200).json({ message: 'Attendance deleted successfully' });
@@ -2466,14 +2321,14 @@ async function getAttendanceSummary(req, res) {
 
 
 async function getAttendanceDetails(req, res) {
-    const { month, year } = req.query;
+    const { month, year, search } = req.query;
 
     if (!month || !year) {
         return res.status(400).json({ message: 'Month and Year are required' });
     }
 
     try {
-        const details = await labourModel.fetchAttendanceDetailsByMonthYear(month, year);
+        const details = await labourModel.fetchAttendanceDetailsByMonthYear(month, year, search);
         res.status(200).json(details);
     } catch (error) {
         console.error('Error fetching attendance details:', error);
@@ -2570,7 +2425,6 @@ async function upsertAttendance(req, res) {
         userType,
     } = req.body;
 
-    console.log("req.body for attendance--->", req.body);
 
     if (!labourId || !date) {
         return res.status(400).json({ message: 'Labour ID and Date are required.' });
@@ -2625,7 +2479,6 @@ async function upsertAttendance(req, res) {
 
         const timesUpdated = await labourModel.getTimesUpdateForMonth(labourId, date);
 
-        // ⛱️ Weekly Off logic (always directly upsert)
         if (markWeeklyOff === true) {
             await labourModel.upsertAttendance({
                 labourId,
@@ -2644,7 +2497,6 @@ async function upsertAttendance(req, res) {
             return res.status(200).json({ message: 'Attendance updated successfully.' });
         }
 
-        // 👷‍♂️ USER APPROVAL Conditions for ENC user
         const isEncUser = userType === 'ENC';
         const needsUserApproval =
             (isEncUser && AttendanceStatus !== "MP") ||
@@ -2669,7 +2521,6 @@ async function upsertAttendance(req, res) {
             return res.status(200).json({ message: 'Attendance sent To USER APPROVAL.' });
         }
 
-        // 👮‍♂️ ADMIN APPROVAL Conditions
         const needsAdminApproval =
             AttendanceStatus !== "MP" ||
             (AttendanceStatus === "MP" && timesUpdated >= 3);
@@ -2748,8 +2599,7 @@ async function rejectAttendanceControllerAdmin(req, res) {
 
 async function rejectAttendanceController(req, res) {
     const { AttendanceId, rejectReason } = req.query;
-    // const id = parseInt(req.params.id, 10); 
-    // const { rejectReason } = req.body; 
+    // const id = parseInt(req.params.id, 10);  
 
 
     if (isNaN(AttendanceId)) {
@@ -2777,29 +2627,24 @@ async function rejectAttendanceController(req, res) {
 const exportAttendance = async (req, res) => {
     try {
         const { startDate, endDate, projectName, department } = req.query;
-        console.log("exportAttendance called with params:", req.query);
 
 
         if (!startDate || !endDate || !projectName) {
             return res.status(400).json({ message: 'Missing required parameters: startDate, endDate, or projectId.' });
         }
 
-        // Fetch attendance data filtered by date range and projectId
         const attendanceData = await labourModel.getAttendanceByDateRange(projectName, startDate, endDate, department);
 
         if (attendanceData.length === 0) {
             return res.status(404).json({ message: 'No attendance data found for the selected criteria.' });
         }
 
-        // Create Excel workbook and worksheet
         const workbook = xlsx.utils.book_new();
         const worksheet = xlsx.utils.json_to_sheet(attendanceData);
         xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Attendance');
 
-        // Generate Excel file as buffer
         const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 
-        // Set headers and send response
         res.setHeader('Content-Disposition', 'attachment; filename=attendance.xlsx');
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.send(buffer);
@@ -2829,7 +2674,6 @@ const importAttendance = async (req, res) => {
 
         // Split into matched / unmatched
         const { matchedRows, unmatchedRows } = await labourModel.getMatchedRows(validData);
-        console.log("matchedRows", matchedRows.length, "unmatchedRows", unmatchedRows.length);
 
         // ✅ Update existing
         if (matchedRows.length > 0) {
@@ -2855,7 +2699,7 @@ const importAttendance = async (req, res) => {
         }
 
         res.send({
-            message: 'Data imported successfully',
+            message: 'Attendance imported successfully',
             matchedRows: matchedRows.length,
             unmatchedRows: unmatchedRows.length,
         });
@@ -2944,7 +2788,6 @@ const getLabourMonthlyWages = async (req, res) => {
 const upsertLabourMonthlyWages = async (req, res) => {
     try {
         const payload = req.body;
-        console.log("payload ===", payload)
         if (!payload.labourId || !payload.payStructure) {
             return res.status(400).json({ message: 'Labour ID and Pay Structure are required' });
         }
@@ -2995,7 +2838,7 @@ const markWagesForApprovalController = async (req, res) => {
     try {
         const payload = req.body;
         const { wageId, labourId, dailyWages, perHourWages, monthlyWages, yearlyWages, effectiveDate, fixedMonthlyWages, weeklyOff, payStructure, wagesEditedBy, remarks } = payload;
-        console.log('payload for wages new 55',payload)
+        
         if (!wageId || !labourId || !payStructure) {
             return res.status(400).json({ message: 'Wage ID, Labour ID, and Pay Structure are required' });
         }
@@ -3031,7 +2874,6 @@ const getWagesAdminApprovals = async (req, res) => {
     }
 };
 
-// Approve or reject wages
 const handleApproval = async (req, res) => {
     try {
         const { WageID, approvalStatus, remarks } = req.body;
@@ -3055,7 +2897,6 @@ const handleApproval = async (req, res) => {
 
 async function approveWagesControllerAdmin(req, res) {
     const { ApprovalID } = req.query;
-    // console.log('id___approveWagesControllerAdmin', ApprovalID)
     if (!ApprovalID) {
         return res.status(400).json({ message: 'WageID is required.' });
     }
@@ -3070,8 +2911,7 @@ async function approveWagesControllerAdmin(req, res) {
 }
 
 async function rejectWagesControllerAdmin(req, res) {
-    const { ApprovalID, Remarks } = req.query; // Ensure Remarks is fetched from query
-    //console.log('id___rejectWagesControllerAdmin', req.query);
+    const { ApprovalID, Remarks } = req.query; 
 
     if (!ApprovalID) {
         return res.status(400).json({ message: 'ApprovalID is required.' });
@@ -3103,27 +2943,22 @@ const exportWagesexcelSheet = async (req, res) => {
             return res.status(400).json({ message: 'Missing required parameter: month' });
         }
 
-        // Use "all" if projectName is missing or empty.
         if (!projectName || projectName.trim() === "") {
             projectName = "all";
         }
 
-        // Calculate the date range for the given month.
         const startDate = `${month}-01`;
         const endDate = new Date(new Date(startDate).setMonth(new Date(startDate).getMonth() + 1) - 1)
             .toISOString()
             .split('T')[0];
 
 
-        // Fetch wages data (or approved onboarding rows if no matching wages).
         const wagesData = await labourModel.getWagesByDateRange(projectName, payStructure, startDate, endDate);
 
-        // Create the Excel workbook.
         const workbook = xlsx.utils.book_new();
         const worksheet = xlsx.utils.json_to_sheet(wagesData);
         xlsx.utils.book_append_sheet(workbook, worksheet, 'Labour Wages');
 
-        // Set the file name.
         const fileName = projectName === "all"
             ? `Approved_Labours_${month}.xlsx`
             : `Wages_${projectName}_${month}.xlsx`;
@@ -3137,7 +2972,6 @@ const exportWagesexcelSheet = async (req, res) => {
     }
 };
 
-// Optionally preset payStructure for dedicated endpoints.
 const exportMonthlyWagesExcel = async (req, res) => {
     req.query.payStructure = 'Monthly Wages';
     exportWagesexcelSheet(req, res);
@@ -3149,7 +2983,6 @@ const exportFixedWagesExcel = async (req, res) => {
 };
 
 /**
- * Converts an Excel serial date to a JavaScript Date object.
  * @param {number} serial - Excel serial date number
  * @returns {Date | null} - JavaScript Date object or null if invalid
  */
@@ -3192,8 +3025,7 @@ const importWages = async (req, res) => {
             }
         }
 
-        fs.unlinkSync(filePath); // Clean up uploaded file
-        //console.log(' errors===errors',errors)
+        fs.unlinkSync(filePath);
         if (errors.length > 0) {
             // Generate error Excel file
             const errorWorkbook = xlsx.utils.book_new();
@@ -3215,7 +3047,6 @@ const importWages = async (req, res) => {
 
 const getWagesAndLabourOnboardingJoincontroller = async (req, res) => {
     try {
-        // Get filters from query parameters (e.g., ?ProjectID=...&DepartmentID=...)
         const filters = req.query;
         const joinWagesLabour = await labourModel.getWagesAndLabourOnboardingJoin(filters);
         res.status(200).json(joinWagesLabour);
@@ -3231,7 +3062,6 @@ const getAttendanceReportAndLabourOnboardingJoincontroller = async (req, res) =>
             ProjectID: req.query.ProjectID || '',
             DepartmentID: req.query.DepartmentID || ''
         };
-        console.log('filters', filters);
         const joinAttendanceLabour = await labourModel.getAttendanceReportAAndLabourOnboardingJoin(filters);
         res.status(200).json(joinAttendanceLabour);
     } catch (error) {
