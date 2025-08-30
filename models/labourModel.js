@@ -895,7 +895,7 @@ async function getAllApprovedLabours() {
         const result = await pool
             .request()
             .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [labourOnboarding] WHERE status IN ('Approved', 'Disable')`);
-    
+
         return result.recordset; // Returns an array of approved labour IDs and working hours
     } catch (err) {
         console.error('SQL error fetching approved labour IDs', err);
@@ -3045,17 +3045,17 @@ async function getMatchedRows(data) {
 
 function excelDecimalToTime(value) {
     if (value === null || value === undefined || value === "") return null;
-  if (typeof value === "string" && /^\d{2}:\d{2}:\d{2}$/.test(value)) {
-    return value; // already valid time string
-  }
-  if (typeof value === "number" && !isNaN(value)) {
-    const totalSeconds = Math.round(value * 24 * 60 * 60);
-    const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
-    const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
-    const seconds = String(totalSeconds % 60).padStart(2, "0");
-    return `${hours}:${minutes}:${seconds}`;
-  }
-  return null;
+    if (typeof value === "string" && /^\d{2}:\d{2}:\d{2}$/.test(value)) {
+        return value; // already valid time string
+    }
+    if (typeof value === "number" && !isNaN(value)) {
+        const totalSeconds = Math.round(value * 24 * 60 * 60);
+        const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+        const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+        const seconds = String(totalSeconds % 60).padStart(2, "0");
+        return `${hours}:${minutes}:${seconds}`;
+    }
+    return null;
 }
 
 function formatTime(value) {
@@ -3085,11 +3085,14 @@ async function updateMatchedRows(data) {
         // ✅ Calculate total hours
         if (firstPunch && lastPunch) {
             const firstDate = new Date(`1970-01-01T${firstPunch}Z`);
-            const lastDate = new Date(`1970-01-01T${lastPunch}Z`);
-            totalHours = Math.abs((lastDate - firstDate) / (1000 * 60 * 60));
+            let lastDate = new Date(`1970-01-01T${lastPunch}Z`);
+            if (lastDate < firstDate) {
+                // Cross-midnight: add 24h
+                lastDate = new Date(lastDate.getTime() + 24 * 60 * 60 * 1000);
+            }
+            totalHours = (lastDate - firstDate) / (1000 * 60 * 60);
             totalHours = Math.round(totalHours * 100) / 100;
         }
-
         // ✅ Status & OT calculation
         let status = "A";
         let OT = 0;
@@ -3101,23 +3104,23 @@ async function updateMatchedRows(data) {
             } else if (totalHours > halfDayHours && totalHours < workingHours) {
                 status = "P";
                 OT = 0;
-            }else if (totalHours <= halfDayHours) {
+            } else if (totalHours <= halfDayHours) {
                 status = "HD";
                 OT = 0;
             }
-             else {
+            else {
                 status = "A";
                 OT = 0;
             }
         }
 
 
-       
+
         // ✅ Round overtime & cap to 4 hrs
-        const OTrounded = roundOvertime(OT);
+        const OTrounded = roundOvertime ? roundOvertime(OT) : Math.round(OT * 2) / 2;
         let OTmanual = 0;
         if (status === "P") {
-            OTmanual = row.OvertimeManually || Math.min(OTrounded, 4);
+            OTmanual = row.OvertimeManually || Math.min(Math.max(OTrounded, 0), 4);
         }
 
         // ✅ Save LabourId + Date pair
@@ -3145,7 +3148,7 @@ async function updateMatchedRows(data) {
             .input("projectName", sql.Int, row.projectName || null)
             .input("ApprovalStatus", sql.NVarChar(50), row.ApprovalStatus || null)
             .input("ApprovalRemark", sql.NVarChar(255), row.ApprovalRemark || null)
-             .query(`
+            .query(`
                 MERGE LabourAttendanceDetails AS target
                 USING (
                     SELECT @LabourId AS LabourId, @Date AS Date
@@ -3186,26 +3189,26 @@ async function updateMatchedRows(data) {
             `);
     }
 
-const labourIdDateMap = new Map();
+    const labourIdDateMap = new Map();
 
-for (const entry of labourDateSet) {
-  const [labourId, date] = entry.split("||");
+    for (const entry of labourDateSet) {
+        const [labourId, date] = entry.split("||");
 
-  if (!labourIdDateMap.has(labourId)) {
-    labourIdDateMap.set(labourId, date);
-  } else {
-    // compare dates and keep the latest
-    const existingDate = labourIdDateMap.get(labourId);
-    if (new Date(date) > new Date(existingDate)) {
-      labourIdDateMap.set(labourId, date);
+        if (!labourIdDateMap.has(labourId)) {
+            labourIdDateMap.set(labourId, date);
+        } else {
+            // compare dates and keep the latest
+            const existingDate = labourIdDateMap.get(labourId);
+            if (new Date(date) > new Date(existingDate)) {
+                labourIdDateMap.set(labourId, date);
+            }
+        }
     }
-  }
-}
 
-// Step 2: Run only once per labourId with the latest date
-for (const [labourId, date] of labourIdDateMap) {
-  await insertIntoLabourAttendanceSummary({ labourId, selectedMonth: date.slice(0, 7) });
-}
+    // Step 2: Run only once per labourId with the latest date
+    for (const [labourId, date] of labourIdDateMap) {
+        await insertIntoLabourAttendanceSummary({ labourId, selectedMonth: date.slice(0, 7) });
+    }
 }
 
 
@@ -3217,6 +3220,9 @@ async function insertUnmatchedRows(data) {
     table.columns.add('AttendanceId', sql.Int);
     table.columns.add('LabourId', sql.VarChar(50));
     table.columns.add('Date', sql.Date);
+    table.columns.add('FirstPunch', sql.NVarChar(20));
+    table.columns.add('LastPunch', sql.NVarChar(20));
+    table.columns.add('Overtime', sql.Decimal(18, 2));
     table.columns.add('FirstPunchManually', sql.NVarChar(20));
     table.columns.add('LastPunchManually', sql.NVarChar(20));
     table.columns.add('OvertimeManually', sql.Decimal(18, 2));
@@ -3225,40 +3231,67 @@ async function insertUnmatchedRows(data) {
     table.columns.add('Status', sql.VarChar(10));
 
     data.forEach((row) => {
-          const firstPunch = excelDecimalToTime(row.FirstPunchManually);
-    const lastPunch = excelDecimalToTime(row.LastPunchManually);
-
         let totalHours = 0;
-    if (firstPunch && lastPunch) {
-        const firstDate = new Date(`1970-01-01T${firstPunch}Z`);
-        const lastDate = new Date(`1970-01-01T${lastPunch}Z`);
-        totalHours = Math.abs((lastDate - firstDate) / (1000 * 60 * 60));
-        totalHours = Math.round(totalHours * 100) / 100;
-    }
+        const attendanceDate = row.Date;
 
-        let status = "A";
-    if (firstPunch && lastPunch) {
-        if (totalHours >= row.WorkingHours) {
-            status = "P";
-        } else if (totalHours >= row.HalfDayHours) {
-            status = "HD";
+        const firstPunch = excelDecimalToTime(row.FirstPunchManually);
+        const lastPunch = excelDecimalToTime(row.LastPunchManually);
+
+        // ✅ Shift & half-day logic
+        const workingHours = row.workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+        const halfDayHours = workingHours === 9 ? 4.5 : 4;
+
+        // ✅ Calculate total hours
+        if (firstPunch && lastPunch) {
+            const firstDate = new Date(`1970-01-01T${firstPunch}Z`);
+            const lastDate = new Date(`1970-01-01T${lastPunch}Z`);
+            totalHours = Math.abs((lastDate - firstDate) / (1000 * 60 * 60));
+            totalHours = Math.round(totalHours * 100) / 100;
         }
-    }
 
-        const OT = (status === "P" && totalHours > row.WorkingHours) ? (totalHours - row.WorkingHours) : 0;
-        const OTrounded = roundOvertime(OT);
-        const OTmanual = row.OvertimeManually || Math.min(OTrounded, 4);
+        // ✅ Status & OT calculation
+        let status = "A";
+        let OT = 0;
+
+        if (firstPunch && lastPunch) {
+            if (totalHours >= workingHours) {
+                status = "P";
+                OT = totalHours - workingHours;
+            } else if (totalHours > halfDayHours && totalHours < workingHours) {
+                status = "P";
+                OT = 0;
+            } else if (totalHours <= halfDayHours) {
+                status = "HD";
+                OT = 0;
+            }
+            else {
+                status = "A";
+                OT = 0;
+            }
+        }
+
+
+
+        // ✅ Round overtime & cap to 4 hrs
+        const OTrounded = roundOvertime ? roundOvertime(OT) : Math.round(OT * 2) / 2;
+        let OTmanual = 0;
+        if (status === "P") {
+            OTmanual = row.OvertimeManually || Math.min(Math.max(OTrounded, 0), 4);
+        }
 
         table.rows.add(
             row.AttendanceId,
             row.LabourId,
             row.Date,
-           firstPunch,       // now safe
-        lastPunch,  
+            firstPunch,       // now safe
+            lastPunch,
             OTmanual,
             row.RemarkManually || null,
             totalHours,
-            status
+            status,
+            firstPunch || null,
+            lastPunch || null,
+            OTmanual
         );
     });
 
