@@ -20,8 +20,8 @@ const pdf = require('html-pdf');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 // const baseUrl = 'http://localhost:4000/uploads/';
-const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
-// const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
+// const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 const LM_READ_TIMEOUT_MS = 90_000;
 const LM_WRITE_TIMEOUT_MS = 45_000;
@@ -2157,7 +2157,7 @@ async function runAttendanceCronEssl() {
 }
 
 
-cron.schedule('36 12 * * *', async () => {
+cron.schedule('57 14 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runAttendanceCronEssl();
     await runDailyAttendanceCron();

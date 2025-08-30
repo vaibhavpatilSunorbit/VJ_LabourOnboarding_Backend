@@ -1631,7 +1631,7 @@ SELECT
          SELECT lo.dateOfJoining
          FROM [dbo].[labourOnboarding] lo
          WHERE lo.LabourID = @labourId
-           AND lo.status = 'Approved'   -- only consider approved joining
+           AND lo.status IN ('Approved', 'Disable')
      ) AS onboard
      WHERE h.HolidayDate BETWEEN @first AND @last
        AND (
@@ -3520,12 +3520,12 @@ async function calculateSalaryForLabour(labourId, month, year) {
         console.log("[INFO] Bonuses:", bonuses);
         // console.log("[INFO] Total Deductions:", totalDeductions);
 
-        let grossPay = baseWage + bonuses;
+        let grossPay = baseWage;
         if (isDailyWage) {
             grossPay += overtimePay + previousWageAmount;
         }
 
-        let netPay = grossPay - totalDeductions;
+        let netPay = grossPay + bonuses - totalDeductions;
         const isNegativeSalary = netPay < 0;
         netPay = Math.max(netPay, 0);
 

@@ -3069,62 +3069,75 @@ function formatTime(value) {
 
 async function updateMatchedRows(data) {
     const pool = await poolPromise;
-    for (const row of data) {
-          let totalHours = 0;
-       const firstPunch = excelDecimalToTime(row.FirstPunchManually);
-    const lastPunch = excelDecimalToTime(row.LastPunchManually);
+    const labourDateSet = new Set(); // ✅ Track unique (LabourId, Date)
 
-          // ✅ Fixed working hours logic
-    const workingHours = row.workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
-    const halfDayHours = workingHours / 2;
-        // Total Hours
-      
+    for (const row of data) {
+        let totalHours = 0;
+        const attendanceDate = row.Date;
+
+        const firstPunch = excelDecimalToTime(row.FirstPunchManually);
+        const lastPunch = excelDecimalToTime(row.LastPunchManually);
+
+        // ✅ Shift & half-day logic
+        const workingHours = row.workingHours === 'FLEXI SHIFT - 9 HRS' ? 9 : 8;
+        const halfDayHours = workingHours === 9 ? 4.5 : 4;
+
+        // ✅ Calculate total hours
         if (firstPunch && lastPunch) {
-             const firstDate = new Date(`1970-01-01T${firstPunch}Z`);
-                const lastDate = new Date(`1970-01-01T${lastPunch}Z`);
+            const firstDate = new Date(`1970-01-01T${firstPunch}Z`);
+            const lastDate = new Date(`1970-01-01T${lastPunch}Z`);
             totalHours = Math.abs((lastDate - firstDate) / (1000 * 60 * 60));
             totalHours = Math.round(totalHours * 100) / 100;
         }
 
-        // Status
-         let status = "A";
-    if (firstPunch && lastPunch) {
-        if (totalHours >= workingHours) {
-            status = "P";
-        } else if (totalHours >= halfDayHours) {
-            status = "HD";
+        // ✅ Status & OT calculation
+        let status = "A";
+        let OT = 0;
+
+        if (firstPunch && lastPunch) {
+            if (totalHours >= workingHours) {
+                status = "P";
+                OT = totalHours - workingHours;
+            } else if (totalHours > halfDayHours && totalHours < workingHours) {
+                status = "P";
+                OT = 0;
+            }else if (totalHours <= halfDayHours) {
+                status = "HD";
+                OT = 0;
+            }
+             else {
+                status = "A";
+                OT = 0;
+            }
         }
-    }
 
-         let OT = 0;
-    if (status === "P" && totalHours > workingHours) {
-        OT = totalHours - workingHours;
-    }
 
-    const OTrounded = roundOvertime(OT);
+       
+        // ✅ Round overtime & cap to 4 hrs
+        const OTrounded = roundOvertime(OT);
+        let OTmanual = 0;
+        if (status === "P") {
+            OTmanual = row.OvertimeManually || Math.min(OTrounded, 4);
+        }
 
-    // Use manual OT if provided, else cap to max 4 hrs
-    const OTmanual = row.OvertimeManually || Math.min(OTrounded, 4);
+        // ✅ Save LabourId + Date pair
+        labourDateSet.add(`${row.LabourId}||${attendanceDate}`);
 
-        // Now update DB row
+        // ✅ Update DB
         await pool.request()
             .input("AttendanceId", sql.Int, row.AttendanceId)
             .input("LabourId", sql.NVarChar(50), row.LabourId)
-            .input("Date", sql.Date, row.Date)
-
+            .input("Date", sql.Date, attendanceDate)
             .input("FirstPunch", sql.NVarChar(20), firstPunch)
             .input("LastPunch", sql.NVarChar(20), lastPunch)
-
             .input("TotalHours", sql.Decimal(10, 2), totalHours || 0)
             .input("Overtime", sql.Decimal(10, 2), OTmanual)
             .input("Status", sql.NVarChar(10), status)
-
             .input("CreationDate", sql.DateTime, new Date())
             .input("FirstPunchManually", sql.NVarChar(20), firstPunch)
             .input("LastPunchManually", sql.NVarChar(20), lastPunch)
             .input("OvertimeManually", sql.Decimal(10, 2), OTmanual)
             .input("RemarkManually", sql.NVarChar(255), row.RemarkManually || null)
-
             .input("EditUserName", sql.NVarChar(255), row.EditUserName || null)
             .input("LastUpdatedDate", sql.DateTime, new Date())
             .input("WorkingHours", sql.VarChar(50), row.workingHours || null)
@@ -3132,49 +3145,69 @@ async function updateMatchedRows(data) {
             .input("projectName", sql.Int, row.projectName || null)
             .input("ApprovalStatus", sql.NVarChar(50), row.ApprovalStatus || null)
             .input("ApprovalRemark", sql.NVarChar(255), row.ApprovalRemark || null)
-
-            .query(`
-      MERGE LabourAttendanceDetails AS target
-USING (
-    SELECT @LabourId AS LabourId, @Date AS Date
-) AS source
-    ON target.LabourId = source.LabourId
-   AND target.Date = source.Date
-WHEN MATCHED THEN
-  UPDATE SET
-    FirstPunch = @FirstPunch,
-    LastPunch = @LastPunch,
-    TotalHours = @TotalHours,
-    Overtime = @Overtime,
-    Status = @Status,
-    FirstPunchManually = @FirstPunchManually,
-    LastPunchManually = @LastPunchManually,
-    OvertimeManually = @OvertimeManually,
-    RemarkManually = @RemarkManually,
-    EditUserName = @EditUserName,
-    LastUpdatedDate = @LastUpdatedDate,
-    WorkingHours = @WorkingHours,
-    OnboardName = @OnboardName,
-    projectName = @projectName,
-    ApprovalStatus = @ApprovalStatus,
-    ApprovalRemark = @ApprovalRemark
-WHEN NOT MATCHED THEN
-  INSERT (
-    LabourId, Date, FirstPunch, LastPunch, TotalHours, Overtime, Status,
-    CreationDate, FirstPunchManually, LastPunchManually, OvertimeManually,
-    RemarkManually, EditUserName, LastUpdatedDate, WorkingHours, OnboardName,
-    projectName, ApprovalStatus, ApprovalRemark
-  )
-  VALUES (
-    @LabourId, @Date, @FirstPunch, @LastPunch, @TotalHours, @Overtime, @Status,
-    @CreationDate, @FirstPunchManually, @LastPunchManually, @OvertimeManually,
-    @RemarkManually, @EditUserName, @LastUpdatedDate, @WorkingHours, @OnboardName,
-    @projectName, @ApprovalStatus, @ApprovalRemark
-  );
-
-      `);
+             .query(`
+                MERGE LabourAttendanceDetails AS target
+                USING (
+                    SELECT @LabourId AS LabourId, @Date AS Date
+                ) AS source
+                ON target.LabourId = source.LabourId
+                AND target.Date = source.Date
+                WHEN MATCHED THEN
+                  UPDATE SET
+                    FirstPunch = @FirstPunch,
+                    LastPunch = @LastPunch,
+                    TotalHours = @TotalHours,
+                    Overtime = @Overtime,
+                    Status = @Status,
+                    FirstPunchManually = @FirstPunchManually,
+                    LastPunchManually = @LastPunchManually,
+                    OvertimeManually = @OvertimeManually,
+                    RemarkManually = @RemarkManually,
+                    EditUserName = @EditUserName,
+                    LastUpdatedDate = @LastUpdatedDate,
+                    WorkingHours = @WorkingHours,
+                    OnboardName = @OnboardName,
+                    projectName = @projectName,
+                    ApprovalStatus = @ApprovalStatus,
+                    ApprovalRemark = @ApprovalRemark
+                WHEN NOT MATCHED THEN
+                  INSERT (
+                    LabourId, Date, FirstPunch, LastPunch, TotalHours, Overtime, Status,
+                    CreationDate, FirstPunchManually, LastPunchManually, OvertimeManually,
+                    RemarkManually, EditUserName, LastUpdatedDate, WorkingHours, OnboardName,
+                    projectName, ApprovalStatus, ApprovalRemark
+                  )
+                  VALUES (
+                    @LabourId, @Date, @FirstPunch, @LastPunch, @TotalHours, @Overtime, @Status,
+                    @CreationDate, @FirstPunchManually, @LastPunchManually, @OvertimeManually,
+                    @RemarkManually, @EditUserName, @LastUpdatedDate, @WorkingHours, @OnboardName,
+                    @projectName, @ApprovalStatus, @ApprovalRemark
+                  );
+            `);
     }
+
+const labourIdDateMap = new Map();
+
+for (const entry of labourDateSet) {
+  const [labourId, date] = entry.split("||");
+
+  if (!labourIdDateMap.has(labourId)) {
+    labourIdDateMap.set(labourId, date);
+  } else {
+    // compare dates and keep the latest
+    const existingDate = labourIdDateMap.get(labourId);
+    if (new Date(date) > new Date(existingDate)) {
+      labourIdDateMap.set(labourId, date);
+    }
+  }
 }
+
+// Step 2: Run only once per labourId with the latest date
+for (const [labourId, date] of labourIdDateMap) {
+  await insertIntoLabourAttendanceSummary({ labourId, selectedMonth: date.slice(0, 7) });
+}
+}
+
 
 
 async function insertUnmatchedRows(data) {

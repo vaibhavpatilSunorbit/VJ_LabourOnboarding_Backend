@@ -2,3 +2,8 @@
 {"level":"info","message":"Running cron job for Attendance Date: 2025-08-28","timestamp":"2025-08-29T07:11:30.770Z"}
 {"level":"info","message":"Running cron job for Attendance Date: 2025-08-28","timestamp":"2025-08-29T07:11:30.771Z"}
 {"level":"info","message":"Cron job completed successfully for Date: 2025-08-28","timestamp":"2025-08-29T07:14:46.640Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-29T09:25:00.324Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-08-29T09:27:00.618Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-28","timestamp":"2025-08-29T09:34:24.966Z"}
+{"level":"info","message":"Running cron job for Attendance Date: 2025-08-28","timestamp":"2025-08-29T09:34:24.974Z"}
+{"level":"info","message":"Cron job completed successfully for Date: 2025-08-28","timestamp":"2025-08-29T10:04:49.172Z"}
