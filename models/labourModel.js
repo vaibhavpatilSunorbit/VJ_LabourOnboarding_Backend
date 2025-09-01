@@ -2572,8 +2572,11 @@ async function upsertAttendance({
                         // Calculate OT from shift
                         const potentialOvertime = totalHours - shiftHours;
                         rawOvertime = (potentialOvertime > 0) ? potentialOvertime : 0;
-                    } else {
+                    } else if(totalHours > 2 && totalHours <= halfDayHours) {
                         status = 'HD';
+                        rawOvertime = 0;
+                    }else{
+                        status = 'A';
                         rawOvertime = 0;
                     }
                 }

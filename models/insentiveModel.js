@@ -1622,7 +1622,7 @@ OPTION (MAXRECURSION 1000);
                 if (hours != null) {
                     if (hours >= halfThreshold) {
                         additionalPresent += 1;
-                    } else if (hours > 0 && hours < halfThreshold) {
+                    } else if (hours > 2 && hours < halfThreshold) {
                         additionalHours += hours;
                         additionalHalf += 1;
                     } else {

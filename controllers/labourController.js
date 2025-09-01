@@ -2157,7 +2157,7 @@ async function runAttendanceCronEssl() {
 }
 
 
-cron.schedule('57 14 * * *', async () => {
+cron.schedule('36 13 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runAttendanceCronEssl();
     await runDailyAttendanceCron();
