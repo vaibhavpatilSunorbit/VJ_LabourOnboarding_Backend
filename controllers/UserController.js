@@ -44,6 +44,8 @@ async function saveUserController(req, res) {
 async function loginUserController(req, res) {
   try {
     const { emailID, pasword } = req.body;
+    // console.log("Login user Deatails" , req.body);
+    
     if (!emailID || !pasword) {
       return res.status(400).json({ msg: "Email and password are required" });
     }
@@ -58,7 +60,7 @@ async function loginUserController(req, res) {
       return res.status(401).json({ msg: "Invalid email or password" });
     }
 
-    const token = jwt.sign({ emailID: user.emailID, userType: user.userType, projectIds:user.assigned_projects , departmentIds:user.assigned_departments }, secretKey, { expiresIn: '1h' });
+    const token = jwt.sign({ emailID: user.emailID, userType: user.userType, projectIds:user.assigned_projects , departmentIds:user.assigned_departments }, secretKey, { expiresIn: '10h' });
     res.status(200).json({ success: true,
       data: {
         id: user.id,

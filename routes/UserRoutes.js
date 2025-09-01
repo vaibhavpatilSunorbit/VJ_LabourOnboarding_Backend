@@ -12,7 +12,7 @@ const {
 const authenticateToken = require("../middleware/authMiddleware");
 
 router.post('/registerUser', saveUserController);
-router.post('/loginUser', loginUserController);
+router.post('/loginUser',  loginUserController);
 router.get('/getAllUsers', getAllUsersController);
 router.put('/updateUser', updateUserController);
 router.delete('/deleteUser/:id', deleteUserController);
