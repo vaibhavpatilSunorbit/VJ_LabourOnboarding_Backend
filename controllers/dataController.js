@@ -500,12 +500,6 @@ const fetchDynamicData = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
 const fetchOrgDynamicData = async (req, res) => {
   // const { employeeId= 444, monthPeriodId=55, gradeId = 1, businessUnitId1 = 80, businessUnitId2 = 65, ledgerId = 170 } = req.query;
   const { employeeId, monthdesc, gradeId, salarybudescription, workbudesc, ledgerId, departmentId, designationId } = req.query;
@@ -643,9 +637,6 @@ const fetchOrgDynamicData = async (req, res) => {
     res.status(500).send('Error fetching dynamic data');
   }
 };
-
-
-
 
 
 const saveApiResponsePayload = async (req, res) => {
