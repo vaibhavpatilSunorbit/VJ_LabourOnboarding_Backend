@@ -858,9 +858,6 @@ const organizationMasterPayloadUpdatepost = async (req, res) => {
   }
 };
 
-
-
-
 // Function to update Employee Master data and save responses
 const updateEmployeeMaster = async (req, res) => {
   const { userId, LabourID, name, aadharNumber, employeeMasterPayload, organizationMasterPayload } = req.body;
@@ -1636,9 +1633,6 @@ const rejectSiteTransfer = async (req, res) => {
   }
 };
 
-
-
-
 const editSiteTransfer = async (req, res) => {
   try {
     const { LabourID, transferSite, transferDate } = req.body;
@@ -1687,8 +1681,6 @@ const editSiteTransfer = async (req, res) => {
     res.status(500).json({ message: "Failed to edit site transfer.", error: error.message });
   }
 };
-
-
 
 const saveLogToDatabaseSiteTransfer = async (userId, LabourID, action, message, status) => {
   try {
@@ -1954,8 +1946,6 @@ cron.schedule('31 02 * * *', async () => {
   }
 });
 
-
-
 // Serve cached results to the frontend
 const fetchCachedLabours = async (req, res) => {
   try {
@@ -1997,8 +1987,6 @@ const getWagesforInsentiveAdd = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
-
-
 
 // -----------------------------------------------------------------------       COMPANY TRANSFER FUCNTIONS START ----------------------------------------------------
 // -----------------------------------------------------------------------       COMPANY TRANSFER FUCNTIONS ----------------------------------------------------
@@ -2119,8 +2107,6 @@ const saveLogToDatabaseCompanyTransfer = async (
     console.error("❌ Error saving log to DB:", error);
   }
 };
-
-
 
 const getAdminCompanyTransferApproval = async (req, res) => {
   try {
@@ -2496,8 +2482,6 @@ const editCompanyTransfer = async (req, res) => {
   }
 };
 
-
-
 const getSuperAdminProjectNames = async (req, res) => {
   try {
     const pool = await poolPromise;
@@ -2656,10 +2640,7 @@ const getDevicesByProject = async (req, res) => {
   }
 };
 
-
-
 //    dashbaord controller.js Code : New functionality   :
-
 
 const getAllLaboursCount = async (req, res) => {
   const filters = req.query;
@@ -3166,6 +3147,7 @@ ORDER BY mdw.wageMonth DESC, WagePayPercentage DESC;
     res.status(500).json({ success: false, message: 'Server error' });
   }
 }
+
 const getDevicesWithPing = async (req, res) => {
   try {
     const pool = await poolPromise3;
