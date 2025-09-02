@@ -402,6 +402,156 @@ const getAllActiveWorkersPersentage = async (req, res) => {
 
 
 
+const getAllAdminNotifacation = async (req, res) => {
+  try {
+    const pool = await poolPromise;
+    const result = await pool.request().query(`
+      SELECT 
+        currentSiteName,
+        COUNT(*) AS PendingCount
+      FROM [AdminSiteTransferApproval]
+      WHERE 
+        (isAdminApproval = 0 OR isAdminApproval IS NULL)
+        AND (isAdminReject = 0 OR isAdminReject IS NULL)
+        AND adminStatus = 'Pending'
+      GROUP BY currentSiteName
+      ORDER BY PendingCount DESC;
+    `);
+
+    res.json({ success: true, data: result.recordset });  // Return all rows, not just first
+  } catch (error) {
+    console.error('Error fetching admin site transfer notifications:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+};
+
+
+const getNotificationAttendance = async (req, res) => {
+  try {
+    const pool = await poolPromise
+    const result = await pool.request().query(`
+    
+     SELECT TOP (5) *
+ FROM [dbo].[LabourAttendanceApproval] where ApprovalStatus = 'Pending'
+ ORDER BY id DESC ;
+   `);
+    res.json({ success: true, data: result.recordset })
+  } catch (error) {
+    console.error('Error fetching admin site transfer notifications:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+  // Return all rows, not just first
+}
+
+
+const getNotificationVariablePay = async (req, res) => {
+  try {
+    const pool = await poolPromise
+    const result = await pool.request().query(`
+     
+  SELECT TOP (5) *
+FROM [dbo].[VariablePay] WHERE ApprovalStatusPay ='AdminPending'
+ORDER BY CreatedAt DESC;
+  `);
+    res.json({ success: true, data: result.recordset })
+  } catch (error) {
+    console.error('Error fetching admin site transfer notifications:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+  // Return all rows, not just first
+}
+
+const getNotificationWagesApproval = async (req, res) => {
+  try {
+    const pool = await poolPromise
+    const result = await pool.request().query(`
+               SELECT TOP (5) *
+                FROM [dbo].[WagesAdminApprovals]
+                ORDER BY CreatedAt DESC;
+            `)
+    res.json({ success: true, data: result.recordset })
+  } catch (error) {
+    console.error('Error fetching admin site transfer notifications:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+}
+
+// DepartmentWiseWagesPercentage 
+
+const getDepartmentWiseWagesPercentage = async (req, res) => {
+  try {
+    const pool = await poolPromise
+    const result = await pool.request().query(`
+            
+            WITH MonthlyDepartmentWages AS (
+  SELECT
+    departmentName,
+    FORMAT(ISNULL(EffectiveDate, FromDate), 'yyyy-MM') AS wageMonth,
+    SUM(ISNULL(MonthlyWages, 0) + ISNULL(FixedMonthlyWages, 0)) AS totalWages
+  FROM [LabourMonthlyWages]
+  WHERE 
+    (MonthlyWages IS NOT NULL OR FixedMonthlyWages IS NOT NULL)
+    AND ApprovalStatusWages = 'Approved'
+  GROUP BY
+    departmentName,
+    FORMAT(ISNULL(EffectiveDate, FromDate), 'yyyy-MM')
+),
+MonthlyTotal AS (
+  SELECT
+    wageMonth,
+    SUM(totalWages) AS grandTotal
+  FROM MonthlyDepartmentWages
+  GROUP BY wageMonth
+)
+SELECT
+  mdw.wageMonth,
+  mdw.departmentName,
+  mdw.totalWages,
+  ROUND(CAST(mdw.totalWages AS FLOAT) / mt.grandTotal * 100, 2) AS WagePayPercentage
+FROM MonthlyDepartmentWages mdw
+JOIN MonthlyTotal mt ON mdw.wageMonth = mt.wageMonth
+ORDER BY mdw.wageMonth DESC, WagePayPercentage DESC;
+
+          `)
+          res.status(200).json({
+            success: true,
+            message: 'Department-wise wage pay percentage calculated successfully.',
+            data: result.recordset
+          });
+  } catch (error) {
+    console.error('Error fetching admin site transfer notifications:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+}
+const getDevicesWithPing = async (req, res) => {
+  try {
+    const pool = await poolPromise3;
+    const result = await pool.request().query(`
+      SELECT DeviceId, DeviceSName, DeviceLocation, SerialNumber, LastPing
+      FROM Devices
+    `);
+
+    const devicesWithStatus = result.recordset.map(device => {
+      const lastPingTime = new Date(device.LastPing);
+      const now = new Date();
+
+      // Calculate difference in minutes
+      const diffMinutes = (now - lastPingTime) / (1000 * 60);
+
+      return {
+        ...device,
+        Status: diffMinutes <= 10 ? 'Online' : 'Offline'
+      };
+    });
+
+    res.json(devicesWithStatus);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+};
+
+
 module.exports = {
   getAllLaboursCount,
   getAllWagesCount,
@@ -410,5 +560,12 @@ module.exports = {
   getAllLastDayPAMCount,
   getAttendanceByPeriod,
   getAllActiveWorkers,
-  getAllActiveWorkersPersentage
+  getAllActiveWorkersPersentage,
+
+  getAllAdminNotifacation,
+  getNotificationAttendance,
+  getNotificationVariablePay,
+  getNotificationWagesApproval,
+  getDepartmentWiseWagesPercentage,
+  getDevicesWithPing
 }

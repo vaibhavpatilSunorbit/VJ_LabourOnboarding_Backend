@@ -20,8 +20,8 @@ const pdf = require('html-pdf');
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 // const baseUrl = 'http://localhost:4000/uploads/';
-const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
-// const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
+// const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
+const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 const LM_READ_TIMEOUT_MS = 90_000;
 const LM_WRITE_TIMEOUT_MS = 45_000;
@@ -1364,9 +1364,51 @@ function roundOvertime(overtimeHours) {
     return hours + (minutes / 60);
 }
 
+// async function runLastMonthAttendanceCron() {
+//     console.log("Starting last month attendance cron job...");
+//     const today = new Date();
+
+//     // Get last month and year
+//     const lastMonth = today.getMonth() === 0 ? 11 : today.getMonth() - 1;
+//     const year = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();
+
+//     // Get number of days in last month
+//     const daysInLastMonth = new Date(year, lastMonth + 1, 0).getDate();
+//     console.log(`Days in last month (${year}-${lastMonth + 1}): ${daysInLastMonth}`);
+//     // Generate all dates of last month in YYYY-MM-DD format
+//     const dates = Array.from({ length: daysInLastMonth }, (_, i) => {
+//         const d = new Date(year, lastMonth, i + 1);
+//         return d.toISOString().split("T")[0];
+//     });
+
+//     cronLogger.info(`Running cron job for all dates in ${year}-${lastMonth + 1} (${daysInLastMonth} days)`);
+//     console.log(`Running cron job for all dates in ${year}-${lastMonth + 1} (${daysInLastMonth} days)`);
+//     try {
+//         await Promise.all(
+//             dates.map(async (date) => {
+//                 try {
+//                     cronLogger.info(`Processing Attendance Date: ${date}`);
+//                     await getAllLaboursAttendanceDaily(date);
+//                     cronLogger.info(`Completed Attendance for Date: ${date}`);
+//                 } catch (error) {
+//                     console.error(`❌ Error for Date ${date}:`, error);
+//                     cronLogger.error(`❌ Error for Date ${date}: ${error.message}`);
+//                 }
+//             })
+//         );
+
+//         cronLogger.info(`✅ Cron job completed successfully for all dates in ${year}-${lastMonth + 1}`);
+//         console.log(`🎉 Cron job completed successfully for all dates in ${year}-${lastMonth + 1}`);
+//     } catch (error) {
+//         console.error(`❌ Error running cron job for last month:`, error);
+//         cronLogger.error(`❌ Error running cron job for last month: ${error.message}`);
+//     }
+// }
+
+
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() -1); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
    
     // console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
@@ -1382,6 +1424,71 @@ async function runDailyAttendanceCron() {
         cronLogger.error(`Error running cron job for Date: ${formattedYesterday}:`, error);
     }
 }
+
+// async function runDailyAttendanceCron() {
+//     const today = new Date();
+//     const yesterday = new Date(today);
+//     yesterday.setDate(yesterday.getDate() - 2);
+
+//     const currentDay = today.getDate();
+//     let startDate;
+
+//     if (currentDay === 1) {
+//         // Today is 1st → backfill previous month
+//         startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+//     } else {
+//         // Otherwise → backfill from 1st of this month
+//         startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+//     }
+
+//     const endDate = yesterday;
+
+//     // Build all dates between startDate and endDate
+//     const dates = [];
+//     let d = new Date(startDate);
+//     while (d <= endDate) {
+//         dates.push(new Date(d).toISOString().split("T")[0]); // yyyy-mm-dd
+//         d.setDate(d.getDate() + 1);
+//     }
+
+//     cronLogger.info(
+//         `Running cron job for Attendance Dates: ${dates[0]} → ${dates[dates.length - 1]}`
+//     );
+
+//     const BATCH_SIZE = 5; // tune this based on DB/server capacity
+
+//     try {
+//         for (let i = 0; i < dates.length; i += BATCH_SIZE) {
+//             const batch = dates.slice(i, i + BATCH_SIZE);
+
+//             cronLogger.info(`Processing batch: ${batch[0]} → ${batch[batch.length - 1]}`);
+
+//              await Promise.all(
+//                 batch.map(async (date) => {
+//                     cronLogger.info(`🔄 Processing date: ${date}`);
+//                     console.log(`🔄 Processing date: ${date}`);
+
+//                     await getAllLaboursAttendanceDaily(date);
+
+//                     cronLogger.info(`✅ Finished processing date: ${date}`);
+//                     console.log(`✅ Finished processing date: ${date}`);
+//                 })
+//             );
+//         }
+
+//         cronLogger.info(
+//             `Cron job completed successfully for ${dates.length} days (${dates[0]} → ${dates[dates.length - 1]})`
+//         );
+//          console.log(
+//             `🎉 Cron job completed successfully for ${dates.length} days (${dates[0]} → ${dates[dates.length - 1]})`
+//         );
+//     } catch (error) {
+//         console.error(`Error running cron job for dates:`, error);
+//         cronLogger.error(`Error running cron job for dates:`, error);
+//     }
+// }
+
+
 
 /**
  * @param {string} attendanceDate – ISO date string in YYYY-MM-DD format (e.g. '2025-05-03').
@@ -1507,7 +1614,7 @@ async function getAllLaboursAttendanceDaily(attendanceDate) {
     const getProjectIdCached = makeDeviceProjectResolver(labourModel);
 
     let processed = 0, succeeded = 0, failed = 0;
-
+    const lastProjectNameMap = new Map();
     const worker = async (labour) => {
         processed += 1;
         try {
@@ -1542,9 +1649,22 @@ async function getAllLaboursAttendanceDaily(attendanceDate) {
                 lDev ? getProjectIdCached(lDev) : Promise.resolve(null),
             ]);
 
+      let currentProjectName = Number.isFinite(Number(labour.projectName))
+        ? Number(labour.projectName)
+        : null;
+
+      if (!currentProjectName) {
+        currentProjectName = lastProjectNameMap.get(labourId) ?? null;
+      }
+
+      if (currentProjectName) {
+        lastProjectNameMap.set(labourId, currentProjectName);
+      }
+
             const detailRow = {
                 labourId,
-                projectName: Number.isFinite(Number(labour.projectName)) ? Number(labour.projectName) : null,
+                // projectName: Number.isFinite(Number(labour.projectName)) ? Number(labour.projectName) : null,
+                projectName: currentProjectName,
                 date: dateKey,
                 firstPunch: firstPunch ? formatTimeToHoursMinutes(firstPunch.punch_time) : null,
                 firstPunchAttendanceId: firstPunch?.attendance_id ?? null,
@@ -2148,7 +2268,7 @@ async function runAttendanceCronEssl() {
     yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
 
-    // console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
+    console.log(`Cron Execution Date: ${formattedYesterday}`);
 
     await labourModel.saveEsslAttendance(formattedYesterday);
     
@@ -2156,11 +2276,76 @@ async function runAttendanceCronEssl() {
 
 }
 
+// async function runAttendanceCronEssl() {
+//     const today = new Date();
+//     const yesterday = new Date(today);
+//     yesterday.setDate(yesterday.getDate() - 1);
 
-cron.schedule('36 13 * * *', async () => {
+//     const currentDay = today.getDate();
+//     let startDate;
+
+//     if (currentDay === 1) {
+//         // Today is 1st → backfill previous month
+//         startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+//     } else {
+//         // Otherwise → backfill from 1st of this month
+//         startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+//     }
+
+//     const endDate = yesterday;
+
+//     // Build all dates between startDate and endDate
+//     const dates = [];
+//     let d = new Date(startDate);
+//     while (d <= endDate) {
+//         dates.push(new Date(d).toISOString().split("T")[0]); // yyyy-mm-dd
+//         d.setDate(d.getDate() + 1);
+//     }
+
+//     cronLogger.info(
+//         `ESSL Cron → Running for Attendance Dates: ${dates[0]} → ${dates[dates.length - 1]}`
+//     );
+
+//     const BATCH_SIZE = 5; // keep small to avoid DB overload
+
+//     try {
+//         for (let i = 0; i < dates.length; i += BATCH_SIZE) {
+//             const batch = dates.slice(i, i + BATCH_SIZE);
+
+//             cronLogger.info(`ESSL Batch → ${batch[0]} → ${batch[batch.length - 1]}`);
+
+//             await Promise.all(
+//                 batch.map(async (date, idx) => {
+//                     const counter = i + idx + 1;
+//                     cronLogger.info(`🔄 [${counter}/${dates.length}] Processing ESSL date: ${date}`);
+//                     console.log(`🔄 [${counter}/${dates.length}] Processing ESSL date: ${date}`);
+
+//                     await labourModel.saveEsslAttendance(date);
+
+//                     cronLogger.info(`✅ Finished ESSL date: ${date}`);
+//                     console.log(`✅ Finished ESSL date: ${date}`);
+//                 })
+//             );
+//         }
+
+//         cronLogger.info(
+//             `🎉 ESSL Cron job completed successfully for ${dates.length} days (${dates[0]} → ${dates[dates.length - 1]})`
+//         );
+//         console.log(
+//             `🎉 ESSL Cron job completed successfully for ${dates.length} days (${dates[0]} → ${dates[dates.length - 1]})`
+//         );
+//     } catch (error) {
+//         console.error(`❌ Error running ESSL cron:`, error);
+//         cronLogger.error(`❌ Error running ESSL cron:`, error);
+//     }
+// }
+
+
+cron.schedule('14 18 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runAttendanceCronEssl();
     await runDailyAttendanceCron();
+    // await runLastMonthAttendanceCron();
 });
 
 

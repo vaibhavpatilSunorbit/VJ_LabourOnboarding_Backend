@@ -2099,12 +2099,14 @@ const saveTransferData = async (req, res) => {
 
     if (!currentSerialNumber) {
       return res.status(400).json({
+        success: false,
         message: `No SerialNumber found for currentSite: ${sanitizedCurrentSite}`,
       });
     }
 
     if (!transferSerialNumber) {
       return res.status(400).json({
+        success: false,
         message: `No SerialNumber found for transferSite: ${sanitizedTransferSite}`,
       });
     }
@@ -2244,6 +2246,33 @@ const saveTransferData = async (req, res) => {
         message: "No rows updated in labourOnboarding table.",
       });
     }
+
+    // also update in [dbo].[VariablePay] column[projectName] and [dbo].[LabourMonthlyWages] this table column [ProjectName], [businessUnit]
+    const updateVariablePayQuery = `
+      UPDATE [dbo].[VariablePay]
+      SET
+        projectName = @transferSite,
+        businessUnit = @transferSiteName
+      WHERE LabourID = @LabourID
+    `;
+    await pool.request()
+      .input("LabourID", sql.NVarChar(50), LabourID)
+      .input("transferSite", sql.Int, sanitizedTransferSite)
+      .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+      .query(updateVariablePayQuery);
+    const updateMonthlyWagesQuery = `
+      UPDATE [dbo].[LabourMonthlyWages]
+      SET
+        ProjectName = @transferSite,
+        businessUnit = @transferSiteName
+      WHERE LabourID = @LabourID
+    `;    
+    await pool.request()
+      .input("LabourID", sql.NVarChar(50), LabourID)
+      .input("transferSite", sql.Int, sanitizedTransferSite)  
+      .input("transferSiteName", sql.NVarChar(255), transferSiteName)
+      .query(updateMonthlyWagesQuery);    
+    // Final Response
 
     res.status(201).json({
       message: "Transfer data saved and labourOnboarding updated successfully.",
@@ -2994,10 +3023,10 @@ const addDevicesToProject = async (req, res) => {
 
 const getDevicesByProject = async (req, res) => {
   try {
-    const { projectId } = req.params;
+    const { projectName } = req.params;
     const pool = await poolPromise;
     const list = await pool.request()
-      .input('pid', sql.Int, projectId)
+      .input('pid', sql.Int, projectName)
       .query(`SELECT DeviceID, DeviceSName, DeviceLocation, SerialNumber, Status
               FROM ProjectDeviceStatus WHERE ProjectID = @pid`);
     return res.status(200).json({ success: true, data: list.recordset });
@@ -3443,7 +3472,7 @@ module.exports = {
 
 // ------------------------------------------------------------------
 
-getAllLaboursCount,
+  getAllLaboursCount,
   getAllWagesCount,
   getAllSiteTransferCount,
   getAllVariablePayCount,

@@ -308,7 +308,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/users', userRoutes);
 app.use('/api', (req, res, next) => { console.log('/api'); next() }, dataRoutes);
 app.use('/insentive', insentiveRoutes);
-app.use('/dashboard', (req, res, next) => { console.log('/dashboard'); next() }, dashBoardRoutes);
+app.use('/dashboard', (req, res, next) => { console.log('/dashboard'); next() }, dashBoardRoutes);                          
 app.use(EmployeeRoute);
 
 const server = http.createServer(app);

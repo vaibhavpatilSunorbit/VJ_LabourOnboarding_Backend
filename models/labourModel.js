@@ -894,7 +894,7 @@ async function getAllApprovedLabours() {
         const pool = await poolPromise;
         const result = await pool
             .request()
-            .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [labourOnboarding] WHERE status IN ('Approved', 'Disable')`);
+            .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [labourOnboarding] WHERE Status in ('Approved', 'Disable')`);
 
         return result.recordset; // Returns an array of approved labour IDs and working hours
     } catch (err) {
@@ -1443,7 +1443,7 @@ async function insertIntoLabourAttendanceDetails(details) {
       END
       ELSE IF EXISTS (
         SELECT 1 FROM [dbo].[LabourAttendanceDetails]
-        WHERE LabourId = @LabourId AND Date = @Date AND FirstPunch IS NULL
+        WHERE LabourId = @LabourId AND Date = @Date and (TimesUpdate is NULL or TimesUpdate = 0)
       )
       BEGIN
         UPDATE [dbo].[LabourAttendanceDetails]
