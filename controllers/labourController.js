@@ -1449,7 +1449,7 @@ function roundOvertime(overtimeHours) {
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
     console.log("yesterday", yesterday)
-    yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 30); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
     console.log("formattedYesterday", formattedYesterday)
 
@@ -2275,7 +2275,7 @@ async function getCachedAttendance(req, res) {
 async function runAttendanceCronEssl() {
     const yesterday = new Date();
     console.log("yesterday", yesterday)
-    yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 30); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
     console.log("formattedYesterday for Essl Attendance", formattedYesterday)
 
@@ -2290,7 +2290,7 @@ async function runAttendanceCronEssl() {
 
 
 // Schedule cron job to run every 20 days at 1:00 AM
-cron.schedule('10 05 * * *', async () => {
+cron.schedule('40 14 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     await runAttendanceCronEssl();
     await runDailyAttendanceCron();
