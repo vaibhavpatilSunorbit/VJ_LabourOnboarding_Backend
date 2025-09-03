@@ -12,7 +12,7 @@ const s3 = new AWS.S3({
 });
 
 const bucketName = "labour-be";
-const baseS3Url = `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/images/`;
+const baseS3Url = `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/imagesLive/`;
 
 const imageFields = [
   "uploadAadhaarFront",
@@ -63,7 +63,7 @@ async function migrateImages() {
             .toBuffer();
 
           // Step 3: Upload to S3
-          const s3Key = `imagesSandbox/${fileName}`;
+          const s3Key = `imagesLive/${fileName}`;
           await s3
             .upload({
               Bucket: bucketName,
