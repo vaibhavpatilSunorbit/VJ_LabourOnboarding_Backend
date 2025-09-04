@@ -20,7 +20,7 @@ const config = {
 const poolPromise4 = new sql.ConnectionPool(config)
   .connect()
   .then(pool => {
-    console.log('Connected to MSSQL');
+    console.log('Connected to MSSQL SCPL');
     return pool;
   })
   .catch(err => {

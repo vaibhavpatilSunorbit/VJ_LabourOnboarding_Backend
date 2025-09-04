@@ -3,7 +3,7 @@ const { poolPromise3 } = require('../config/dbConfig3');
 const { poolPromise } = require('../config/dbConfig');
 const { poolPromise4 } = require('../config/dbConfigSCPL');
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs').promises;
 const axios = require('axios')
 const multer = require('multer');
 const { upload } = require('../server');
@@ -16,12 +16,28 @@ const { isHoliday } = require('../models/labourModel');
 const xlsx = require('xlsx');
 const moment = require('moment');
 const pdf = require('html-pdf');
+// const uploadToS3Webp = require('../sheduler/s3upload')
+const AWS = require("aws-sdk");
+const sharp = require("sharp");
+require("dotenv").config();
+
+
+// AWS S3 Config
+const s3 = new AWS.S3({
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION,
+});
 
 // const { sql, poolPromise2 } = require('../config/dbConfig');
 
 // const baseUrl = 'http://localhost:4000/uploads/';
 // const baseUrl = 'https://laboursandbox.vjerp.com/uploads/';
 const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
+
+
+const bucketName = "labour-be";
+const baseS3Url = `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/images/`;
 
 const LM_READ_TIMEOUT_MS = 90_000;
 const LM_WRITE_TIMEOUT_MS = 45_000;
@@ -31,6 +47,34 @@ const RETRIES_READ = 1;      // "small" retry: 1 extra try
 const RETRIES_WRITE = 1;
 const RETRIES_LOOKUP = 1;
 
+
+
+
+// 🔹 Helper: upload buffer to S3 as webp
+async function uploadToS3Webp(file, folder = "images") {
+  if (!file) return null;
+
+  const timestamp = Date.now();
+  const randomString = Math.floor(Math.random() * 1e9);
+  const fileName = `${timestamp}-${randomString}.webp`;
+   const fileBuffer = await fs.readFile(file.path);
+
+  // Convert to webp
+  const webpBuffer = await sharp(fileBuffer).webp({ quality: 80 }).toBuffer();
+
+  const s3Key = `${folder}/${fileName}`;
+
+  await s3
+    .upload({
+      Bucket: bucketName,
+      Key: s3Key,
+      Body: webpBuffer,
+      ContentType: "image/webp",
+    })
+    .promise();
+
+  return `${baseS3Url}${fileName}`;
+}
 
 
 async function handleCheckAadhaar(req, res) {
@@ -131,13 +175,19 @@ async function createRecord(req, res) {
         const uploadInductionDocFilename = path.basename(uploadInductionDoc[0].path);
         const photoSrcFilename = path.basename(photoSrc[0].path);
 
-        // const frontImageUrl = baseUrl + frontImageFilename;
-        const frontImageUrl = frontImageFilename ? baseUrl + frontImageFilename : null;
-        // const backImageUrl = baseUrl + backImageFilename;
-        const backImageUrl = backImageFilename ? baseUrl + backImageFilename : null;
-        const IdProofImageUrl = baseUrl + IdProofImageFilename;
-        const uploadInductionDocImageUrl = baseUrl + uploadInductionDocFilename;
-        const photoSrcUrl = baseUrl + photoSrcFilename;
+        // // const frontImageUrl = baseUrl + frontImageFilename;
+        // const frontImageUrl = frontImageFilename ? baseUrl + frontImageFilename : null;
+        // // const backImageUrl = baseUrl + backImageFilename;
+        // const backImageUrl = backImageFilename ? baseUrl + backImageFilename : null;
+        // const IdProofImageUrl = baseUrl + IdProofImageFilename;
+        // const uploadInductionDocImageUrl = baseUrl + uploadInductionDocFilename;
+        // const photoSrcUrl = baseUrl + photoSrcFilename;
+
+        const frontImageUrl = uploadAadhaarFront ? await uploadToS3Webp(uploadAadhaarFront[0]) : null;
+const backImageUrl = uploadAadhaarBack ? await uploadToS3Webp(uploadAadhaarBack[0]) : null;
+const IdProofImageUrl = await uploadToS3Webp(uploadIdProof[0]);
+const uploadInductionDocImageUrl = await uploadToS3Webp(uploadInductionDoc[0]);
+const photoSrcUrl = await uploadToS3Webp(photoSrc[0]);
 
         const dateOfJoiningDate = new Date(dateOfJoining);
         const fromDate = dateOfJoiningDate;
@@ -371,22 +421,32 @@ async function createRecordUpdate(req, res) {
             uploadInductionDoc = null
         } = req.files || {};  // Use {} as fallback if req.files is undefined
 
-        const processFileField = (bodyField, fileField) => {
-            if (fileField) {
-                // Binary data uploaded, get URL path
-                return baseUrl + path.basename(fileField[0].path);
-            } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
-                // If no new file, use the existing URL
+        // const processFileField = (bodyField, fileField) => {
+        //     if (fileField) {
+        //         // Binary data uploaded, get URL path
+        //         return baseUrl + path.basename(fileField[0].path);
+        //     } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
+        //         // If no new file, use the existing URL
+        //         return bodyField;
+        //     }
+        //     return null; // No data available
+        // };
+
+
+        async function processFileField(bodyField, fileField) {
+            if (fileField && fileField[0]) {
+                return await uploadToS3Webp(fileField[0]);
+            } else if (typeof bodyField === "string" && bodyField.startsWith("http")) {
                 return bodyField;
             }
-            return null; // No data available
-        };
+            return null;
+        }
 
-        const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
-        const backImageUrl = processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
-        const photoSrcUrl = processFileField(req.body.photoSrc, photoSrc);
-        const IdProofImageUrl = processFileField(req.body.uploadIdProof, uploadIdProof);
-        const uploadInductionDocImageUrl = processFileField(req.body.uploadInductionDoc, uploadInductionDoc);
+        const frontImageUrl = await processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
+        const backImageUrl = await processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
+        const photoSrcUrl = await processFileField(req.body.photoSrc, photoSrc);
+        const IdProofImageUrl = await processFileField(req.body.uploadIdProof, uploadIdProof);
+        const uploadInductionDocImageUrl = await processFileField(req.body.uploadInductionDoc, uploadInductionDoc);
 
 
         const dateOfJoiningDate = new Date(dateOfJoining);
@@ -577,21 +637,32 @@ async function updateRecord(req, res) {
 
         const { uploadAadhaarFront, uploadAadhaarBack, photoSrc, uploadIdProof, uploadInductionDoc } = req.files || {};
 
-        const processFileField = (bodyField, fileField) => {
-            if (fileField) {
-                return baseUrl + path.basename(fileField[0].path);
-            } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
-                
+        // const processFileField = (bodyField, fileField) => {
+        //     if (fileField) {
+        //         return baseUrl + path.basename(fileField[0].path);
+        //     } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
+
+        //         return bodyField;
+        //     }
+        //     return null; 
+        // };
+
+        async function processFileField(bodyField, fileField) {
+            if (fileField && fileField[0]) {
+                return await uploadToS3Webp(fileField[0]);
+            } else if (typeof bodyField === "string" && bodyField.startsWith("http")) {
                 return bodyField;
             }
-            return null; 
-        };
+            return null;
+        }
 
-        const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
-        const backImageUrl = processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
-        const photoSrcUrl = processFileField(req.body.photoSrc, photoSrc);
-        const IdProofImageUrl = processFileField(req.body.uploadIdProof, uploadIdProof);
-        const uploadInductionDocImageUrl = processFileField(req.body.uploadInductionDoc, uploadInductionDoc);
+
+
+        const frontImageUrl = await processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
+        const backImageUrl = await processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
+        const photoSrcUrl = await processFileField(req.body.photoSrc, photoSrc);
+        const IdProofImageUrl = await processFileField(req.body.uploadIdProof, uploadIdProof);
+        const uploadInductionDocImageUrl = await processFileField(req.body.uploadInductionDoc, uploadInductionDoc);
 
         const dateOfJoiningDate = new Date(dateOfJoining);
         const fromDate = dateOfJoiningDate;
@@ -684,7 +755,7 @@ async function updateRecord(req, res) {
 
         if (safeDepartmentId !== null) {
             departmentRequest.input('departmentId', safeDepartmentId);
-         
+
         } else {
             return res.status(400).send('Invalid departmentId');
         }
@@ -838,22 +909,32 @@ async function updateRecordWithDisable(req, res) {
             uploadInductionDoc = null
         } = req.files || {};
 
-        const processFileField = (bodyField, fileField) => {
-            if (fileField) {
-                return baseUrl + path.basename(fileField[0].path);
-            } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
-             
+        // const processFileField = (bodyField, fileField) => {
+        //     if (fileField) {
+        //         return baseUrl + path.basename(fileField[0].path);
+        //     } else if (typeof bodyField === 'string' && bodyField.startsWith('http')) {
+
+        //         return bodyField;
+        //     }
+        //     return null; // No data available
+        // };
+
+
+        async function processFileField(bodyField, fileField) {
+            if (fileField && fileField[0]) {
+                return await uploadToS3Webp(fileField[0]);
+            } else if (typeof bodyField === "string" && bodyField.startsWith("http")) {
                 return bodyField;
             }
-            return null; // No data available
-        };
+            return null;
+        }
 
 
-        const frontImageUrl = processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
-        const backImageUrl = processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
-        const photoSrcUrl = processFileField(req.body.photoSrc, photoSrc);
-        const IdProofImageUrl = processFileField(req.body.uploadIdProof, uploadIdProof);
-        const uploadInductionDocImageUrl = processFileField(req.body.uploadInductionDoc, uploadInductionDoc);
+        const frontImageUrl = await processFileField(req.body.uploadAadhaarFront, uploadAadhaarFront);
+        const backImageUrl = await processFileField(req.body.uploadAadhaarBack, uploadAadhaarBack);
+        const photoSrcUrl = await processFileField(req.body.photoSrc, photoSrc);
+        const IdProofImageUrl = await processFileField(req.body.uploadIdProof, uploadIdProof);
+        const uploadInductionDocImageUrl = await processFileField(req.body.uploadInductionDoc, uploadInductionDoc);
 
         const dateOfJoiningDate = new Date(dateOfJoining);
         const fromDate = dateOfJoiningDate;
@@ -1204,7 +1285,7 @@ async function editbuttonLabour(req, res) {
 
 async function esslapi(req, res) {
     try {
-        const approvedLaboursXml = req.body; 
+        const approvedLaboursXml = req.body;
 
         const parser = new xml2js.Parser({ explicitArray: false });
         const approvedLabours = await parser.parseStringPromise(approvedLaboursXml);
@@ -1320,7 +1401,7 @@ async function getUserStatusController(req, res) {
 async function updateHideResubmitLabour(req, res) {
     try {
         const { id } = req.params; // Labour ID comes from the URL parameters
-        const { hideResubmit } = req.body; 
+        const { hideResubmit } = req.body;
         const updated = await labourModel.updateHideResubmit(id, hideResubmit);
 
         if (updated === 0) {
@@ -1410,7 +1491,7 @@ async function runDailyAttendanceCron() {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
-   
+
     // console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
     cronLogger.info(`Running cron job for Attendance Date: ${formattedYesterday}`);
 
@@ -1649,17 +1730,17 @@ async function getAllLaboursAttendanceDaily(attendanceDate) {
                 lDev ? getProjectIdCached(lDev) : Promise.resolve(null),
             ]);
 
-      let currentProjectName = Number.isFinite(Number(labour.projectName))
-        ? Number(labour.projectName)
-        : null;
+            let currentProjectName = Number.isFinite(Number(labour.projectName))
+                ? Number(labour.projectName)
+                : null;
 
-      if (!currentProjectName) {
-        currentProjectName = lastProjectNameMap.get(labourId) ?? null;
-      }
+            if (!currentProjectName) {
+                currentProjectName = lastProjectNameMap.get(labourId) ?? null;
+            }
 
-      if (currentProjectName) {
-        lastProjectNameMap.set(labourId, currentProjectName);
-      }
+            if (currentProjectName) {
+                lastProjectNameMap.set(labourId, currentProjectName);
+            }
 
             const detailRow = {
                 labourId,
@@ -2271,7 +2352,7 @@ async function runAttendanceCronEssl() {
     console.log(`Cron Execution Date: ${formattedYesterday}`);
 
     await labourModel.saveEsslAttendance(formattedYesterday);
-    
+
     cronLogger.info(`Running cron job for Attendance Date: ${formattedYesterday}`);
 
 }
@@ -3023,7 +3104,7 @@ const markWagesForApprovalController = async (req, res) => {
     try {
         const payload = req.body;
         const { wageId, labourId, dailyWages, perHourWages, monthlyWages, yearlyWages, effectiveDate, fixedMonthlyWages, weeklyOff, payStructure, wagesEditedBy, remarks } = payload;
-        
+
         if (!wageId || !labourId || !payStructure) {
             return res.status(400).json({ message: 'Wage ID, Labour ID, and Pay Structure are required' });
         }
@@ -3096,7 +3177,7 @@ async function approveWagesControllerAdmin(req, res) {
 }
 
 async function rejectWagesControllerAdmin(req, res) {
-    const { ApprovalID, Remarks } = req.query; 
+    const { ApprovalID, Remarks } = req.query;
 
     if (!ApprovalID) {
         return res.status(400).json({ message: 'ApprovalID is required.' });

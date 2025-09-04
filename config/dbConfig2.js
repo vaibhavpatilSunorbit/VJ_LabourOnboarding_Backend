@@ -20,7 +20,7 @@ const config = {
 const poolPromise2 = new sql.ConnectionPool(config)
   .connect()
   .then(pool => {
-    console.log('Connected to MSSQL');
+    console.log('Connected to MSSQL JDPROJECT');
     return pool;
   })
   .catch(err => {

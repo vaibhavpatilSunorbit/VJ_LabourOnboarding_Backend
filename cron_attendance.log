@@ -383,3 +383,68 @@
 {"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-09-03T11:01:00.965Z"}
 {"level":"info","message":"Running cron job for Attendance Date: 2025-08-31","timestamp":"2025-09-03T11:01:00.966Z"}
 {"level":"info","message":"Cron job completed successfully for Date: 2025-08-31","timestamp":"2025-09-03T11:01:02.366Z"}
+{"level":"info","message":"Scheduled cron triggered...","timestamp":"2025-09-04T09:23:00.306Z"}
+{"level":"info","message":"Running cron job for all dates in 2025-8 (31 days)","timestamp":"2025-09-04T09:23:00.310Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-07-31","timestamp":"2025-09-04T09:23:00.310Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-01","timestamp":"2025-09-04T09:23:00.312Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-02","timestamp":"2025-09-04T09:23:00.312Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-03","timestamp":"2025-09-04T09:23:00.313Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-04","timestamp":"2025-09-04T09:23:00.313Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-05","timestamp":"2025-09-04T09:23:00.313Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-06","timestamp":"2025-09-04T09:23:00.314Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-07","timestamp":"2025-09-04T09:23:00.314Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-08","timestamp":"2025-09-04T09:23:00.314Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-09","timestamp":"2025-09-04T09:23:00.315Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-10","timestamp":"2025-09-04T09:23:00.315Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-11","timestamp":"2025-09-04T09:23:00.315Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-12","timestamp":"2025-09-04T09:23:00.316Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-13","timestamp":"2025-09-04T09:23:00.316Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-14","timestamp":"2025-09-04T09:23:00.316Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-15","timestamp":"2025-09-04T09:23:00.317Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-16","timestamp":"2025-09-04T09:23:00.317Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-17","timestamp":"2025-09-04T09:23:00.317Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-18","timestamp":"2025-09-04T09:23:00.317Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-19","timestamp":"2025-09-04T09:23:00.318Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-20","timestamp":"2025-09-04T09:23:00.318Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-21","timestamp":"2025-09-04T09:23:00.318Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-22","timestamp":"2025-09-04T09:23:00.318Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-23","timestamp":"2025-09-04T09:23:00.318Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-24","timestamp":"2025-09-04T09:23:00.319Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-25","timestamp":"2025-09-04T09:23:00.319Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-26","timestamp":"2025-09-04T09:23:00.319Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-27","timestamp":"2025-09-04T09:23:00.319Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-28","timestamp":"2025-09-04T09:23:00.319Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-29","timestamp":"2025-09-04T09:23:00.320Z"}
+{"level":"info","message":"Processing Attendance Date: 2025-08-30","timestamp":"2025-09-04T09:23:00.320Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-15","timestamp":"2025-09-04T09:23:02.314Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-02","timestamp":"2025-09-04T09:23:02.573Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-07-31","timestamp":"2025-09-04T09:23:02.575Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-05","timestamp":"2025-09-04T09:23:02.582Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-04","timestamp":"2025-09-04T09:23:02.587Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-03","timestamp":"2025-09-04T09:23:02.593Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-01","timestamp":"2025-09-04T09:23:02.594Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-06","timestamp":"2025-09-04T09:23:02.609Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-08","timestamp":"2025-09-04T09:23:02.611Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-11","timestamp":"2025-09-04T09:23:02.618Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-07","timestamp":"2025-09-04T09:23:02.632Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-13","timestamp":"2025-09-04T09:23:02.640Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-10","timestamp":"2025-09-04T09:23:02.645Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-12","timestamp":"2025-09-04T09:23:02.652Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-14","timestamp":"2025-09-04T09:23:02.653Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-17","timestamp":"2025-09-04T09:23:02.661Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-16","timestamp":"2025-09-04T09:23:02.675Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-09","timestamp":"2025-09-04T09:23:02.677Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-18","timestamp":"2025-09-04T09:23:02.685Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-20","timestamp":"2025-09-04T09:23:02.697Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-19","timestamp":"2025-09-04T09:23:02.708Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-22","timestamp":"2025-09-04T09:23:02.712Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-21","timestamp":"2025-09-04T09:23:02.714Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-23","timestamp":"2025-09-04T09:23:02.716Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-26","timestamp":"2025-09-04T09:23:02.720Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-27","timestamp":"2025-09-04T09:23:02.733Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-24","timestamp":"2025-09-04T09:23:02.739Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-25","timestamp":"2025-09-04T09:23:02.743Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-29","timestamp":"2025-09-04T09:23:02.757Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-28","timestamp":"2025-09-04T09:23:02.773Z"}
+{"level":"info","message":"Completed Attendance for Date: 2025-08-30","timestamp":"2025-09-04T09:23:02.774Z"}
+{"level":"info","message":"✅ Cron job completed successfully for all dates in 2025-8","timestamp":"2025-09-04T09:23:02.774Z"}
