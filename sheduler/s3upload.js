@@ -117,10 +117,10 @@ const s3 = new AWS.S3({
 ///////////////////////////////////     for new  uploads images   ////////////////////////////////////
 
 const bucketName = "labour-be";
-const baseS3Url = `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/imagesSandbox/`;
+const baseS3Url = `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/imagesLive/`;
 
 // 🔹 Helper: upload buffer to S3 as webp
-async function uploadToS3Webp(file, folder = "imagesSandbox") {
+async function uploadToS3Webp(file, folder = "imagesLive") {
   if (!file) return null;
 
   const timestamp = Date.now();
