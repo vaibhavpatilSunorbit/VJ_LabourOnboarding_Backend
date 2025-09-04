@@ -791,8 +791,6 @@ async function rejectAdminVariablePay(VariablePayId, Remarks) {
 //     }
 // }
 
-
-
 const getVariablePayAdminApproval = async () => {
     const pool = await poolPromise;
     const result = await pool.request().query(`SELECT 
@@ -812,9 +810,6 @@ FROM [VariablePay] V order by V.CreatedAt desc;
 `);
     return result.recordset;
 };
-
-
-
 
 async function getVariablePayByDateRange(projectName, startDate, endDate, approvalStatus) {
     const pool = await poolPromise;
@@ -2782,9 +2777,6 @@ function formatTotalOvertime(TotalOvertimeHours) {
     return hours + (minutes / 60);
 }
 
-
-
-
 // ------------------------------------------     calculate OT ----------------------
 
 // async function calculateTotalOvertime(labourId, month, year) {
@@ -2885,10 +2877,6 @@ function withTimeout(promise, ms = DEFAULT_TIMEOUT_MS, label = 'Operation', fall
         })
     ]);
 }
-
-
-
-
 
 async function calculateSalaryForLabour(labourId, month, year) {
     const salaryTimer = `Salary-${labourId}`;
@@ -4790,10 +4778,6 @@ async function getWagesByDateRange(projectName, payStructure, approvalStatus) {
     const result = await request.query(query);
     return result.recordset;
 }
-
-
-
-
 
 module.exports = {
     getAllLabours,
