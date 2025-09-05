@@ -1445,51 +1445,51 @@ function roundOvertime(overtimeHours) {
     return hours + (minutes / 60);
 }
 
-// async function runLastMonthAttendanceCron() {
-//     console.log("Starting last month attendance cron job...");
-//     const today = new Date();
+async function runLastMonthAttendanceCron() {
+    console.log("Starting last month attendance cron job...");
+    const today = new Date();
 
-//     // Get last month and year
-//     const lastMonth = today.getMonth() === 0 ? 11 : today.getMonth() - 1;
-//     const year = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();
+    // Get last month and year
+    const lastMonth = today.getMonth() === 0 ? 11 : today.getMonth() - 1;
+    const year = today.getMonth() === 0 ? today.getFullYear() - 1 : today.getFullYear();
 
-//     // Get number of days in last month
-//     const daysInLastMonth = new Date(year, lastMonth + 1, 0).getDate();
-//     console.log(`Days in last month (${year}-${lastMonth + 1}): ${daysInLastMonth}`);
-//     // Generate all dates of last month in YYYY-MM-DD format
-//     const dates = Array.from({ length: daysInLastMonth }, (_, i) => {
-//         const d = new Date(year, lastMonth, i + 1);
-//         return d.toISOString().split("T")[0];
-//     });
+    // Get number of days in last month
+    const daysInLastMonth = new Date(year, lastMonth + 1, 0).getDate();
+    console.log(`Days in last month (${year}-${lastMonth + 1}): ${daysInLastMonth}`);
+    // Generate all dates of last month in YYYY-MM-DD format
+    const dates = Array.from({ length: daysInLastMonth }, (_, i) => {
+        const d = new Date(year, lastMonth, i + 1);
+        return d.toISOString().split("T")[0];
+    });
 
-//     cronLogger.info(`Running cron job for all dates in ${year}-${lastMonth + 1} (${daysInLastMonth} days)`);
-//     console.log(`Running cron job for all dates in ${year}-${lastMonth + 1} (${daysInLastMonth} days)`);
-//     try {
-//         await Promise.all(
-//             dates.map(async (date) => {
-//                 try {
-//                     cronLogger.info(`Processing Attendance Date: ${date}`);
-//                     await getAllLaboursAttendanceDaily(date);
-//                     cronLogger.info(`Completed Attendance for Date: ${date}`);
-//                 } catch (error) {
-//                     console.error(`❌ Error for Date ${date}:`, error);
-//                     cronLogger.error(`❌ Error for Date ${date}: ${error.message}`);
-//                 }
-//             })
-//         );
+    cronLogger.info(`Running cron job for all dates in ${year}-${lastMonth + 1} (${daysInLastMonth} days)`);
+    console.log(`Running cron job for all dates in ${year}-${lastMonth + 1} (${daysInLastMonth} days)`);
+    try {
+        await Promise.all(
+            dates.map(async (date) => {
+                try {
+                    cronLogger.info(`Processing Attendance Date: ${date}`);
+                    await getAllLaboursAttendanceDaily(date);
+                    cronLogger.info(`Completed Attendance for Date: ${date}`);
+                } catch (error) {
+                    console.error(`❌ Error for Date ${date}:`, error);
+                    cronLogger.error(`❌ Error for Date ${date}: ${error.message}`);
+                }
+            })
+        );
 
-//         cronLogger.info(`✅ Cron job completed successfully for all dates in ${year}-${lastMonth + 1}`);
-//         console.log(`🎉 Cron job completed successfully for all dates in ${year}-${lastMonth + 1}`);
-//     } catch (error) {
-//         console.error(`❌ Error running cron job for last month:`, error);
-//         cronLogger.error(`❌ Error running cron job for last month: ${error.message}`);
-//     }
-// }
+        cronLogger.info(`✅ Cron job completed successfully for all dates in ${year}-${lastMonth + 1}`);
+        console.log(`🎉 Cron job completed successfully for all dates in ${year}-${lastMonth + 1}`);
+    } catch (error) {
+        console.error(`❌ Error running cron job for last month:`, error);
+        cronLogger.error(`❌ Error running cron job for last month: ${error.message}`);
+    }
+}
 
 
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 5); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
 
     // console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
@@ -2422,11 +2422,11 @@ async function runAttendanceCronEssl() {
 // }
 
 
-cron.schedule('31 16 * * *', async () => {
+cron.schedule('13 15 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
-    await runAttendanceCronEssl();
-    await runDailyAttendanceCron();
-    // await runLastMonthAttendanceCron();
+    // await runAttendanceCronEssl();
+    // await runDailyAttendanceCron();
+    await runLastMonthAttendanceCron();
 });
 
 

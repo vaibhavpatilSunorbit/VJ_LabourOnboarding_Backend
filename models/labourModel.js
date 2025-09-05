@@ -894,7 +894,7 @@ async function getAllApprovedLabours() {
         const pool = await poolPromise;
         const result = await pool
             .request()
-            .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [labourOnboarding] WHERE Status in ('Approved', 'Disable')`);
+            .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [labourOnboarding] WHERE LabourID = 'JC3821'`);
 
         return result.recordset; // Returns an array of approved labour IDs and working hours
     } catch (err) {
@@ -1444,6 +1444,119 @@ async function insertIntoLabourAttendanceDetails(details) {
       ELSE IF EXISTS (
         SELECT 1 FROM [dbo].[LabourAttendanceDetails]
         WHERE LabourId = @LabourId AND Date = @Date and (TimesUpdate is NULL or TimesUpdate = 0)
+      )
+      BEGIN
+        UPDATE [dbo].[LabourAttendanceDetails]
+        SET 
+          FirstPunch = @FirstPunch,
+          FirstPunchAttendanceId = @FirstPunchAttendanceId,
+          FirstPunchDeviceId = @FirstPunchDeviceId,
+          LastPunch = @LastPunch,
+          LastPunchAttendanceId = @LastPunchAttendanceId,
+          LastPunchDeviceId = @LastPunchDeviceId,
+          TotalHours = @TotalHours,
+          Overtime = @Overtime,
+          PayrollCalRoundOffOvertime = @PayrollCalRoundOffOvertime,
+          Status = @Status,
+          CreationDate = @CreationDate,
+          projectName = @projectName,
+          FirstPunchManually = @FirstPunchManually,
+          LastPunchManually = @LastPunchManually,
+          OvertimeManually = @OvertimeManually,
+          RemarkManually = @RemarkManually,
+          projectIdFromDevicefirstPunch = @projectIdFromDevicefirstPunch,
+          projectIdFromDeviceLastPunch = @projectIdFromDeviceLastPunch
+        WHERE LabourId = @LabourId AND Date = @Date
+      END
+    `;
+
+        const key = `${details.labourId}|${details.date}`;
+
+
+        if (details.date < new Date().toISOString().split('T')[0]) {
+            return withSqlRetry(async () => {
+                const req = pool.request();
+                req.timeout = WRITE_TIMEOUT_MS;
+
+                await req
+                    .input('LabourId', sql.NVarChar, s(details.labourId))
+                    .input('projectName', sql.Int, iOrNull(details.projectName))
+                    .input('Date', sql.Date, details.date)
+                    .input('FirstPunch', sql.NVarChar, s(details.firstPunch))
+                    .input('FirstPunchAttendanceId', sql.Int, iOrNull(details.firstPunchAttendanceId))
+                    .input('FirstPunchDeviceId', sql.NVarChar, s(details.firstPunchDeviceId))
+                    .input('LastPunch', sql.NVarChar, s(details.lastPunch))
+                    .input('LastPunchAttendanceId', sql.Int, iOrNull(details.lastPunchAttendanceId))
+                    .input('LastPunchDeviceId', sql.NVarChar, s(details.lastPunchDeviceId))
+                    .input('TotalHours', sql.Float, fOrZero(details.totalHours))
+                    .input('Overtime', sql.Float, fOrZero(details.overtime))
+                    .input('PayrollCalRoundOffOvertime', sql.Float, fOrZero(details.PayrollCalRoundOffOvertime))
+                    .input('Status', sql.NVarChar, s(details.status))
+                    .input('CreationDate', sql.DateTime, details.creationDate || new Date())
+                    .input('FirstPunchManually', sql.NVarChar, s(details.firstPunch)) // as in your code
+                    .input('LastPunchManually', sql.NVarChar, s(details.lastPunch))
+                    .input('OvertimeManually', sql.Float, fOrZero(details.OvertimeManually))
+                    .input('RemarkManually', sql.NVarChar, s(details.remarkManually))
+                    .input('projectIdFromDevicefirstPunch', sql.Int, iOrNull(details.projectIdFromDevicefirstPunch))
+                    .input('projectIdFromDeviceLastPunch', sql.Int, iOrNull(details.projectIdFromDeviceLastPunch))
+                    .query(query);
+            }, { label: `LabourAttendanceDetails upsert ${key}` })
+                .catch((e) => {
+                    // treat duplicate as success (race on IF NOT EXISTS)
+                    if (isDuplicate(e)) {
+                        console.warn(`[dup] LabourAttendanceDetails already exists for ${key}, treating as success.`);
+                        return true;
+                    }
+                    throw e;
+                });
+        }
+
+    } catch (err) {
+        console.error('❌ Error inserting/updating LabourAttendanceDetails:', err);
+        throw err;
+    }
+}
+
+
+async function insertIntoLabourAttendanceDetailsForUpsert(details) {
+    try {
+        if (!details || typeof details !== 'object') throw new Error('details is required');
+        if (!details.labourId) throw new Error('details.labourId is required');
+        if (!details.date) throw new Error('details.date is required (YYYY-MM-DD)');
+
+        const pool = await poolPromise;
+
+        const query = `
+      IF NOT EXISTS (
+        SELECT 1
+        FROM [dbo].[LabourAttendanceDetails]
+        WHERE LabourId = @LabourId AND Date = @Date
+      )
+      BEGIN
+        INSERT INTO [dbo].[LabourAttendanceDetails] (
+          [LabourId], [Date],
+          [FirstPunch], [FirstPunchAttendanceId], [FirstPunchDeviceId],
+          [LastPunch], [LastPunchAttendanceId], [LastPunchDeviceId],
+          [TotalHours], [Overtime], [PayrollCalRoundOffOvertime], [Status],
+          [CreationDate], [projectName],
+          [FirstPunchManually], [LastPunchManually],
+          [OvertimeManually], [RemarkManually],
+          [projectIdFromDevicefirstPunch], [projectIdFromDeviceLastPunch]
+        )
+        VALUES (
+          @LabourId, @Date,
+          @FirstPunch, @FirstPunchAttendanceId, @FirstPunchDeviceId,
+          @LastPunch, @LastPunchAttendanceId, @LastPunchDeviceId,
+          @TotalHours, @Overtime, @PayrollCalRoundOffOvertime, @Status,
+          @CreationDate, @projectName,
+          @FirstPunchManually, @LastPunchManually,
+          @OvertimeManually, @RemarkManually,
+          @projectIdFromDevicefirstPunch, @projectIdFromDeviceLastPunch
+        )
+      END
+      ELSE IF EXISTS (
+        SELECT 1 FROM [dbo].[LabourAttendanceDetails]
+        WHERE LabourId = @LabourId AND Date = @Date AND FirstPunch IS NULL
       )
       BEGIN
         UPDATE [dbo].[LabourAttendanceDetails]
@@ -2830,7 +2943,7 @@ async function upsertAttendance({
 
         // 9d) Insert the daily records (skip if they already exist)
         for (const dayAttendance of monthlyAttendance) {
-            await insertIntoLabourAttendanceDetails(dayAttendance);
+            await insertIntoLabourAttendanceDetailsForUpsert(dayAttendance);
         }
 
     } catch (error) {
