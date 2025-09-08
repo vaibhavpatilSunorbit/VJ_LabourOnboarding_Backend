@@ -1287,7 +1287,7 @@ const getSerialNumberByLabourID = async (labourID) => {
       .query(`
         SELECT pds.SerialNumber
         FROM ProjectDeviceStatus pds
-        JOIN labourOnboarding lob ON pds.BusinessUnit = lob.BusinessUnit
+        JOIN labourOnboarding lob ON pds.ProjectID = lob.projectName
         WHERE lob.LabourID = @LabourID
       `);
 
@@ -1438,7 +1438,6 @@ const isLabourAlreadyLogged = async (labourID) => {
 
 // Main function to get labours with old attendance and process them
 const getLaboursWithOldAttendance = async () => {
-  console.log('Fetching labours with old attendance...');
   try {
     const poolLabour = await poolPromise;
     const poolAttendance = await poolPromise3;
