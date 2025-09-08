@@ -85,27 +85,49 @@ async function getNextUniqueID(req, res) {
 };
 
 
+
+
+// GET /command-status/:commandId   OR   /command-status?commandId=123
 async function getCommandStatus(req, res) {
-    const commandId = req.params.commandId;
-     console.log( commandId , 'commandId ---------');
-     
     try {
+        // Accept from both params and query
+        let commandId = req.params.commandId || req.query.commandId;
+
+        if (!commandId) {
+            return res.status(400).json({ message: "Command ID is required." });
+        }
+
+        console.log("Received commandId:", `"${commandId}"`);
+
         const pool = await poolPromise3;
-        const result = await pool.request()
-            .input('CommandId', sql.Int, commandId)
-            .query('SELECT status FROM DeviceCommands WHERE DeviceCommandId = @CommandId');
+        const request = pool.request();
+
+        // Try to parse as integer if numeric
+        if (!isNaN(commandId)) {
+            request.input("CommandId", sql.Int, parseInt(commandId, 10));
+        } else {
+            request.input("CommandId", sql.VarChar, commandId.trim());
+        }
+
+        const result = await request.query(`
+            SELECT status 
+            FROM DeviceCommands 
+            WHERE DeviceCommandId = @CommandId
+        `);
 
         if (result.recordset.length > 0) {
             const status = result.recordset[0].status;
             return res.json({ status });
         } else {
-            return res.status(404).json({ message: 'Command ID not found.' });
+            console.warn(`No record found for CommandId = ${commandId}`);
+            return res.status(404).json({ message: "Command ID not found." });
         }
     } catch (error) {
-        console.error('Error fetching command status:', error.message);
-        res.status(500).json({ message: 'Internal server error' });
+        console.error("Error fetching command status:", error.message);
+        res.status(500).json({ message: "Internal server error" });
     }
-};
+}
+
 
 // This is running code comment in 29-07-2024
 
