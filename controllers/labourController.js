@@ -1489,7 +1489,7 @@ async function runLastMonthAttendanceCron() {
 
 async function runDailyAttendanceCron() {
     const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 5); // Get the previous day
+    yesterday.setDate(yesterday.getDate() - 24); // Get the previous day
     const formattedYesterday = yesterday.toISOString().split('T')[0];
 
     // console.log(`Cron Execution Date: ${new Date().toISOString().split('T')[0]}`);
@@ -1719,7 +1719,22 @@ async function getAllLaboursAttendanceDaily(attendanceDate) {
 
             const OT = (status === 'P' && totalHours > shiftHours) ? (totalHours - shiftHours) : 0;
             const OTrounded = roundOvertime(OT);
-            const OTmanual = Math.min(OTrounded, 4);
+
+// -----------------------------   HOLIDAY OVERTIME ZERO LOGIC       ------------------------------------------------
+             // 🔹 Holiday check here
+             const pool = await poolPromise;
+        const holidayCheckResult = await pool.request()
+            .input('date', sql.Date, attendanceDate)
+            .query(`
+                SELECT HolidayDate
+                FROM [dbo].[HolidayDate]
+                WHERE HolidayDate = @date
+            `);
+
+        const isHoliday = holidayCheckResult.recordset.length > 0;
+// -----------------------------    HOLIDAY OVERTIME ZERO LOGIC END   ---------------------
+
+            const OTmanual = isHoliday ? 0 : Math.min(OTrounded, 4);
             const to2 = (n) => Math.round((Number(n || 0)) * 100) / 100;
 
             const fDev = firstPunch?.Device_id ?? null;
@@ -2422,11 +2437,11 @@ async function runAttendanceCronEssl() {
 // }
 
 
-cron.schedule('13 15 * * *', async () => {
+cron.schedule('34 13 * * *', async () => {
     cronLogger.info('Scheduled cron triggered...');
     // await runAttendanceCronEssl();
-    // await runDailyAttendanceCron();
-    await runLastMonthAttendanceCron();
+    await runDailyAttendanceCron();
+    // await runLastMonthAttendanceCron();
 });
 
 

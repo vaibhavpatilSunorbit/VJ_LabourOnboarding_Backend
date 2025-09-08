@@ -894,7 +894,7 @@ async function getAllApprovedLabours() {
         const pool = await poolPromise;
         const result = await pool
             .request()
-            .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [labourOnboarding] WHERE LabourID = 'JC3821'`);
+            .query(`SELECT LabourID AS labourId, workingHours, projectName FROM [labourOnboarding] WHERE status IN ('Approved', 'Disable')`);
 
         return result.recordset; // Returns an array of approved labour IDs and working hours
     } catch (err) {
