@@ -3456,7 +3456,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
     const salaryTimer = `Salary-${labourId}`;
     // console.time(salaryTimer);
     try {
-        console.log(`\n[START] Salary calculation for Labour ID: ${labourId}, Month: ${month}, Year: ${year}`);
+        // console.log(`\n[START] Salary calculation for Labour ID: ${labourId}, Month: ${month}, Year: ${year}`);
         // console.time('getWageInfoForLabour');
         const wagesInfo = await withTimeout(getWageInfoForLabour(labourId, month, year), DEFAULT_TIMEOUT_MS, // increased to 30s
             `getWageInfoForLabour-${labourId}`
@@ -3471,7 +3471,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
             };
         }
         const { wageBreakdown = [], workingHours } = wagesInfo;
-        console.log("[INFO] Wages Info:", wagesInfo);
+        // console.log("[INFO] Wages Info:", wagesInfo);
         const forSundaylatestWage = wageBreakdown[wageBreakdown.length - 1];
         const forSundaydailyWageRate = forSundaylatestWage.payStructure === 'DAILY WAGES' ? forSundaylatestWage?.dailyWages : (forSundaylatestWage?.fixedMonthlyWages / forSundaylatestWage?.daysInSlice) || 0;
 
@@ -3479,7 +3479,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
         console.time('getAttendanceSummary');
         let attendance;
        if (forSundaydailyWageRate > 0) {
-      console.log("code is getAttendanceSummaryForLabour called");
+    //   console.log("code is getAttendanceSummaryForLabour called");
       // ✅ FIX: do not pass console.log into withTimeout; pass a function + fallback {}
       attendance = await withTimeout(
         () => getAttendanceSummaryForLabour(labourId, month, year, workingHours, forSundaydailyWageRate),
@@ -3487,7 +3487,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
         { label: `getAttendanceSummaryForLabour-${labourId}`, fallbackValue: {} }
       );
     } else {
-      console.log("code is getAttendanceSummaryForLabourMonthly called");
+    //   console.log("code is getAttendanceSummaryForLabourMonthly called");
       attendance = await withTimeout(
         () => getAttendanceSummaryForLabourMonthly(labourId, month, year),
         DEFAULT_TIMEOUT_MS,
@@ -3586,17 +3586,17 @@ async function calculateSalaryForLabour(labourId, month, year) {
         // console.log("[INFO] Wage Type Flags:", { isDailyWage, isFixedMonthly });
 
         if (isDailyWage) {
-            console.log("[DAILY] presentDays=======================", presentDays);
-            console.log("[DAILY] parsedWorkingHours=======================", parsedWorkingHours);
+            // console.log("[DAILY] presentDays=======================", presentDays);
+            // console.log("[DAILY] parsedWorkingHours=======================", parsedWorkingHours);
             const totalPossibleHours = totalHolidaysConsider > 0 ? ((presentDays + totalHolidaysInMonth) * parsedWorkingHours) : presentDays * parsedWorkingHours;
             const hourlyWage = dailyWageRate / parsedWorkingHours;
-            console.log("[DAILY] Total Possible Hours:", totalPossibleHours);
+            // console.log("[DAILY] Total Possible Hours:", totalPossibleHours);
             // console.log("[DAILY] Hourly totalHrsExcludingOT:", totalHrsExcludingOT);
             baseWage = totalPossibleHours * hourlyWage;
-            console.log("[DAILY] sundayPayment:", sundayPayment);
+            // console.log("[DAILY] sundayPayment:", sundayPayment);
             baseWage += sundayPayment;
-            console.log("[DAILY] Hourly Wage:", hourlyWage);
-            console.log("[DAILY] Base Wage Calculated:", baseWage);
+            // console.log("[DAILY] Hourly Wage:", hourlyWage);
+            // console.log("[DAILY] Base Wage Calculated:", baseWage);
         } else if (isFixedMonthly) {
             const baseMonthly = fixedMonthlyWage || monthlySalary;
             const hourlyWage = baseMonthly / (daysInSlice * parsedWorkingHours);
@@ -3611,7 +3611,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
             if (expectedDays >= daysInSlice && (latestWage?.weeklyOff || latestWage?.weeklyOff > 0)) {
                 const actualWorkedHours = totalHolidaysConsider > 0 ? ((presentDays + totalHolidaysInMonth) * parsedWorkingHours) : presentDays * parsedWorkingHours;
                 const workedPay = actualWorkedHours * hourlyWage;
-                console.log("[FIXED] actualWorkedHours:", actualWorkedHours);
+                // console.log("[FIXED] actualWorkedHours:", actualWorkedHours);
                 weeklyOffPay = (presentDays <= daysInSlice / 2)
                     ? (weeklyOffDays / 2) * parsedWorkingHours * hourlyWage
                     : weeklyOffDays * parsedWorkingHours * hourlyWage;
@@ -3656,7 +3656,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
         const totalAttendanceDeductions = 0;
         const totalDeductions = totalAttendanceDeductions + advance + debit;
 
-        console.log("[INFO] Bonuses:", bonuses);
+        // console.log("[INFO] Bonuses:", bonuses);
         // console.log("[INFO] Total Deductions:", totalDeductions);
 
         let grossPay = baseWage;
@@ -3668,7 +3668,7 @@ async function calculateSalaryForLabour(labourId, month, year) {
         const isNegativeSalary = netPay < 0;
         netPay = Math.max(netPay, 0);
 
-        console.log("[RESULT] Gross Pay:", grossPay);
+        // console.log("[RESULT] Gross Pay:", grossPay);
         // console.log("[RESULT] Net Pay:", netPay);
         // console.log("[RESULT] Is Negative Salary:", isNegativeSalary);
         // console.log(`[END] Salary calculation complete for Labour ID: ${labourId}\n`);

@@ -938,8 +938,8 @@ async function getOvertimeMonthlyAPI(req, res) {
  * Fetch salary generation data for all eligible labours
  */
 
-const CONCURRENCY = 3;  // adjust to SQL capacity
-const MAX_RETRIES = 3;
+const CONCURRENCY = 5;  // adjust to SQL capacity
+const MAX_RETRIES = 1;
 
 /* ─────────────────────────────────────────────────────────────── */
 /*  GET /insentive/payroll/salaryGenerationDataAllLabours          */
