@@ -1648,6 +1648,9 @@ OPTION (MAXRECURSION 1000);
         if (additionalHours > 0) {
             sundayPayment += additionalHours * (sundayRate / parsedWorkingHours);
         }
+        if (additionalweeklyOffDay > 0) {
+         sundayPayment += additionalweeklyOffDay * sundayRate;
+        }
         return {
             totalDays: row.totalDays + sundays.length || 0,
             presentDays: row.presentDays || 0,
@@ -3718,16 +3721,16 @@ async function calculateSalaryForLabour(labourId, month, year) {
 
             cappedOvertime: cappedOvertime.toFixed(2),
             derivedPerHour: derivedPerHour.toFixed(2),
-            overtimePay: overtimePay.toFixed(2),
+            overtimePay: Math.round(overtimePay),
             // holidayOvertimePay: holidayOvertimePay.toFixed(2),
-            baseWage: baseWage.toFixed(2),
-            weeklyOffPay: weeklyOffPay.toFixed(2),
-            previousWageAmount: previousWageAmount.toFixed(2),
-            bonuses: bonuses.toFixed(2),
-            totalAttendanceDeductions: totalAttendanceDeductions.toFixed(2),
-            totalDeductions: totalDeductions.toFixed(2),
-            grossPay: grossPay.toFixed(2),
-            netPay: netPay.toFixed(2),
+            baseWage: Math.round(baseWage),
+            weeklyOffPay: Math.round(weeklyOffPay),
+            previousWageAmount: Math.round(previousWageAmount),
+            bonuses: Math.round(bonuses),
+            totalAttendanceDeductions: Math.round(totalAttendanceDeductions),
+            totalDeductions: Math.round(totalDeductions),
+            grossPay: Math.round(grossPay),
+            netPay: Math.round(netPay),
             isNegativeSalary
         };
     } catch (error) {

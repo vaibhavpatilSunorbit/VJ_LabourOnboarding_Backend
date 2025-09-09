@@ -2894,7 +2894,7 @@ const getSuperAdminProjectNames = async (req, res) => {
       ,[plainPassword]
       ,[assigned_projects] as projectIds
       ,[assigned_departments] as departmentIds 
-      from [dbo].[Users_New] where Id = 90
+      from [dbo].[Users_New] where Id = 11
     `);
     res.json(result.recordset);
     // console.log('result.recordset}}||',result.recordset)
