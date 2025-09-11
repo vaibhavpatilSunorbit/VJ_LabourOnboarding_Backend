@@ -36,7 +36,7 @@ async function migrateImages() {
                [photoSrc],
                [uploadIdProof],
                [uploadInductionDoc]
-        FROM [LabourOnboardingForm].[dbo].[labourOnboarding]
+        FROM [LabourOnboardingForm_TEST].[dbo].[labourOnboarding]
         WHERE [uploadAadhaarFront] IS NOT NULL AND [uploadAadhaarBack] IS NOT NULL
       `);
 
@@ -86,7 +86,7 @@ async function migrateImages() {
       // Step 4: Update DB
       if (Object.keys(updates).length > 0) {
         const updateQuery = `
-          UPDATE [LabourOnboardingForm].[dbo].[labourOnboarding]
+          UPDATE [LabourOnboardingForm_TEST].[dbo].[labourOnboarding]
           SET ${Object.keys(updates)
             .map((field) => `[${field}] = @${field}`)
             .join(", ")}
@@ -109,6 +109,7 @@ async function migrateImages() {
     console.error("❌ Migration error:", err.message || err);
   }
 }
+// migrateImages();
 
 cron.schedule('00 21 * * *', async () => {
   console.log('s3 bucket migration started at 01:08 AM');
