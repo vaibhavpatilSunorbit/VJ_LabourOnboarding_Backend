@@ -37,7 +37,7 @@ const baseUrl = 'https://vjlabour.vjerp.com/uploads/';
 
 
 const bucketName = "labour-be";
-const baseS3Url = `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/images/`;
+const baseS3Url = `https://${bucketName}.s3.${process.env.AWS_REGION}.amazonaws.com/imagesLive/`;
 
 const LM_READ_TIMEOUT_MS = 90_000;
 const LM_WRITE_TIMEOUT_MS = 45_000;
@@ -51,7 +51,7 @@ const RETRIES_LOOKUP = 1;
 
 
 // 🔹 Helper: upload buffer to S3 as webp
-async function uploadToS3Webp(file, folder = "images") {
+async function uploadToS3Webp(file, folder = "imagesLive") {
   if (!file) return null;
 
   const timestamp = Date.now();
